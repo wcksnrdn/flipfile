@@ -1,0 +1,66 @@
+[package]
+name = "flipfile"
+version = "0.1.0"
+description = "flipfile: drag-and-drop file converter"
+authors = ["you"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "flipfile_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+image = "0.25.10"
+tauri-plugin-global-shortcut = "2"
+trash = "5.2.9"
+arboard = "3"
+pdfium-render = "0.9"
+
+# Native glass view (src/glass.rs) and HEIC/AVIF decoding via ImageIO (src/system_codec.rs).
+# Mostly already compiled as part of Tauri/wry on macOS; these enable a few extra bindings.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "objc2-core-foundation",
+  "NSResponder",
+  "NSView",
+  "NSWindow",
+  "NSEvent",
+  "NSGlassEffectView",
+  "NSVisualEffectView",
+] }
+objc2-core-foundation = "0.3"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+objc2-image-io = { version = "0.3", default-features = false, features = [
+  "std",
+  "objc2-core-graphics",
+  "CGImageSource",
+  "CGImageDestination",
+] }
+
+# HEIC/AVIF decoding via WIC (src/system_codec.rs) and the Alt key state (src/keys.rs);
+# already part of Tauri's dependency tree on Windows.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Graphics_Imaging", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Variant", "Win32_UI_Input_KeyboardAndMouse"] }
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
