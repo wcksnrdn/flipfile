@@ -8,6 +8,8 @@ use image::RgbaImage;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
+use crate::grants::Grants;
+
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Pasted {
@@ -29,7 +31,7 @@ fn temp_dir(app: &AppHandle) -> Result<PathBuf, String> {
 #[tauri::command]
 pub async fn read_clipboard(app: AppHandle, name: String) -> Result<Pasted, String> {
     let dir = temp_dir(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    let pasted = tauri::async_runtime::spawn_blocking(move || {
         let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
 
         // Copied files take priority: Finder also puts the file's icon on the clipboard as an image.
@@ -55,18 +57,54 @@ pub async fn read_clipboard(app: AppHandle, name: String) -> Result<Pasted, Stri
         // Only the latest paste is ever needed, so older temporary images are removed.
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let safe: String = name.chars().filter(|c| !matches!(c, '/' | '\\' | ':')).collect();
-        let path = dir.join(format!("{}.png", if safe.trim().is_empty() { "Clipboard" } else { safe.trim() }));
+        let path = dir.join(format!("{}.png", safe_file_name(&name)));
         rgba.save(&path).map_err(|e| e.to_string())?;
         Ok(Pasted::Image { path: path.to_string_lossy().into_owned() })
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())??;
+
+    // What was pasted becomes the only thing convert_batch will accept (see grants.rs)
+    let granted: Vec<PathBuf> = match &pasted {
+        Pasted::Files { paths } => paths.iter().map(PathBuf::from).collect(),
+        Pasted::Image { path } => vec![PathBuf::from(path)],
+        Pasted::Empty => vec![],
+    };
+    app.state::<Grants>().replace(granted);
+    Ok(pasted)
+}
+
+/// The UI suggests the name, but it must never escape the temp folder or produce odd
+/// files: only letters, digits, spaces and `-_.` survive, no leading dot, at most 100 chars.
+fn safe_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
+        .take(100)
+        .collect();
+    let cleaned = cleaned.trim().trim_start_matches('.').trim();
+    if cleaned.is_empty() { "Clipboard".into() } else { cleaned.into() }
 }
 
 /// Called on startup so temporary clipboard images never pile up.
 pub fn clear_temp(app: &AppHandle) {
     if let Ok(dir) = temp_dir(app) {
         let _ = fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::safe_file_name;
+
+    #[test]
+    fn pasted_image_names_are_sanitised() {
+        assert_eq!(safe_file_name("Clipboard 2026-10-20 at 14.03.12"), "Clipboard 2026-10-20 at 14.03.12");
+        assert_eq!(safe_file_name("../../etc/passwd"), "etcpasswd");
+        assert_eq!(safe_file_name("..\\..\\x:y"), "xy");
+        assert_eq!(safe_file_name("...hidden"), "hidden");
+        assert_eq!(safe_file_name("a\u{0}b\nc"), "abc");
+        assert_eq!(safe_file_name("   "), "Clipboard");
+        assert_eq!(safe_file_name(&"x".repeat(500)).len(), 100);
     }
 }

@@ -98,6 +98,11 @@ mod imp {
 /// Returns whether native glass is available, so the UI can lighten its CSS tint.
 #[tauri::command]
 pub fn set_glass(window: tauri::WebviewWindow, cx: f64, cy: f64, diameter: f64) -> bool {
+    // Values come from the UI: keep them sane before they reach AppKit.
+    if !(cx.is_finite() && cy.is_finite() && diameter.is_finite()) {
+        return false;
+    }
+    let (cx, cy, diameter) = (cx.clamp(-4096.0, 4096.0), cy.clamp(-4096.0, 4096.0), diameter.clamp(0.0, 4096.0));
     #[cfg(target_os = "macos")]
     {
         let Ok(ns_window) = window.ns_window() else { return false };
