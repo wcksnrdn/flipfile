@@ -1,14 +1,19 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": [
-    "main"
-  ],
+  "description": "Exactly what the main window's UI uses, nothing more (least privilege). The global shortcut, tray, clipboard and file conversion run in Rust and need no UI permission.",
+  "windows": ["main"],
   "permissions": [
-    "core:default",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-scale-factor",
     "core:window:allow-start-dragging",
-    "opener:default",
-    "opener:allow-reveal-item-in-dir"
+    "opener:allow-reveal-item-in-dir",
+    "allow-convert-batch",
+    "allow-read-clipboard",
+    "allow-option-key-down",
+    "allow-settings-summary",
+    "allow-set-glass",
+    "allow-quit-app"
   ]
 }

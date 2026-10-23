@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-option-key-down"
+description = "Enables the option_key_down command without any pre-configured scope."
+commands.allow = ["option_key_down"]
+
+[[permission]]
+identifier = "deny-option-key-down"
+description = "Denies the option_key_down command without any pre-configured scope."
+commands.deny = ["option_key_down"]
