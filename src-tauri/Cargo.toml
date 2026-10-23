@@ -25,8 +25,19 @@ serde_json = "1"
 image = "0.25.10"
 tauri-plugin-global-shortcut = "2"
 trash = "5.2.9"
+# Already used by `image`; direct access for lossless Deflate-compressed TIFF output
+tiff = "0.11"
 arboard = "3"
 pdfium-render = "0.9"
+typst = "0.15"
+typst-pdf = "0.15"
+# System fonts only: Typst's embedded fonts would add ~10 MB and every desktop OS ships fonts
+typst-kit = { version = "0.15", default-features = false, features = ["scan-fonts"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
+roxmltree = "0.21.1"
+typst-layout = "0.15"
+# Font metrics (Word line heights); already part of the build through Typst
+ttf-parser = "0.25"
 
 # Native glass view (src/glass.rs) and HEIC/AVIF decoding via ImageIO (src/system_codec.rs).
 # Mostly already compiled as part of Tauri/wry on macOS; these enable a few extra bindings.
@@ -43,7 +54,11 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSVisualEffectView",
 ] }
 objc2-core-foundation = "0.3"
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+# Text recognition (Word OCR) with macOS' built-in Vision framework
+objc2-vision = { version = "0.3", default-features = false, features = [
+  "std", "objc2-core-foundation", "VNRequest", "VNRecognizeTextRequest", "VNRequestHandler", "VNObservation", "VNTypes",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange"] }
 objc2-image-io = { version = "0.3", default-features = false, features = [
   "std",
   "objc2-core-graphics",
@@ -54,8 +69,23 @@ objc2-image-io = { version = "0.3", default-features = false, features = [
 # HEIC/AVIF decoding via WIC (src/system_codec.rs) and the Alt key state (src/keys.rs);
 # already part of Tauri's dependency tree on Windows.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["Win32_Graphics_Imaging", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Variant", "Win32_UI_Input_KeyboardAndMouse"] }
+windows = { version = "0.62", features = [
+  "Win32_Graphics_Imaging", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Variant", "Win32_UI_Input_KeyboardAndMouse",
+  # Text recognition (Word OCR) with Windows' built-in engine
+  "Foundation", "Foundation_Collections", "Graphics_Imaging", "Media_Ocr", "Security_Cryptography", "Storage_Streams",
+] }
 
+
+# `tauri dev` builds without optimisation. The image encoders (AVIF/rav1e, GIF palette
+# quantisation, PNG, PDFium bindings) then run 10-100x slower: one AVIF conversion of
+# a 12 MP photo took over 15 minutes. Optimising the dependencies (not flipfile itself,
+# which stays quick to rebuild and debug) makes dev behave like the release app.
+[dev-dependencies]
+# Builds sample Word files for the tests
+docx-rs = "0.4"
+
+[profile.dev.package."*"]
+opt-level = 3
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

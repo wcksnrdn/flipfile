@@ -18,7 +18,7 @@ pub fn set_library_dir(dir: PathBuf) {
     let _ = RESOURCE_DIR.set(dir);
 }
 
-fn pdfium() -> Result<&'static Pdfium, String> {
+pub(crate) fn pdfium() -> Result<&'static Pdfium, String> {
     static PDFIUM: OnceLock<Result<Pdfium, String>> = OnceLock::new();
     PDFIUM
         .get_or_init(|| {

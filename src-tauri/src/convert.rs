@@ -1,4 +1,5 @@
 use image::codecs::avif::AvifEncoder;
+use image::codecs::gif::GifEncoder;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType as PngFilter, PngEncoder};
 use image::imageops::FilterType;
@@ -13,14 +14,21 @@ use std::sync::Mutex;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 
+use crate::grants::Grants;
 use crate::history::History;
 use crate::settings::{Options, Resize, Settings, COMPRESS_QUALITY};
 use crate::pdf::{jpeg_pages_to_pdf, Page};
+use crate::office;
 use crate::pdf_render;
 use crate::strip::{strip_jpeg, strip_png};
 use crate::system_codec;
 
-const AVIF_SPEED: u8 = 6; // 1 = smallest file, 10 = fastest
+// Measured on a 12 MP photo (release build, 8 cores): speed 6 took 6.3 s, speed 9 took
+// 2.7 s for the same file size; speed 10 is faster again but ~20% larger.
+const AVIF_SPEED: u8 = 9; // 1 = smallest file, 10 = fastest
+// GIF palette quantisation (NeuQuant), 1 = best and slowest. Speed 10 measured 6x faster
+// than the default 1 on a 12 MP photo for a ~4% larger file.
+const GIF_SPEED: i32 = 10;
 const ICO_MAX: u32 = 256; // largest size the ICO format allows
 
 #[derive(Clone, Serialize)]
@@ -41,6 +49,7 @@ pub struct BatchResult {
     // Total input/output size of single-file results, so compressing shows its effect
     bytes_before: u64,
     bytes_after: u64,
+    note: Option<String>, // e.g. why a format could not get smaller
 }
 
 /// One converted input: a file, or a folder of page images for a multi-page PDF.
@@ -48,6 +57,7 @@ struct Converted {
     path: String,
     pages: usize,
     sizes: Option<(u64, u64)>, // input and output bytes, for plain file -> file results
+    note: Option<String>,
 }
 
 impl Converted {
@@ -57,6 +67,7 @@ impl Converted {
             path: output.to_string_lossy().into_owned(),
             pages: 0,
             sizes: Some((size(input), size(output))),
+            note: None,
         }
     }
 }
@@ -72,9 +83,21 @@ pub async fn convert_batch(
     paths: Vec<String>,
     format: String,
     on_progress: Channel<Progress>,
-    out_dir: Option<String>,
+    to_downloads: bool,
     preset: Option<String>,
 ) -> Result<BatchResult, String> {
+    // Only files the user dropped or pasted (see grants.rs)
+    if let Err(denied) = app.state::<Grants>().check(&paths) {
+        return Err(format!("\"{}\" was not given to flipfile", file_name(Path::new(denied))));
+    }
+    // The output folder is decided here, never taken from the UI: pasted clipboard
+    // images (whose source is a temporary file) go to Downloads, everything else
+    // next to its original.
+    let out_dir = if to_downloads {
+        Some(app.path().download_dir().map_err(|_| "The Downloads folder could not be found".to_string())?)
+    } else {
+        None
+    };
     let options = app.state::<Mutex<Settings>>().lock().unwrap().options(preset.as_deref());
     // Name for same-format results: photo_compressed.jpg / photo_resized.png
     let suffix = match preset.as_deref() {
@@ -84,8 +107,9 @@ pub async fn convert_batch(
     };
     // Runs on a separate thread so the UI never freezes
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let out_dir = out_dir.as_deref().map(Path::new);
-        if format == "pdf" && paths.len() > 1 {
+        let out_dir = out_dir.as_deref();
+        let all_images = paths.iter().all(|p| word_kind(Path::new(p)).is_none());
+        if format == "pdf" && paths.len() > 1 && all_images {
             merge_to_pdf(&paths, &on_progress, out_dir, &options)
         } else {
             // A single PDF can take a while: report its pages instead of the one file.
@@ -96,7 +120,14 @@ pub async fn convert_batch(
                 }
             };
             let results = par_map(&paths, &on_progress, |p| convert(p, &format, out_dir, &options, suffix, &on_page));
-            let mut batch = BatchResult { outputs: vec![], errors: vec![], pages: 0, bytes_before: 0, bytes_after: 0 };
+            let mut batch = BatchResult {
+                outputs: vec![],
+                errors: vec![],
+                pages: 0,
+                bytes_before: 0,
+                bytes_after: 0,
+                note: None,
+            };
             for r in results {
                 match r {
                     Ok(c) => {
@@ -105,6 +136,9 @@ pub async fn convert_batch(
                         if let Some((before, after)) = c.sizes {
                             batch.bytes_before += before;
                             batch.bytes_after += after;
+                        }
+                        if batch.note.is_none() {
+                            batch.note = c.note;
                         }
                     }
                     Err(e) => batch.errors.push(e),
@@ -187,6 +221,56 @@ fn is_heif_family_file(path: &Path) -> bool {
     system_codec::is_heif_family(&header(path))
 }
 
+/// `Some(false)` for .docx-family files, `Some(true)` for legacy binary .doc, from the
+/// file's content *and* extension (other ZIP-based files are not Word documents).
+fn word_kind(path: &Path) -> Option<bool> {
+    let head = header(path);
+    let ext = path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
+    if head.starts_with(b"PK\x03\x04") && matches!(ext.as_str(), "docx" | "docm" | "dotx" | "dotm") {
+        Some(false)
+    } else if head.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) && matches!(ext.as_str(), "doc" | "dot") {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+/// Word document -> PDF (best engine on this computer), or -> images through a PDF.
+fn from_word(
+    input: &Path,
+    legacy: bool,
+    format: &str,
+    out_dir: Option<&Path>,
+    options: &Options,
+    on_page: OnPage,
+) -> Result<Converted, String> {
+    let name = file_name(input);
+    match format {
+        "docx" | "docx-ocr" => Err(format!("\"{name}\" is already a Word document")),
+        "pdf" => {
+            let output = unique_output_path(input, out_dir, "converted", "pdf");
+            let engine = office::apps::word_to_pdf(input, &output, legacy).map_err(|e| format!("\"{name}\": {e}"))?;
+            // Shown in the status, so it is clear which engine produced the PDF
+            let note = match engine {
+                office::apps::Engine::Word => "via Word",
+                office::apps::Engine::LibreOffice => "via LibreOffice",
+                office::apps::Engine::BuiltIn => "built-in engine",
+            };
+            Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 0, sizes: None, note: Some(note.into()) })
+        }
+        "jpg" | "jpeg" | "png" | "webp" | "bmp" | "tiff" | "gif" | "ico" | "avif" => {
+            let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+            let temp = std::env::temp_dir().join(format!("flipfile-word-{}-{nanos}.pdf", std::process::id()));
+            let result = office::apps::word_to_pdf(input, &temp, legacy)
+                .map_err(|e| format!("\"{name}\": {e}"))
+                .and_then(|_| pdf_to_images(&temp, input, format, out_dir, options, on_page));
+            let _ = fs::remove_file(&temp);
+            result
+        }
+        _ => Err(format!("\"{name}\": pick PDF or an image format for Word documents")),
+    }
+}
+
 fn convert(
     path: &str,
     format: &str,
@@ -198,6 +282,22 @@ fn convert(
     let input = Path::new(path);
     let name = file_name(input);
     let is_pdf = pdf_render::is_pdf(&header(input));
+    if let Some(legacy) = word_kind(input) {
+        return from_word(input, legacy, format, out_dir, options, on_page);
+    }
+    if format == "docx-ocr" {
+        return ocr_to_word(input, is_pdf, out_dir, on_page);
+    }
+    if format == "docx" {
+        if !is_pdf {
+            return Err(format!("\"{name}\": only PDF files can become Word documents"));
+        }
+        let output = unique_output_path(input, out_dir, "converted", "docx");
+        let data = fs::read(input).map_err(|e| format!("\"{name}\" could not be read: {e}"))?;
+        let docx = office::from_pdf::pdf_to_docx(pdf_render::pdfium()?, &data, on_page).map_err(|e| format!("\"{name}\": {e}"))?;
+        fs::write(&output, docx).map_err(save_err)?;
+        return Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 0, sizes: None, note: None });
+    }
     if is_pdf && matches!(format, "pdf" | "clean" | SAME_FORMAT) {
         return Err(match format {
             "pdf" => format!("\"{name}\" is already a PDF"),
@@ -206,7 +306,7 @@ fn convert(
         });
     }
     if format == "clean" {
-        return clean(input, out_dir).map(|path| Converted { path, pages: 0, sizes: None });
+        return clean(input, out_dir).map(|path| Converted { path, pages: 0, sizes: None, note: None });
     }
 
     let (ext, suffix) = match format {
@@ -219,14 +319,58 @@ fn convert(
     let ext = ext.as_str();
 
     if is_pdf {
-        return pdf_to_images(input, ext, out_dir, options, on_page);
+        return pdf_to_images(input, input, ext, out_dir, options, on_page);
     }
 
     let (img, _) = open_oriented(input)?;
     let img = resize(img, options.resize);
     let output = unique_output_path(input, out_dir, suffix, ext);
     encode(&img, ext, &output, options.quality)?;
-    Ok(Converted::file(input, &output))
+    let mut converted = Converted::file(input, &output);
+    if ext == "bmp" && options.quality <= COMPRESS_QUALITY {
+        // BMP stores raw pixels: 24-bit (done for every opaque image) is as small as it gets.
+        converted.note = Some("BMP can't be compressed further".into());
+    }
+    Ok(converted)
+}
+
+/// Scanned PDF or photo of a document -> editable Word document, read by the system's
+/// text recognition (macOS Vision / Windows OCR)
+fn ocr_to_word(input: &Path, is_pdf: bool, out_dir: Option<&Path>, on_page: OnPage) -> Result<Converted, String> {
+    let name = file_name(input);
+    let mut pages = vec![];
+    if is_pdf {
+        let data = fs::read(input).map_err(|e| format!("\"{name}\" could not be read: {e}"))?;
+        let pdfium = pdf_render::pdfium()?;
+        let document = pdfium.load_pdf_from_byte_slice(&data, None).map_err(|_| format!("\"{name}\": the PDF could not be opened"))?;
+        let total = document.pages().len() as usize;
+        for (index, page) in document.pages().iter().enumerate() {
+            on_page(index, total);
+            let (w, h) = (page.width().value, page.height().value);
+            // 300 dpi reads small print well; very large pages are capped
+            let scale = (300.0 / 72.0f32).min(3500.0 / w.max(h).max(1.0));
+            let config = pdfium_render::prelude::PdfRenderConfig::new().scale_page_by_factor(scale);
+            let image = page.render_with_config(&config).map_err(|e| format!("\"{name}\": {e}"))?.as_image().map_err(|e| format!("\"{name}\": {e}"))?;
+            let scan = image.to_rgba8();
+            let lines = office::ocr::recognize(&scan).map_err(|e| format!("\"{name}\": {e}"))?;
+            pages.push(office::from_pdf::OcrPage { width: w, height: h, lines, scan: Some(scan) });
+        }
+        on_page(total, total);
+    } else {
+        let (img, _) = open_oriented(input)?;
+        on_page(0, 1);
+        let scan = img.to_rgba8();
+        let lines = office::ocr::recognize(&scan).map_err(|e| format!("\"{name}\": {e}"))?;
+        // A photo becomes a page as wide as A4, in the photo's proportions
+        let width = 595.3;
+        let height = width * img.height() as f32 / img.width().max(1) as f32;
+        pages.push(office::from_pdf::OcrPage { width, height, lines, scan: Some(scan) });
+        on_page(1, 1);
+    }
+    let docx = office::from_pdf::ocr_to_docx(pages).map_err(|e| format!("\"{name}\": {e}"))?;
+    let output = unique_output_path(input, out_dir, "converted", "docx");
+    fs::write(&output, docx).map_err(save_err)?;
+    Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 0, sizes: None, note: Some("text recognised".into()) })
 }
 
 /// The extension to write when keeping a file's own format. HEIC cannot be written,
@@ -259,14 +403,18 @@ fn same_format_ext(input: &Path) -> Result<String, String> {
 
 /// A one-page PDF becomes `name_converted.ext`; longer ones get a `name_pages/` folder
 /// with `page-01.ext`, `page-02.ext`, … so they stay together and sort correctly.
+/// `pdf` is read; results are named after `name_from` (the PDF itself, or the Word
+/// document it was made from).
 fn pdf_to_images(
-    input: &Path,
+    pdf: &Path,
+    name_from: &Path,
     ext: &str,
     out_dir: Option<&Path>,
     options: &Options,
     on_page: OnPage,
 ) -> Result<Converted, String> {
-    let total = pdf_render::page_count(input)?;
+    let input = name_from;
+    let total = pdf_render::page_count(pdf)?;
     if total == 0 {
         return Err(format!("\"{}\" has no pages", file_name(input)));
     }
@@ -275,21 +423,21 @@ fn pdf_to_images(
 
     if total == 1 {
         let output = unique_output_path(input, out_dir, "converted", ext);
-        pdf_render::render_pages(input, |_, img| save(img, &output))?;
+        pdf_render::render_pages(pdf, |_, img| save(img, &output))?;
         on_page(1, 1);
-        return Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 1, sizes: None });
+        return Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 1, sizes: None, note: None });
     }
 
     let folder = unique_output_dir(input, out_dir, "pages");
     fs::create_dir_all(&folder).map_err(save_err)?;
     let digits = total.to_string().len().max(2);
-    let rendered = pdf_render::render_pages(input, |i, img| {
+    let rendered = pdf_render::render_pages(pdf, |i, img| {
         save(img, &folder.join(format!("page-{:0digits$}.{ext}", i + 1)))?;
         on_page(i + 1, total);
         Ok(())
     });
     match rendered {
-        Ok(pages) => Ok(Converted { path: folder.to_string_lossy().into_owned(), pages, sizes: None }),
+        Ok(pages) => Ok(Converted { path: folder.to_string_lossy().into_owned(), pages, sizes: None, note: None }),
         Err(e) => {
             let _ = fs::remove_dir_all(&folder); // no half-finished folders
             Err(e)
@@ -299,6 +447,43 @@ fn pdf_to_images(
 
 fn save_err(e: impl ToString) -> String {
     format!("Could not save: {}", e.to_string())
+}
+
+/// BMP and TIFF store raw pixels, so an alpha channel that is fully opaque only wastes
+/// space: 3 bytes per pixel instead of 4 is 25% smaller for an identical image.
+fn drop_opaque_alpha(img: &DynamicImage) -> DynamicImage {
+    if !img.color().has_alpha() {
+        return DynamicImage::ImageRgb8(img.to_rgb8());
+    }
+    let rgba = img.to_rgba8();
+    if rgba.pixels().all(|p| p[3] == u8::MAX) {
+        DynamicImage::ImageRgb8(img.to_rgb8())
+    } else {
+        DynamicImage::ImageRgba8(rgba)
+    }
+}
+
+/// "Compress" for TIFF: lossless Deflate with the horizontal predictor (both part of
+/// the TIFF standard and read by every major app). The `image` crate only writes
+/// uncompressed TIFF, so the `tiff` crate is used directly.
+fn write_tiff_deflate(img: &DynamicImage, output: &Path) -> Result<(), String> {
+    use tiff::encoder::compression::DeflateLevel;
+    use tiff::encoder::{colortype, Compression, TiffEncoder};
+    use tiff::tags::Predictor;
+
+    let file = File::create(output).map(BufWriter::new).map_err(save_err)?;
+    let mut encoder = TiffEncoder::new(file)
+        .map_err(save_err)?
+        .with_compression(Compression::Deflate(DeflateLevel::Best))
+        .with_predictor(Predictor::Horizontal);
+    match drop_opaque_alpha(img) {
+        DynamicImage::ImageRgb8(rgb) => encoder.write_image::<colortype::RGB8>(rgb.width(), rgb.height(), rgb.as_raw()),
+        other => {
+            let rgba = other.to_rgba8();
+            encoder.write_image::<colortype::RGBA8>(rgba.width(), rgba.height(), rgba.as_raw())
+        }
+    }
+    .map_err(save_err)
 }
 
 /// Applies the resize setting. Never upscales.
@@ -337,9 +522,15 @@ fn encode(img: &DynamicImage, ext: &str, output: &Path, quality: u8) -> Result<(
             .map_err(save_err),
         "png" => img.save_with_format(output, ImageFormat::Png).map_err(save_err),
         "webp" => rgba().save_with_format(output, ImageFormat::WebP).map_err(save_err),
-        "bmp" => rgba().save_with_format(output, ImageFormat::Bmp).map_err(save_err),
-        "tiff" => rgba().save_with_format(output, ImageFormat::Tiff).map_err(save_err),
-        "gif" => rgba().save_with_format(output, ImageFormat::Gif).map_err(save_err),
+        "bmp" => drop_opaque_alpha(img).save_with_format(output, ImageFormat::Bmp).map_err(save_err),
+        "tiff" if quality <= COMPRESS_QUALITY => write_tiff_deflate(img, output),
+        "tiff" => drop_opaque_alpha(img).save_with_format(output, ImageFormat::Tiff).map_err(save_err),
+        "gif" => {
+            let rgba = img.to_rgba8();
+            GifEncoder::new_with_speed(&mut create()?, GIF_SPEED)
+                .encode(rgba.as_raw(), rgba.width(), rgba.height(), image::ExtendedColorType::Rgba8)
+                .map_err(save_err)
+        }
         "ico" => DynamicImage::ImageRgba8(square_icon(img))
             .save_with_format(output, ImageFormat::Ico)
             .map_err(save_err),
@@ -401,7 +592,7 @@ fn merge_to_pdf(
         }
     }
     if ok.is_empty() {
-        return Ok(BatchResult { outputs: vec![], errors, pages: 0, bytes_before: 0, bytes_after: 0 });
+        return Ok(BatchResult { outputs: vec![], errors, pages: 0, bytes_before: 0, bytes_after: 0, note: None });
     }
 
     // Named after the first file, saved next to it
@@ -415,6 +606,7 @@ fn merge_to_pdf(
         pages: 0,
         bytes_before: 0,
         bytes_after: 0,
+        note: None,
     })
 }
 
@@ -737,4 +929,164 @@ mod tests {
         assert!(c.path.ends_with("shot_resized.png"));
         assert_eq!(image::open(&c.path).unwrap().dimensions(), (200, 150));
     }
+
+    #[test]
+    fn bmp_and_tiff_get_as_small_as_their_format_allows() {
+        let dir = temp_dir("rawformats");
+        let photo = dir.join("photo.png");
+        // Opaque, but stored as RGBA (like most screenshots)
+        DynamicImage::ImageRgba8(RgbaImage::from_fn(300, 200, |x, y| image::Rgba([(x * 3) as u8, (y * 5) as u8, 90, 255])))
+            .save(&photo)
+            .unwrap();
+        let none = &|_: usize, _: usize| {};
+        let plain = Options::default();
+        let compress = Options { resize: Resize::Original, quality: COMPRESS_QUALITY };
+
+        // BMP: 24-bit for opaque images (3 bytes per pixel + header), with an honest note on Compress
+        let bmp = run(photo.to_str().unwrap(), "bmp", None, &plain).unwrap();
+        assert!(fs::metadata(&bmp).unwrap().len() < 300 * 200 * 3 + 1024);
+        let c = convert(bmp.as_str(), SAME_FORMAT, None, &compress, "compressed", none).unwrap();
+        assert!(c.path.ends_with("_compressed.bmp"));
+        assert_eq!(c.note.as_deref(), Some("BMP can't be compressed further"));
+        assert_eq!(image::open(&c.path).unwrap().to_rgb8(), image::open(&photo).unwrap().to_rgb8());
+
+        // Transparent images keep their alpha channel in BMP
+        let clear = dir.join("clear.png");
+        DynamicImage::ImageRgba8(RgbaImage::from_pixel(40, 40, image::Rgba([10, 20, 30, 0]))).save(&clear).unwrap();
+        let bmp = run(clear.to_str().unwrap(), "bmp", None, &plain).unwrap();
+        assert!(image::open(&bmp).unwrap().color().has_alpha());
+
+        // TIFF: Compress uses lossless Deflate, so it is smaller and pixel-identical
+        let tif = run(photo.to_str().unwrap(), "tiff", None, &plain).unwrap();
+        let small = convert(tif.as_str(), SAME_FORMAT, None, &compress, "compressed", none).unwrap();
+        assert!(small.path.ends_with("_compressed.tiff"));
+        let (before, after) = small.sizes.unwrap();
+        assert!(after < before / 2, "{after} vs {before}");
+        assert_eq!(image::open(&small.path).unwrap().to_rgb8(), image::open(&photo).unwrap().to_rgb8());
+    }
+
+    fn sample_docx(dir: &Path) -> PathBuf {
+        use docx_rs::*;
+        let docx = Docx::new()
+            .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Quarterly Report").bold().size(36)))
+            .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Revenue grew by twelve percent this quarter.")))
+            .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Page one").add_break(BreakType::Page).add_text("Page two")));
+        let path = dir.join("report.docx");
+        let mut out = std::io::Cursor::new(Vec::new());
+        docx.build().pack(&mut out).unwrap();
+        fs::write(&path, out.into_inner()).unwrap();
+        path
+    }
+
+    #[test]
+    fn word_documents_convert_through_the_pipeline() {
+        let dir = temp_dir("word");
+        let docx = sample_docx(&dir);
+        let none = &|_: usize, _: usize| {};
+        let plain = Options::default();
+
+        // Word -> PDF (built-in engine in tests)
+        let pdf = convert(docx.to_str().unwrap(), "pdf", None, &plain, "converted", none).unwrap();
+        assert!(pdf.path.ends_with("report_converted.pdf"));
+        assert!(fs::read(&pdf.path).unwrap().starts_with(b"%PDF-"));
+
+        // Word -> images: one per page, named after the Word file
+        let png = convert(docx.to_str().unwrap(), "png", None, &plain, "converted", none).unwrap();
+        assert_eq!(png.pages, 2);
+        assert!(png.path.ends_with("report_pages"));
+
+        // PDF -> Word, and that Word file reads back with the same text
+        let back = convert(&pdf.path, "docx", None, &plain, "converted", none).unwrap();
+        assert!(back.path.ends_with("report_converted_converted.docx"));
+        let model = crate::office::docx::read(&fs::read(&back.path).unwrap()).unwrap();
+        let text: String = model
+            .sections
+            .iter()
+            .flat_map(|s| s.blocks.iter())
+            .filter_map(|b| match b {
+                crate::office::docx::Block::Paragraph(p) => Some(
+                    p.inlines
+                        .iter()
+                        .filter_map(|i| match i {
+                            crate::office::docx::Inline::Text(t, _) => Some(t.as_str()),
+                            _ => None,
+                        })
+                        .collect::<String>(),
+                ),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("Quarterly Report"), "{text}");
+        assert!(text.contains("Revenue grew by twelve percent this quarter."), "{text}");
+        assert!(text.contains("Page two"), "{text}");
+
+        // Clear refusals for conversions that make no sense
+        assert!(convert(docx.to_str().unwrap(), "docx", None, &plain, "converted", none).is_err());
+        let photo = dir.join("photo.png");
+        sample(20, 20).save(&photo).unwrap();
+        let err = convert(photo.to_str().unwrap(), "docx", None, &plain, "converted", none).err().unwrap();
+        assert!(err.contains("only PDF files can become Word documents"), "{err}");
+
+        // Word OCR: a picture of text becomes an editable Word document (macOS/Windows)
+        if cfg!(any(target_os = "macos", windows)) {
+            let page = dir.join("scan.png");
+            let mut img = RgbImage::from_pixel(900, 300, Rgb([255, 255, 255]));
+            // "HELLO" in big block letters: 5x7 dot patterns, 12 px per dot
+            let font: [[&str; 7]; 5] = [
+                ["X...X", "X...X", "X...X", "XXXXX", "X...X", "X...X", "X...X"],
+                ["XXXXX", "X....", "X....", "XXXX.", "X....", "X....", "XXXXX"],
+                ["X....", "X....", "X....", "X....", "X....", "X....", "XXXXX"],
+                ["X....", "X....", "X....", "X....", "X....", "X....", "XXXXX"],
+                [".XXX.", "X...X", "X...X", "X...X", "X...X", "X...X", ".XXX."],
+            ];
+            for (k, letter) in font.iter().enumerate() {
+                for (row, bits) in letter.iter().enumerate() {
+                    for (col, bit) in bits.chars().enumerate() {
+                        if bit == 'X' {
+                            for dy in 0..12 {
+                                for dx in 0..12 {
+                                    img.put_pixel(60 + k as u32 * 160 + col as u32 * 12 + dx, 60 + row as u32 * 12 + dy, Rgb([0, 0, 0]));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            img.save(&page).unwrap();
+            let done = convert(page.to_str().unwrap(), "docx-ocr", None, &plain, "converted", none).unwrap();
+            let model = crate::office::docx::read(&fs::read(&done.path).unwrap()).unwrap();
+            let text = format!("{:?}", model.sections);
+            // (the blocky hand-drawn O may read as C or 0)
+            assert!(text.to_uppercase().contains("HELL"), "{text}");
+        }
+        // A ZIP that is not a Word document is not treated as one
+        let fake = dir.join("archive.docx.zip");
+        fs::write(&fake, b"PK\x03\x04 not really").unwrap();
+        assert!(word_kind(&fake).is_none());
+    }
+
+    /// Word OCR during development:
+    /// `FLIPFILE_SCAN=scan.pdf|photo.jpg FLIPFILE_OUT=dir cargo test review_ocr -- --ignored --nocapture`
+    /// writes the Word file into `dir` and renders it back as ocr1.png, ocr2.png, …
+    #[test]
+    #[ignore]
+    fn review_ocr() {
+        use pdfium_render::prelude::PdfRenderConfig;
+        let input = std::env::var("FLIPFILE_SCAN").expect("set FLIPFILE_SCAN");
+        let out = std::path::PathBuf::from(std::env::var("FLIPFILE_OUT").expect("set FLIPFILE_OUT"));
+        let none = &|_: usize, _: usize| {};
+        let start = std::time::Instant::now();
+        let done = convert(&input, "docx-ocr", Some(&out), &Options::default(), "converted", none).unwrap();
+        println!("ocr -> docx: {:.2}s {}", start.elapsed().as_secs_f64(), done.path);
+        let pdf = crate::office::docx_to_pdf_builtin(&fs::read(&done.path).unwrap()).unwrap();
+        let pdfium = pdf_render::pdfium().unwrap();
+        let doc = pdfium.load_pdf_from_byte_slice(&pdf, None).unwrap();
+        for (i, page) in doc.pages().iter().enumerate().take(4) {
+            let img = page.render_with_config(&PdfRenderConfig::new().set_target_width(900)).unwrap().as_image().unwrap();
+            img.save(out.join(format!("ocr{}.png", i + 1))).unwrap();
+        }
+        println!("pages: {}", doc.pages().len());
+    }
+
 }
