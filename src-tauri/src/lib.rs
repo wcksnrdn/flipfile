@@ -1,8 +1,10 @@
 mod clipboard;
 mod convert;
 mod glass;
+mod grants;
 mod history;
 mod keys;
+mod office;
 mod pdf;
 mod pdf_render;
 mod settings;
@@ -33,6 +35,15 @@ pub fn run() {
                 })
                 .build(),
         )
+        .manage(grants::Grants::default())
+        // Record dropped files before the UI is told about the drop (see grants.rs).
+        // Tauri runs these handlers synchronously right after emitting the event, so
+        // the grant is always in place before the UI can call convert_batch.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                window.state::<grants::Grants>().replace(paths.iter().cloned());
+            }
+        })
         .setup(|app| {
             let history_file = app.path().app_data_dir().ok().map(|d| d.join("history.json"));
             app.manage(Mutex::new(history::History::load(history_file)));
