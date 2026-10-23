@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="250 220 524 600">
+  <!-- Menu bar template icon (macOS): the mirrored "ff" mark from app-icon.svg in plain black.
+       macOS recolors template images for light and dark menu bars. -->
+  <g fill="none" stroke="#000" stroke-linecap="round" stroke-width="96">
+    <path d="M452 770 L452 420 C452 318 398 270 300 270"/>
+    <path d="M572 770 L572 420 C572 318 626 270 724 270"/>
+    <path d="M330 500 L452 500"/>
+    <path d="M572 500 L694 500"/>
+  </g>
+</svg>
