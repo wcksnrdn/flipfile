@@ -267,7 +267,7 @@ flipfile opens files from anywhere, so it is built to stay safe even if somethin
 | **Frozen prototypes** | `freezePrototype` blocks prototype-pollution attacks in the webview. |
 | **Least-privilege capabilities** (`capabilities/default.json`) | The UI can only listen to events, read the scale factor, move the window, reveal a file in Finder/Explorer, and call flipfile's own six commands. Opening URLs or apps, reading system paths, changing the window, registering shortcuts and anything else is refused. |
 | **App commands under the ACL** (`build.rs`) | flipfile's own commands are declared in an `AppManifest`, so they are subject to capabilities like plugin commands. |
-| **User-granted files only** (`src-tauri/src/grants.rs`) | The backend converts only files the user actually dropped or pasted, recorded from the native event before the UI sees it. The output folder is decided in Rust, never by the UI. Even injected script could not make flipfile read or write other files. |
+| **User-granted files only** (`src-tauri/src/state/grants.rs`) | The backend converts only files the user actually dropped or pasted, recorded from the native event before the UI sees it. The output folder is decided in Rust, never by the UI. Even injected script could not make flipfile read or write other files. |
 | **Input checks** | Pasted image names are sanitised; window geometry values are range-checked. |
 | **Memory-safe decoding** | Images are decoded in Rust; HEIC/AVIF by the operating system; PDFs by PDFium, pinned to a known release. |
 | **Verified PDFium** (`scripts/fetch-pdfium.mjs`) | The bundled PDFium library is pinned by SHA-256, both the downloaded archive and the extracted library, and re-checked on every build. The hashes were cross-checked against the GitHub build attestations of `bblanchon/pdfium-binaries`. Any mismatch stops the build. |
@@ -366,6 +366,9 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
 ## Project structure
 
 ```
+├── .github/workflows/
+│   ├── ci.yml               # typecheck, build and Rust tests on every push / PR
+│   └── release.yml          # builds installers for every OS when a v* tag is pushed
 ├── index.html
 ├── package.json
 ├── scripts/
@@ -383,9 +386,18 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
     ├── icons/               # app-icon.svg + tray-template.svg (sources) → generated icons
     └── src/
         ├── lib.rs           # app setup: plugins, tray, shortcut, state, commands
-        ├── convert.rs       # conversion pipeline, batching, progress, output names
-        ├── pdf.rs           # minimal PDF writer (images → PDF)
-        ├── pdf_render.rs    # PDF → images via PDFium
+        ├── convert/         # conversion pipeline behind `convert_batch`
+        │   ├── mod.rs       #   batching, progress, dispatch per file
+        │   ├── input.rs     #   file detection, decoding with EXIF orientation
+        │   ├── encode.rs    #   resize + every image encoder
+        │   ├── pdf.rs       #   PDF → images, images → merged PDF
+        │   ├── word.rs      #   Word → PDF/images, OCR → Word
+        │   ├── clean.rs     #   metadata removal (strip.rs: lossless JPEG/PNG)
+        │   ├── output.rs    #   unique output names, never overwrites
+        │   └── tests.rs
+        ├── pdf/
+        │   ├── writer.rs    # minimal PDF writer (images → PDF)
+        │   └── render.rs    # PDF → images via PDFium
         ├── office/          # Word ↔ PDF
         │   ├── docx.rs      #   .docx reader (styles, lists, tables, images, header/footer)
         │   ├── to_typst.rs  #   document → Typst layout code (text always escaped)
@@ -394,15 +406,16 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         │   ├── pdf_docx_writer.rs # page layout → .docx package
         │   ├── ocr.rs       #   text recognition via macOS Vision / Windows OCR
         │   └── apps.rs      #   uses Word / LibreOffice when installed, else built-in
-        ├── strip.rs         # lossless JPEG/PNG metadata removal
-        ├── system_codec.rs  # HEIC/AVIF via ImageIO (macOS) / WIC (Windows)
-        ├── settings.rs      # resize & quality presets, persisted
-        ├── grants.rs        # only files the user dropped/pasted may be converted
-        ├── history.rs       # recent conversions + undo, persisted
-        ├── tray.rs          # menu bar / tray menu, show/hide
-        ├── clipboard.rs     # ⌘V / Ctrl+V: images and copied files
-        ├── keys.rs          # Option/Alt state during a drag
-        └── glass.rs         # native glass view behind the webview (macOS)
+        ├── platform/        # OS integration
+        │   ├── system_codec.rs # HEIC/AVIF via ImageIO (macOS) / WIC (Windows)
+        │   ├── tray.rs      #   menu bar / tray menu, show/hide
+        │   ├── clipboard.rs #   ⌘V / Ctrl+V: images and copied files
+        │   ├── keys.rs      #   Option/Alt state during a drag
+        │   └── glass.rs     #   native glass view behind the webview (macOS)
+        └── state/           # app state managed by Tauri
+            ├── settings.rs  #   resize & quality presets, persisted
+            ├── grants.rs    #   only files the user dropped/pasted may be converted
+            └── history.rs   #   recent conversions + undo, persisted
 ```
 
 ---
@@ -457,5 +470,4 @@ Dividing the macOS value by `devicePixelRatio`, as the first version did, halved
 
 ## License
 
-Not decided yet.
-# flipfile
+[MIT](LICENSE) © wcksnrdn
