@@ -1,0 +1,42 @@
+name: CI
+
+# Typecheck + build the UI and run the Rust tests on every push and pull request,
+# so a broken main is caught before a release tag is pushed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # The tests use macOS-only engines (ImageIO for HEIC/AVIF, Vision for OCR)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+
+      - name: Typecheck and build UI
+        run: npm run build
+
+      - name: Fetch PDFium
+        run: npm run fetch-pdfium
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test

@@ -2,7 +2,9 @@
 name = "flipfile"
 version = "0.1.0"
 description = "flipfile: drag-and-drop file converter"
-authors = ["you"]
+authors = ["wcksnrdn"]
+license = "MIT"
+repository = "https://github.com/wcksnrdn/flipfile"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

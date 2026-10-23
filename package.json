@@ -2,13 +2,16 @@
   "name": "flipfile",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "fetch-pdfium": "node scripts/fetch-pdfium.mjs"
+    "fetch-pdfium": "node scripts/fetch-pdfium.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run fetch-pdfium && cd src-tauri && cargo test"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.3.0",
