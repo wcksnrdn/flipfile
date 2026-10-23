@@ -8,7 +8,7 @@ use image::RgbaImage;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
-use crate::grants::Grants;
+use crate::state::grants::Grants;
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]

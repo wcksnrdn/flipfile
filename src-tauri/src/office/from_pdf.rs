@@ -2336,7 +2336,7 @@ mod review {
     #[test]
     #[ignore]
     fn dump_pdf_page() {
-        let pdfium = crate::pdf_render::pdfium().unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
         let doc = pdfium.load_pdf_from_file(&std::env::var("FLIPFILE_PDF").unwrap(), None).unwrap();
         let index: i32 = std::env::var("FLIPFILE_PAGE").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
         let page = doc.pages().get(index - 1).unwrap();

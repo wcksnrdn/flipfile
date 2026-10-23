@@ -13,8 +13,8 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, Wry};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::history::History;
-use crate::settings::{Settings, QUALITY_OPTIONS, RESIZE_OPTIONS};
+use crate::state::history::History;
+use crate::state::settings::{Settings, QUALITY_OPTIONS, RESIZE_OPTIONS};
 
 pub const SHORTCUT: &str = "CmdOrCtrl+Shift+K";
 const TRAY_ID: &str = "main";
@@ -201,7 +201,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     // macOS: a monochrome template icon that adapts to light/dark menu bars, menu on click.
     #[cfg(target_os = "macos")]
     let builder = builder
-        .icon(Image::from_bytes(include_bytes!("../icons/tray-template.png"))?)
+        .icon(Image::from_bytes(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/icons/tray-template.png")))?)
         .icon_as_template(true)
         .show_menu_on_left_click(true);
 

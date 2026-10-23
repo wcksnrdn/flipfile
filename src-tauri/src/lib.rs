@@ -1,21 +1,16 @@
-mod clipboard;
-mod convert;
-mod glass;
-mod grants;
-mod history;
-mod keys;
-mod office;
-mod pdf;
-mod pdf_render;
-mod settings;
-mod strip;
-mod system_codec;
-mod tray;
+mod convert; // conversion pipeline behind `convert_batch`
+mod office; // Word <-> PDF engines
+mod pdf; // low-level PDF writing and PDFium rendering
+mod platform; // OS integration: clipboard, glass, keys, codecs, tray
+mod state; // app state: grants, history, settings
 
 use std::sync::Mutex;
 
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+use platform::{clipboard, glass, keys, tray};
+use state::{grants, history, settings};
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
@@ -53,7 +48,7 @@ pub fn run() {
             tray::setup(app.handle())?;
             clipboard::clear_temp(app.handle());
             if let Ok(dir) = app.path().resource_dir() {
-                pdf_render::set_library_dir(dir.join("pdfium"));
+                pdf::render::set_library_dir(dir.join("pdfium"));
             }
 
             // Another app may already own the shortcut; the tray still works without it.

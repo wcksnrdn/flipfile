@@ -23,7 +23,7 @@ mod tests {
 
     fn pdf_text(pdf: &[u8]) -> (usize, String) {
         // The app's shared PDFium binding: PDFium can only be bound once per process
-        let pdfium = crate::pdf_render::pdfium().unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
         let doc = pdfium.load_pdf_from_byte_slice(pdf, None).unwrap();
         let mut text = String::new();
         for page in doc.pages().iter() {
@@ -124,7 +124,7 @@ mod tests {
         let pdf = docx_to_pdf_builtin(&docx).unwrap();
         std::fs::write(out.join("review.pdf"), &pdf).unwrap();
         // The app's shared PDFium binding: PDFium can only be bound once per process
-        let pdfium = crate::pdf_render::pdfium().unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
         let doc = pdfium.load_pdf_from_byte_slice(&pdf, None).unwrap();
         for (i, page) in doc.pages().iter().enumerate() {
             let img = page.render_with_config(&PdfRenderConfig::new().set_target_width(900)).unwrap().as_image().unwrap();
@@ -143,7 +143,7 @@ mod tests {
         let markup = format!("{}{}", to_typst::PREAMBLE, std::fs::read_to_string(&input).unwrap());
         let pdf = typeset::to_pdf(markup, vec![]).unwrap();
         std::fs::write(out.join("typ.pdf"), &pdf).unwrap();
-        let pdfium = crate::pdf_render::pdfium().unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
         let doc = pdfium.load_pdf_from_byte_slice(&pdf, None).unwrap();
         for (i, page) in doc.pages().iter().enumerate().take(4) {
             let img = page.render_with_config(&PdfRenderConfig::new().set_target_width(900)).unwrap().as_image().unwrap();
@@ -160,7 +160,7 @@ mod tests {
         let input = std::env::var("FLIPFILE_PDF").expect("set FLIPFILE_PDF");
         let out = std::path::PathBuf::from(std::env::var("FLIPFILE_OUT").expect("set FLIPFILE_OUT"));
         // The app's shared PDFium binding: PDFium can only be bound once per process
-        let pdfium = crate::pdf_render::pdfium().unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
         let start = std::time::Instant::now();
         let docx = from_pdf::pdf_to_docx(&pdfium, &std::fs::read(&input).unwrap(), &|_, _| {}).unwrap();
         println!("pdf -> docx: {:.2}s, {} bytes", start.elapsed().as_secs_f64(), docx.len());
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     #[ignore]
     fn compare_pages() {
-        let pdfium = crate::pdf_render::pdfium().unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
         let heads = |var: &str| -> Vec<String> {
             let doc = pdfium.load_pdf_from_file(&std::env::var(var).unwrap(), None).unwrap();
             doc.pages()
@@ -267,7 +267,7 @@ mod tests {
         let input = std::env::var("FLIPFILE_PDF").expect("set FLIPFILE_PDF");
         let out = std::path::PathBuf::from(std::env::var("FLIPFILE_OUT").expect("set FLIPFILE_OUT"));
         let prefix = std::env::var("FLIPFILE_PREFIX").unwrap_or_else(|_| "page".into());
-        let pdfium = crate::pdf_render::pdfium().unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
         let doc = pdfium.load_pdf_from_file(&input, None).unwrap();
         let from: usize = std::env::var("FLIPFILE_FROM").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
         for (i, page) in doc.pages().iter().enumerate().skip(from - 1).take(8) {
