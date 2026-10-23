@@ -37,7 +37,7 @@ const MAIN = ring(
     { id: "webp", label: "WEBP" },
     { id: "bmp", label: "BMP" },
     { id: "pdf", label: "PDF" },
-    { id: "docx", label: "WORD", sub: "Soon", disabled: true },
+    { id: "docx", label: "WORD" },
     { id: "more", label: "More", sub: "•••", nav: "more" },
   ],
   -Math.PI / 2 // first format sits straight up
@@ -49,6 +49,8 @@ const MORE_ITEMS: Item[] = [
   { id: "ico", label: "ICO" },
   { id: "avif", label: "AVIF" },
   { id: "clean", label: "Clean", sub: "metadata" },
+  // Scanned PDFs and photos of documents -> editable Word, through the OS's own OCR
+  { id: "docx-ocr", label: "WORD", sub: "OCR" },
   { id: "back", label: "Back", sub: "‹", nav: "main" },
 ];
 
@@ -77,7 +79,8 @@ export const RINGS: Record<RingId, Ring> = { main: MAIN, more: MORE, size: SIZE 
 export function labelOf(id: string): string | undefined {
   for (const r of Object.values(RINGS)) {
     const item = r.items.find((i) => i.id === id);
-    if (item) return item.label;
+    // "WORD" + "OCR" reads as one name in titles
+    if (item) return item.id === "docx-ocr" ? "WORD OCR" : item.label;
   }
 }
 

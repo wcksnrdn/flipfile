@@ -4,7 +4,6 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { downloadDir } from "@tauri-apps/api/path";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { DEBUG_DROP, DebugOverlay, type DropDebugInfo } from "./DebugOverlay";
 import {
@@ -36,8 +35,7 @@ type Status = {
 // Files or an image pasted with Cmd/Ctrl+V, waiting for the user to click a format.
 type Picking = {
   paths: string[];
-  image: boolean; // raw clipboard image (saved as a temp file) rather than copied files
-  outDir?: string; // pasted images go to Downloads, since their source is temporary
+  image: boolean; // raw clipboard image (a temp file): the backend saves its result in Downloads
 };
 
 type Pasted = { kind: "files"; paths: string[] } | { kind: "image"; path: string } | { kind: "empty" };
@@ -48,7 +46,10 @@ type BatchResult = {
   pages: number;
   bytes_before: number;
   bytes_after: number;
+  note: string | null; // e.g. "BMP can't be compressed further"
 };
+
+const WORD_FILE = /\.(docx|docm|dotx|dotm|doc|dot)$/i;
 
 // Dropping on a size preset keeps each file's own format (see SAME_FORMAT in convert.rs)
 const SAME_FORMAT = "same";
@@ -104,6 +105,8 @@ export default function App() {
   const ringBeforeAlt = useRef<RingId>("main");
   const lastPoint = useRef<Point | null>(null);
   const [fileCount, setFileCount] = useState(0);
+  // Several *images* dropped on PDF are merged into one; Word documents become one PDF each
+  const [mergeable, setMergeable] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const [ringId, setRingId] = useState<RingId>("main");
   const [status, setStatus] = useState<Status | null>(null);
@@ -242,7 +245,7 @@ export default function App() {
     setHovered(null);
   };
 
-  const runBatch = async (paths: string[], format: string, outDir?: string, preset?: string | null) => {
+  const runBatch = async (paths: string[], format: string, toDownloads = false, preset?: string | null) => {
     window.clearTimeout(resetTimer.current);
     const same = format === SAME_FORMAT;
     const presetLabel = preset && !same ? ` · ${labelOf(preset)}` : "";
@@ -271,19 +274,19 @@ export default function App() {
         paths,
         format,
         onProgress,
-        outDir: outDir ?? null,
+        toDownloads,
         preset: preset ?? null,
       });
     } catch (e) {
-      result = { outputs: [], errors: [String(e)], pages: 0, bytes_before: 0, bytes_after: 0 };
+      result = { outputs: [], errors: [String(e)], pages: 0, bytes_before: 0, bytes_after: 0, note: null };
     }
 
-    const { outputs, errors, pages, bytes_before, bytes_after } = result;
+    const { outputs, errors, pages, bytes_before, bytes_after, note } = result;
     const merged = format === "pdf" && many && outputs.length === 1;
     // Resizing/compressing in place: the size change is what the user wants to see
     const sizes = (same || preset === "compress") && bytes_before > 0;
     const done = sizes
-      ? `${bytes_after >= bytes_before ? "Already compact · " : ""}${formatBytes(bytes_before)} → ${formatBytes(bytes_after)}`
+      ? `${note ? `${note} · ` : bytes_after >= bytes_before ? "Already compact · " : ""}${formatBytes(bytes_before)} → ${formatBytes(bytes_after)}`
       : merged
       ? `${plural(paths.length - errors.length, "image")} → 1 PDF${presetLabel}`
       : pages > 0 // PDF pages rendered to images (multi-page PDFs give a folder each)
@@ -291,7 +294,9 @@ export default function App() {
         : `${plural(outputs.length, "file")} → ${label}`;
 
     if (errors.length === 0) {
-      setStatus({ title: "✓ Done", hint: `${done} · click to show`, tone: "ok", outputs });
+      // A note (e.g. which Word engine was used) is shown unless it is already part of `done`
+      const extra = note && !sizes ? ` · ${note}` : "";
+      setStatus({ title: "✓ Done", hint: `${done}${extra} · click to show`, tone: "ok", outputs });
     } else {
       setStatus({
         title: outputs.length > 0 ? `${paths.length - errors.length} done, ${errors.length} failed` : "Failed",
@@ -331,6 +336,7 @@ export default function App() {
           closeRing(); // a drag replaces any pending paste
           setDragging(true);
           setFileCount(p.paths.length);
+          setMergeable(p.paths.length > 1 && p.paths.every((path) => !WORD_FILE.test(path)));
           const { point, raw } = at(p.position);
           setHover(resolve(p.type, point, raw));
         } else if (p.type === "over") {
@@ -344,7 +350,7 @@ export default function App() {
           const format = resolve(p.type, point, raw);
           const chosen = presetRef.current;
           closeRing();
-          if (format) runBatch(p.paths, format, undefined, chosen);
+          if (format) runBatch(p.paths, format, false, chosen);
         }
       })
       .then(keep);
@@ -427,11 +433,11 @@ export default function App() {
     lastIndex.current = null;
     if (pasted.kind === "files") {
       setFileCount(pasted.paths.length);
+      setMergeable(pasted.paths.length > 1 && pasted.paths.every((path) => !WORD_FILE.test(path)));
       setPicking({ paths: pasted.paths, image: false });
     } else {
       setFileCount(1);
-      const outDir = await downloadDir().catch(() => undefined);
-      setPicking({ paths: [pasted.path], image: true, outDir });
+      setPicking({ paths: [pasted.path], image: true });
     }
   };
 
@@ -485,10 +491,10 @@ export default function App() {
     if (!picking || coreRef.current?.contains(e.target as Node)) return;
     const format = resolve("click", { x: e.clientX, y: e.clientY });
     if (!format) return;
-    const { paths, outDir } = picking;
+    const { paths, image } = picking;
     const chosen = presetRef.current;
     closeRing();
-    runBatch(paths, format, outDir, chosen);
+    runBatch(paths, format, image, chosen);
   };
 
   const hoveredLabel = hovered ? labelOf(hovered) : undefined;
@@ -511,7 +517,9 @@ export default function App() {
       hint =
         hovered === "clean"
           ? `${verb} to strip metadata`
-          : hovered === "pdf" && fileCount > 1
+          : hovered === "docx-ocr"
+            ? `${verb} to read scanned text into Word`
+          : hovered === "pdf" && fileCount > 1 && mergeable
             ? `${verb} to merge into 1 PDF`
             : `${verb} to convert`;
     } else {
