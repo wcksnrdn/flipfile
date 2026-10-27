@@ -6,6 +6,17 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-27
+
+### Fixed
+
+- macOS: the downloaded app was reported as "damaged and can't be opened". The whole
+  bundle is now ad-hoc signed after its resources are added.
+
+### Added
+
+- macOS Intel (x64) build alongside Apple Silicon.
+
 ## [0.1.0] - 2026-10-23
 
 First public release.
@@ -22,5 +33,6 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/wcksnrdn/flipfile/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/wcksnrdn/flipfile/releases/tag/v0.1.0

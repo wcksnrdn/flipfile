@@ -1,6 +1,6 @@
 [package]
 name = "flipfile"
-version = "0.1.0"
+version = "0.1.1"
 description = "flipfile: drag-and-drop file converter"
 authors = ["wcksnrdn"]
 license = "MIT"
