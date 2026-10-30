@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-use platform::{clipboard, glass, keys, tray};
+use platform::{appearance, clipboard, glass, keys, tray};
 use state::{grants, history, settings};
 
 #[tauri::command]
@@ -34,10 +34,13 @@ pub fn run() {
         // Record dropped files before the UI is told about the drop (see grants.rs).
         // Tauri runs these handlers synchronously right after emitting the event, so
         // the grant is always in place before the UI can call convert_batch.
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
                 window.state::<grants::Grants>().replace(paths.iter().cloned());
             }
+            // The system switched between light and dark: swap the app icon to match
+            tauri::WindowEvent::ThemeChanged(theme) => appearance::apply(window.app_handle(), *theme),
+            _ => {}
         })
         .setup(|app| {
             let history_file = app.path().app_data_dir().ok().map(|d| d.join("history.json"));
@@ -46,6 +49,7 @@ pub fn run() {
             app.manage(Mutex::new(settings::Settings::load(settings_file)));
 
             tray::setup(app.handle())?;
+            appearance::init(app.handle());
             clipboard::clear_temp(app.handle());
             if let Ok(dir) = app.path().resource_dir() {
                 pdf::render::set_library_dir(dir.join("pdfium"));

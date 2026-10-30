@@ -54,13 +54,16 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSEvent",
   "NSGlassEffectView",
   "NSVisualEffectView",
+  # the light/dark Dock icon (src/platform/appearance.rs)
+  "NSApplication",
+  "NSImage",
 ] }
 objc2-core-foundation = "0.3"
 # Text recognition (Word OCR) with macOS' built-in Vision framework
 objc2-vision = { version = "0.3", default-features = false, features = [
   "std", "objc2-core-foundation", "VNRequest", "VNRecognizeTextRequest", "VNRequestHandler", "VNObservation", "VNTypes",
 ] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange", "NSData", "NSString", "NSUserDefaults"] }
 objc2-image-io = { version = "0.3", default-features = false, features = [
   "std",
   "objc2-core-graphics",

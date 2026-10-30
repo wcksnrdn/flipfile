@@ -17,7 +17,7 @@ use crate::state::history::History;
 use crate::state::settings::{Settings, QUALITY_OPTIONS, RESIZE_OPTIONS};
 
 pub const SHORTCUT: &str = "CmdOrCtrl+Shift+K";
-const TRAY_ID: &str = "main";
+pub(crate) const TRAY_ID: &str = "main";
 const RECENT_LIMIT: usize = 10;
 const REVEAL_PREFIX: &str = "reveal:";
 const RESIZE_PREFIX: &str = "resize:";

@@ -1,10 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="250 220 524 600">
-  <!-- Menu bar template icon (macOS): the mirrored "ff" mark from app-icon.svg in plain black.
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="72 72 880 880">
+  <!-- Menu bar template icon (macOS): the nested "f" mark in plain black.
        macOS recolors template images for light and dark menu bars. -->
-  <g fill="none" stroke="#000" stroke-linecap="round" stroke-width="96">
-    <path d="M452 770 L452 420 C452 318 398 270 300 270"/>
-    <path d="M572 770 L572 420 C572 318 626 270 724 270"/>
-    <path d="M330 500 L452 500"/>
-    <path d="M572 500 L694 500"/>
+  <defs><mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="#fff"/><path d="M 494.0 856.0 L 494.0 420.0 A 100 100 0 0 1 594.0 320.0 L 664.0 320.0" stroke="#000" stroke-width="192" stroke-linecap="round" fill="none"/></mask></defs>
+  <g fill="none" stroke="#000" stroke-linecap="round" stroke-width="112">
+    <path d="M 342.0 856.0 L 342.0 420.0 A 252 252 0 0 1 594.0 168.0 L 682.0 168.0" mask="url(#cut)"/>
+    <path d="M 494.0 856.0 L 494.0 420.0 A 100 100 0 0 1 594.0 320.0 L 664.0 320.0"/>
   </g>
 </svg>
