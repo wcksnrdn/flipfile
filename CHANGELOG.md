@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-30
+
+### Changed
+
+- New logo: two nested "f" strokes, in a clean monochrome palette.
+- The app icon follows the system appearance: light by default, dark in dark mode
+  (on macOS while the app runs; "Auto" appearance keeps the light icon).
+- New menu bar icon (macOS) with the same mark.
+
 ## [0.1.1] - 2026-10-27
 
 ### Fixed
@@ -33,6 +42,7 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/wcksnrdn/flipfile/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/wcksnrdn/flipfile/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/wcksnrdn/flipfile/releases/tag/v0.1.0
