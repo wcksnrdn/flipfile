@@ -290,6 +290,76 @@ fn sample_docx(dir: &Path) -> PathBuf {
     path
 }
 
+/// A small workbook written by hand: Rupiah accounting, a percentage, a merged title,
+/// a print title row, and a hidden sheet that must not print
+fn sample_xlsx(dir: &Path) -> PathBuf {
+    use std::io::Write as _;
+    let files: [(&str, &str); 7] = [
+        ("[Content_Types].xml", r#"<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>"#),
+        ("_rels/.rels", r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#),
+        ("xl/workbook.xml", r#"<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Neraca" sheetId="1" r:id="rId1"/><sheet name="Draft" sheetId="2" state="hidden" r:id="rId2"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">Neraca!$2:$2</definedName></definedNames></workbook>"#),
+        ("xl/_rels/workbook.xml.rels", r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>"#),
+        ("xl/styles.xml", r#"<?xml version="1.0"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="_-[$Rp-421]* #,##0_-;\-[$Rp-421]* #,##0_-;_-[$Rp-421]* &quot;-&quot;_-;_-@_-"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="2"><border/><border><bottom style="double"><color rgb="FF000000"/></bottom></border></borders><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1"/><xf numFmtId="10" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0"><alignment horizontal="center"/></xf></cellXfs></styleSheet>"#),
+        ("xl/sharedStrings.xml", r#"<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>LAPORAN POSISI KEUANGAN</t></si><si><t>Akun</t></si><si><t>Kas dan setara kas</t></si><si><t>Pertumbuhan</t></si></sst>"#),
+        ("xl/worksheets/sheet1.xml", r#"<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="30" customWidth="1"/><col min="2" max="2" width="22" customWidth="1"/></cols><sheetData><row r="1"><c r="A1" s="3" t="s"><v>0</v></c></row><row r="2"><c r="A2" t="s"><v>1</v></c></row><row r="3"><c r="A3" t="s"><v>2</v></c><c r="B3" s="1"><v>1500000</v></c></row><row r="4"><c r="A4" t="s"><v>3</v></c><c r="B4" s="2"><v>0.125</v></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>"#),
+    ];
+    let path = dir.join("neraca.xlsx");
+    let mut zip = zip::ZipWriter::new(File::create(&path).unwrap());
+    let opts = zip::write::SimpleFileOptions::default();
+    for (name, body) in files {
+        zip.start_file(name, opts).unwrap();
+        zip.write_all(body.as_bytes()).unwrap();
+    }
+    zip.start_file("xl/worksheets/sheet2.xml", opts).unwrap();
+    zip.write_all(br#"<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>SECRET DRAFT</t></is></c></row></sheetData></worksheet>"#).unwrap();
+    zip.finish().unwrap();
+    path
+}
+
+fn pdf_text(path: &str) -> (usize, String) {
+    let pdfium = crate::pdf::render::pdfium().unwrap();
+    let doc = pdfium.load_pdf_from_file(path, None).unwrap();
+    let text = doc.pages().iter().map(|p| p.text().unwrap().all()).collect::<Vec<_>>().join("\n");
+    (doc.pages().len() as usize, text)
+}
+
+#[test]
+fn spreadsheets_convert_through_the_pipeline() {
+    let dir = temp_dir("sheet");
+    let xlsx = sample_xlsx(&dir);
+    let none = &|_: usize, _: usize| {};
+    let plain = Options::default();
+
+    // Excel -> PDF (built-in engine in tests)
+    let pdf = convert(xlsx.to_str().unwrap(), "pdf", None, &plain, "converted", none).unwrap();
+    assert!(pdf.path.ends_with("neraca_converted.pdf"));
+    assert_eq!(pdf.note.as_deref(), Some("built-in engine"));
+    let (pages, text) = pdf_text(&pdf.path);
+    assert_eq!(pages, 1, "{text}");
+    for expected in ["LAPORAN POSISI KEUANGAN", "Kas dan setara kas", "Rp", "Pertumbuhan"] {
+        assert!(text.contains(expected), "missing {expected:?} in:\n{text}");
+    }
+    // the amount, grouped in the computer's own region style
+    let sep = crate::office::numfmt::Separators::system();
+    assert!(text.contains(&format!("1{g}500{g}000", g = sep.group)), "{text}");
+    assert!(text.contains(&format!("12{d}50%", d = sep.decimal)), "{text}");
+    assert!(!text.contains("SECRET DRAFT"), "hidden sheets must not print");
+
+    // Excel -> images, through the PDF
+    let png = convert(xlsx.to_str().unwrap(), "png", None, &plain, "converted", none).unwrap();
+    assert!(png.path.ends_with(".png"), "{}", png.path);
+
+    // CSV -> PDF, with ; separators detected
+    let csv = dir.join("kas.csv");
+    fs::write(&csv, "Tanggal;Keterangan;Jumlah\n2026-01-02;Setoran awal;2500000\n").unwrap();
+    let pdf = convert(csv.to_str().unwrap(), "pdf", None, &plain, "converted", none).unwrap();
+    let (_, text) = pdf_text(&pdf.path);
+    assert!(text.contains("Setoran awal") && text.contains("2500000"), "{text}");
+
+    // Word formats make no sense for a spreadsheet
+    assert!(convert(xlsx.to_str().unwrap(), "docx", None, &plain, "converted", none).is_err());
+}
+
 #[test]
 fn word_documents_convert_through_the_pipeline() {
     let dir = temp_dir("word");

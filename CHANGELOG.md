@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Excel → PDF** (`.xlsx`, `.xlsm`, `.csv`; `.xls`/`.ods` with Excel or LibreOffice).
+  Microsoft Excel (Windows) or LibreOffice are used when installed; otherwise a built-in
+  engine prints every visible sheet like Excel: page setup, fit to page, print area,
+  repeated title rows, page breaks, header/footer, number formats (accounting, Rupiah,
+  dates, percentages) in the region's own separators, fonts, fills, borders, merged
+  cells, wrapped text and pictures.
+
 ## [0.1.2] - 2026-10-30
 
 ### Changed

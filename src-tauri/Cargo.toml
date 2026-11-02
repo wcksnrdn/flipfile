@@ -63,7 +63,7 @@ objc2-core-foundation = "0.3"
 objc2-vision = { version = "0.3", default-features = false, features = [
   "std", "objc2-core-foundation", "VNRequest", "VNRecognizeTextRequest", "VNRequestHandler", "VNObservation", "VNTypes",
 ] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange", "NSData", "NSString", "NSUserDefaults"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange", "NSData", "NSString", "NSUserDefaults", "NSLocale"] }
 objc2-image-io = { version = "0.3", default-features = false, features = [
   "std",
   "objc2-core-graphics",
@@ -78,6 +78,8 @@ windows = { version = "0.62", features = [
   "Win32_Graphics_Imaging", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Variant", "Win32_UI_Input_KeyboardAndMouse",
   # Text recognition (Word OCR) with Windows' built-in engine
   "Foundation", "Foundation_Collections", "Graphics_Imaging", "Media_Ocr", "Security_Cryptography", "Storage_Streams",
+  # The region's decimal and thousands separators (Excel -> PDF)
+  "Win32_Globalization",
 ] }
 
 

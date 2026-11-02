@@ -49,7 +49,8 @@ type BatchResult = {
   note: string | null; // e.g. "BMP can't be compressed further"
 };
 
-const WORD_FILE = /\.(docx|docm|dotx|dotm|doc|dot)$/i;
+// Office documents convert one by one; only images can be merged into one PDF
+const OFFICE_FILE = /\.(docx|docm|dotx|dotm|doc|dot|xlsx|xlsm|xltx|xltm|xls|xlt|ods|csv)$/i;
 
 // Dropping on a size preset keeps each file's own format (see SAME_FORMAT in convert.rs)
 const SAME_FORMAT = "same";
@@ -336,7 +337,7 @@ export default function App() {
           closeRing(); // a drag replaces any pending paste
           setDragging(true);
           setFileCount(p.paths.length);
-          setMergeable(p.paths.length > 1 && p.paths.every((path) => !WORD_FILE.test(path)));
+          setMergeable(p.paths.length > 1 && p.paths.every((path) => !OFFICE_FILE.test(path)));
           const { point, raw } = at(p.position);
           setHover(resolve(p.type, point, raw));
         } else if (p.type === "over") {
@@ -433,7 +434,7 @@ export default function App() {
     lastIndex.current = null;
     if (pasted.kind === "files") {
       setFileCount(pasted.paths.length);
-      setMergeable(pasted.paths.length > 1 && pasted.paths.every((path) => !WORD_FILE.test(path)));
+      setMergeable(pasted.paths.length > 1 && pasted.paths.every((path) => !OFFICE_FILE.test(path)));
       setPicking({ paths: pasted.paths, image: false });
     } else {
       setFileCount(1);

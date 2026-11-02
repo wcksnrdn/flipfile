@@ -1,12 +1,21 @@
-// Office documents (Word) <-> PDF, implemented in-process.
+// Office documents (Word, Excel) <-> PDF, implemented in-process.
 
 pub mod apps;
 pub mod docx;
 pub mod from_pdf;
+pub mod numfmt;
 pub mod ocr;
+pub mod sheet_pdf;
 mod pdf_docx_writer;
 pub mod to_typst;
 pub mod typeset;
+pub mod xlsx;
+
+/// Excel (.xlsx) or CSV -> PDF with flipfile's built-in engine (reader + Typst layout).
+pub fn sheet_to_pdf_builtin(bytes: &[u8], file_name: &str, csv: bool) -> Result<Vec<u8>, String> {
+    let workbook = if csv { xlsx::read_csv(bytes, file_name)? } else { xlsx::read(bytes)? };
+    sheet_pdf::to_pdf(&workbook, numfmt::Separators::system(), file_name)
+}
 
 /// Word -> PDF with flipfile's built-in engine (DOCX reader + Typst layout).
 pub fn docx_to_pdf_builtin(docx_bytes: &[u8]) -> Result<Vec<u8>, String> {
@@ -131,6 +140,36 @@ mod tests {
             img.save(out.join(format!("page{}.png", i + 1))).unwrap();
         }
         println!("pages: {}", doc.pages().len());
+    }
+
+    /// Visual check of Excel -> PDF during development:
+    /// `FLIPFILE_XLSX=in.xlsx FLIPFILE_OUT=dir cargo test review_xlsx -- --ignored --nocapture`
+    /// writes the PDF and a PNG per page into `dir` (FLIPFILE_MARKUP=1 prints the markup,
+    /// FLIPFILE_SEP=, uses 1.234,56 separators).
+    #[test]
+    #[ignore]
+    fn review_xlsx() {
+        let input = std::env::var("FLIPFILE_XLSX").expect("set FLIPFILE_XLSX");
+        let out = std::path::PathBuf::from(std::env::var("FLIPFILE_OUT").expect("set FLIPFILE_OUT"));
+        let bytes = std::fs::read(&input).unwrap();
+        let csv = input.to_lowercase().ends_with(".csv");
+        let wb = if csv { xlsx::read_csv(&bytes, "review.csv").unwrap() } else { xlsx::read(&bytes).unwrap() };
+        let sep = if std::env::var("FLIPFILE_SEP").as_deref() == Ok(",") { numfmt::Separators::COMMA } else { numfmt::Separators::US };
+        let printed = sheet_pdf::print(&wb, sep, "review.xlsx").unwrap();
+        if std::env::var("FLIPFILE_MARKUP").is_ok() {
+            println!("{}", printed.markup);
+        }
+        let start = std::time::Instant::now();
+        let pdf = typeset::to_pdf(printed.markup, printed.files).unwrap();
+        println!("typeset in {:?}", start.elapsed());
+        std::fs::write(out.join("review.pdf"), &pdf).unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
+        let doc = pdfium.load_pdf_from_byte_slice(&pdf, None).unwrap();
+        for (i, page) in doc.pages().iter().enumerate().take(12) {
+            let img = page.render_with_config(&PdfRenderConfig::new().set_target_width(1100)).unwrap().as_image().unwrap();
+            img.save(out.join(format!("page{}.png", i + 1))).unwrap();
+        }
+        println!("sheets: {}, pages: {}", wb.sheets.len(), doc.pages().len());
     }
 
     /// Renders hand-written Typst markup (with the engine's preamble) to PNGs:

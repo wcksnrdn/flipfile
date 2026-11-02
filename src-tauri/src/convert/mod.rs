@@ -4,7 +4,7 @@
 // - input:  inspecting and decoding input files
 // - encode: resizing and writing every image format
 // - pdf:    PDF -> images, images -> one merged PDF
-// - word:   Word -> PDF/images, OCR -> Word
+// - word:   Word and Excel -> PDF/images, OCR -> Word
 // - clean:  lossless metadata removal (with strip)
 // - output: unique output paths
 
@@ -33,10 +33,10 @@ use crate::state::history::History;
 use crate::state::settings::{Options, Settings, COMPRESS_QUALITY};
 use clean::clean;
 use encode::{encode, resize};
-use input::{file_name, header, open_oriented, same_format_ext, word_kind};
+use input::{file_name, header, open_oriented, same_format_ext, sheet_kind, word_kind};
 use output::{save_err, unique_output_path};
 use pdf::{merge_to_pdf, pdf_to_images};
-use word::{from_word, ocr_to_word};
+use word::{from_sheet, from_word, ocr_to_word};
 
 #[derive(Clone, Serialize)]
 pub struct Progress {
@@ -115,7 +115,7 @@ pub async fn convert_batch(
     // Runs on a separate thread so the UI never freezes
     let result = tauri::async_runtime::spawn_blocking(move || {
         let out_dir = out_dir.as_deref();
-        let all_images = paths.iter().all(|p| word_kind(Path::new(p)).is_none());
+        let all_images = paths.iter().all(|p| word_kind(Path::new(p)).is_none() && sheet_kind(Path::new(p)).is_none());
         if format == "pdf" && paths.len() > 1 && all_images {
             merge_to_pdf(&paths, &on_progress, out_dir, &options)
         } else {
@@ -205,6 +205,9 @@ fn convert(
     let is_pdf = pdf_render::is_pdf(&header(input));
     if let Some(legacy) = word_kind(input) {
         return from_word(input, legacy, format, out_dir, options, on_page);
+    }
+    if let Some(kind) = sheet_kind(input) {
+        return from_sheet(input, kind, format, out_dir, options, on_page);
     }
     if format == "docx-ocr" {
         return ocr_to_word(input, is_pdf, out_dir, on_page);

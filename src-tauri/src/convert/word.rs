@@ -1,5 +1,5 @@
-// Word documents in the pipeline: Word -> PDF / images, and OCR of scans and photos
-// into an editable Word document.
+// Office documents in the pipeline: Word and Excel -> PDF / images, and OCR of scans
+// and photos into an editable Word document.
 
 use std::fs;
 use std::path::Path;
@@ -29,7 +29,7 @@ pub(super) fn from_word(
             let engine = office::apps::word_to_pdf(input, &output, legacy).map_err(|e| format!("\"{name}\": {e}"))?;
             // Shown in the status, so it is clear which engine produced the PDF
             let note = match engine {
-                office::apps::Engine::Word => "via Word",
+                office::apps::Engine::Word | office::apps::Engine::Excel => "via Word",
                 office::apps::Engine::LibreOffice => "via LibreOffice",
                 office::apps::Engine::BuiltIn => "built-in engine",
             };
@@ -45,6 +45,40 @@ pub(super) fn from_word(
             result
         }
         _ => Err(format!("\"{name}\": pick PDF or an image format for Word documents")),
+    }
+}
+
+/// Spreadsheet (Excel, CSV) -> PDF, or -> images through a PDF
+pub(super) fn from_sheet(
+    input: &Path,
+    kind: office::apps::SheetKind,
+    format: &str,
+    out_dir: Option<&Path>,
+    options: &Options,
+    on_page: OnPage,
+) -> Result<Converted, String> {
+    let name = file_name(input);
+    let note = |e: office::apps::Engine| match e {
+        office::apps::Engine::Excel => "via Excel",
+        office::apps::Engine::LibreOffice => "via LibreOffice",
+        _ => "built-in engine",
+    };
+    match format {
+        "pdf" => {
+            let output = unique_output_path(input, out_dir, "converted", "pdf");
+            let engine = office::apps::sheet_to_pdf(input, &output, kind).map_err(|e| format!("\"{name}\": {e}"))?;
+            Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 0, sizes: None, note: Some(note(engine).into()) })
+        }
+        "jpg" | "jpeg" | "png" | "webp" | "bmp" | "tiff" | "gif" | "ico" | "avif" => {
+            let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+            let temp = std::env::temp_dir().join(format!("flipfile-sheet-{}-{nanos}.pdf", std::process::id()));
+            let result = office::apps::sheet_to_pdf(input, &temp, kind)
+                .map_err(|e| format!("\"{name}\": {e}"))
+                .and_then(|_| pdf_to_images(&temp, input, format, out_dir, options, on_page));
+            let _ = fs::remove_file(&temp);
+            result
+        }
+        _ => Err(format!("\"{name}\": pick PDF or an image format for spreadsheets")),
     }
 }
 

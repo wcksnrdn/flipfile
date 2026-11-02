@@ -14,6 +14,7 @@ Built with [Tauri v2](https://tauri.app), React + TypeScript (Vite) and Rust.
 - [Using flipfile](#using-flipfile)
   - [Converting by drag and drop](#converting-by-drag-and-drop)
   - [Word ↔ PDF](#word--pdf)
+  - [Excel → PDF](#excel--pdf)
   - [More formats and "Back"](#more-formats-and-back)
   - [Resize and compress](#resize-and-compress)
   - [Pasting from the clipboard](#pasting-from-the-clipboard)
@@ -39,6 +40,7 @@ Built with [Tauri v2](https://tauri.app), React + TypeScript (Vite) and Rust.
 - **Forgiving, direction-based targeting.** Move *toward* a format; you don't need to land on it exactly.
 - **iPhone photos (HEIC) and AVIF input** through the operating system's own codecs.
 - **Word → PDF and PDF → Word**, built in: no office suite needed (Microsoft Word or LibreOffice are used automatically when already installed, for an exact match).
+- **Excel → PDF**, built in: workbooks print the way Excel prints them (number formats, Rupiah/accounting, page setup, repeated titles). Excel or LibreOffice are used when installed.
 - **PDF → images** (every page, 200 DPI) with PDFium, the PDF engine used by Chrome.
 - **Images → one PDF.** Drop several images on PDF and get a single multi-page document.
 - **Resize and compress**, either as a default in the tray menu or for one drop by holding ⌥ Option / Alt.
@@ -94,6 +96,19 @@ PDF → Word rebuilds the document from the PDF's layout, in the spirit of pdf2d
 Pages filled to the bottom edge get their gaps tightened by a few points, so nothing spills onto an extra page; on a test set of 30 varied PDFs (reports, journals, books, invoices, certificates, infographics, slides) every converted document has exactly as many pages as the original. Pictures are kept at most at 300 dpi of their size on the page, photo backgrounds are stored as JPEG, so the Word file is usually no bigger than the PDF.
 
 Scanned pages without text are kept as page images by **WORD**; use **WORD OCR** to get their text.
+
+### Excel → PDF
+
+Drop an Excel workbook (`.xlsx`, `.xlsm`) or a `.csv` on **PDF**; on an image format it gives one image per page. Like Word → PDF, Microsoft Excel (Windows) or LibreOffice are used when installed; otherwise flipfile's built-in engine prints the workbook itself, so nothing has to be installed. Old `.xls` and `.ods` files need Excel or LibreOffice.
+
+The built-in engine prints what Excel would print:
+
+- **Every visible sheet**, each with its own page setup: paper size (A4, Letter, Legal, F4, …), orientation, margins, scale or *fit to N pages wide/tall*, centring, print area, rows repeated at the top of each page, manual page breaks, page order, and header/footer with page numbers (`&P`, `&N`), sheet and file name. Hidden sheets, rows and columns don't print.
+- **Numbers as Excel shows them**: Excel's number formats are reproduced, including accounting and currency formats (`Rp`, `$`, the symbol at the cell's left edge and negatives in brackets), `[Red]` negatives, percentages, thousands scaling, scientific notation, fractions, and dates and times. Thousands and decimal separators follow the computer's region (1.234.567,89 in Indonesia, 1,234,567.89 in the US), and day/month names follow its language. Formulas print their last calculated result, as stored by Excel.
+- **The look of the sheet**: column widths and row heights in Excel's own units, fonts, fills, borders (thin, thick, double, dashed, …), merged cells, alignment and indents, wrapped text (rows without a fixed height grow to fit it), pictures such as logos, and printed gridlines when the sheet asks for them. Text spills into empty neighbouring cells, numbers that don't fit show `####`, as in Excel.
+- **CSV** files print as a table with gridlines and a bold header row; `,` `;` tab and `|` separators are detected, and codes with leading zeros stay as written.
+
+Charts, shapes and conditional formatting are not drawn by the built-in engine yet.
 
 ### WORD OCR (scans and photos)
 
@@ -199,6 +214,8 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | PDF | ✓ *(PDFium)* | ✓ | Images → PDF (one page per image); PDF → images at 200 DPI |
 | Word (DOCX) | ✓ | ✓ | Word → PDF / images; PDF → Word. See [Word ↔ PDF](#word--pdf) |
 | Word 97–2003 (DOC) | ✓ *(Word/LibreOffice)* | — | Needs Word or LibreOffice installed |
+| Excel (XLSX, XLSM), CSV | ✓ | — | Excel → PDF / images. See [Excel → PDF](#excel--pdf) |
+| Excel 97–2003 (XLS), ODS | ✓ *(Excel/LibreOffice)* | — | Needs Excel or LibreOffice installed |
 
 **Clean metadata** removes EXIF, GPS, XMP, IPTC and text comments. JPG and PNG are cleaned **losslessly**; color profiles are kept. Photos with a rotation tag are re-saved upright so they don't end up sideways. Other formats are re-encoded. HEIC, AVIF and PDF can't be cleaned yet.
 
@@ -213,6 +230,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Convert `photo.png` to JPG | `photo_converted.jpg` (next to the original) |
 | Several images → PDF | `firstimage_merged.pdf` |
 | Word → PDF | `report_converted.pdf` |
+| Excel → PDF | `budget_converted.pdf` (all visible sheets in one PDF) |
 | PDF → Word | `report_converted.docx` |
 | Multi-page Word → PNG | folder `report_pages/` with `page-01.png`, … |
 | One-page PDF → PNG | `document_converted.png` |
@@ -271,7 +289,7 @@ flipfile opens files from anywhere, so it is built to stay safe even if somethin
 | **Input checks** | Pasted image names are sanitised; window geometry values are range-checked. |
 | **Memory-safe decoding** | Images are decoded in Rust; HEIC/AVIF by the operating system; PDFs by PDFium, pinned to a known release. |
 | **Verified PDFium** (`scripts/fetch-pdfium.mjs`) | The bundled PDFium library is pinned by SHA-256, both the downloaded archive and the extracted library, and re-checked on every build. The hashes were cross-checked against the GitHub build attestations of `bblanchon/pdfium-binaries`. Any mismatch stops the build. |
-| **Office apps run safely** (`src-tauri/src/office/apps.rs`) | When Word or LibreOffice is used, file paths are passed as arguments or environment variables, never pasted into script text; every run has a time limit and only that child process is stopped on timeout; LibreOffice gets a private, temporary profile. Word documents are read with size limits (no zip bombs), external links inside them are never followed, and their text is escaped before layout so document content cannot change the layout code. |
+| **Office apps run safely** (`src-tauri/src/office/apps.rs`) | When Word, Excel or LibreOffice is used, file paths are passed as arguments or environment variables, never pasted into script text; every run has a time limit and only that child process is stopped on timeout; LibreOffice gets a private, temporary profile. Word documents are read with size limits (no zip bombs), external links inside them are never followed, and their text is escaped before layout so document content cannot change the layout code. |
 | **Offline** | No network access at runtime, no telemetry, no auto-loaded remote content. |
 
 Download flipfile **only from this repository's GitHub Releases page**.
@@ -339,7 +357,7 @@ The tests cover every output format, EXIF orientation, metadata stripping, PDF m
 - `renders_pdf_pages_to_images` uses the PDFium library from `npm run fetch-pdfium`.
 - `decodes_heic_and_avif_via_imageio` runs only on macOS; it creates real HEIC/AVIF files with the built-in `sips` tool.
 
-### Reviewing Word ↔ PDF output
+### Reviewing Word ↔ PDF and Excel → PDF output
 
 Two ignored tests render conversions to PNG for a visual check:
 
@@ -347,11 +365,12 @@ Two ignored tests render conversions to PNG for a visual check:
 cd src-tauri
 FLIPFILE_DOCX=in.docx FLIPFILE_OUT=/tmp/out cargo test review_docx -- --ignored   # Word → PDF → PNGs
 FLIPFILE_PDF=in.pdf   FLIPFILE_OUT=/tmp/out cargo test review_pdf  -- --ignored   # PDF → Word → PDF → PNGs
+FLIPFILE_XLSX=in.xlsx FLIPFILE_OUT=/tmp/out cargo test review_xlsx -- --ignored   # Excel/CSV → PDF → PNGs (FLIPFILE_SEP=, for 1.234,56)
 FLIPFILE_PDF=in.pdf   FLIPFILE_PAGE=3     cargo test dump_pdf_page -- --ignored --nocapture   # what the PDF analysis sees on a page
 FLIPFILE_PDF=ours.pdf FLIPFILE_REF=ref.pdf FLIPFILE_MAP=1 cargo test compare_pages -- --ignored --nocapture   # where two PDFs' pages drift apart
 ```
 
-Unit tests always use the built-in engines; they never open Word or LibreOffice.
+Unit tests always use the built-in engines; they never open Word, Excel or LibreOffice.
 
 ### Debug mode for drop positions
 
@@ -398,14 +417,17 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         ├── pdf/
         │   ├── writer.rs    # minimal PDF writer (images → PDF)
         │   └── render.rs    # PDF → images via PDFium
-        ├── office/          # Word ↔ PDF
+        ├── office/          # Word ↔ PDF, Excel → PDF
         │   ├── docx.rs      #   .docx reader (styles, lists, tables, images, header/footer)
         │   ├── to_typst.rs  #   document → Typst layout code (text always escaped)
         │   ├── typeset.rs   #   in-process Typst → PDF, system fonts
         │   ├── from_pdf.rs  #   PDF → page layout (tables, text, header/footer, pictures, decoration)
         │   ├── pdf_docx_writer.rs # page layout → .docx package
         │   ├── ocr.rs       #   text recognition via macOS Vision / Windows OCR
-        │   └── apps.rs      #   uses Word / LibreOffice when installed, else built-in
+        │   ├── xlsx.rs      #   .xlsx / .csv reader (cells, styles, page setup, pictures)
+        │   ├── numfmt.rs    #   Excel number formats, in the region's separators
+        │   ├── sheet_pdf.rs #   prints sheets into pages, like Excel
+        │   └── apps.rs      #   uses Word / Excel / LibreOffice when installed, else built-in
         ├── platform/        # OS integration
         │   ├── system_codec.rs # HEIC/AVIF via ImageIO (macOS) / WIC (Windows)
         │   ├── tray.rs      #   menu bar / tray menu, show/hide

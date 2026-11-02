@@ -1,4 +1,4 @@
-// Inspecting input files: names, magic bytes, Word detection, decoding with EXIF
+// Inspecting input files: names, magic bytes, Word/Excel detection, decoding with EXIF
 // orientation, and the extension to keep when a file stays in its own format.
 
 use image::metadata::Orientation;
@@ -55,6 +55,20 @@ pub(super) fn word_kind(path: &Path) -> Option<bool> {
         Some(true)
     } else {
         None
+    }
+}
+
+/// The kind of spreadsheet, from the file's content *and* extension
+pub(super) fn sheet_kind(path: &Path) -> Option<crate::office::apps::SheetKind> {
+    use crate::office::apps::SheetKind;
+    let head = header(path);
+    let ext = path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
+    match ext.as_str() {
+        "xlsx" | "xlsm" | "xltx" | "xltm" if head.starts_with(b"PK\x03\x04") => Some(SheetKind::Xlsx),
+        "xls" | "xlt" if head.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) => Some(SheetKind::Other),
+        "ods" if head.starts_with(b"PK\x03\x04") => Some(SheetKind::Other),
+        "csv" => Some(SheetKind::Csv),
+        _ => None,
     }
 }
 

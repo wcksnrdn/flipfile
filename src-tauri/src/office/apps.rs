@@ -1,7 +1,7 @@
-// Word -> PDF through an office app the user *already has*, for a result identical
-// to what that app prints: Microsoft Word (Windows) first, then LibreOffice. When neither is
-// installed, or either fails, flipfile's built-in engine is used instead, so the user
-// is never asked to install anything.
+// Word / Excel -> PDF through an office app the user *already has*, for a result
+// identical to what that app prints: Microsoft Word or Excel (Windows) first, then
+// LibreOffice. When neither is installed, or either fails, flipfile's built-in engine
+// is used instead, so the user is never asked to install anything.
 //
 // Safety: file paths are never spliced into script or command text (PowerShell gets
 // them through environment variables, LibreOffice as plain arguments), every external
@@ -19,6 +19,7 @@ const APP_TIMEOUT: Duration = Duration::from_secs(120);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Engine {
     Word,
+    Excel,
     LibreOffice,
     BuiltIn,
 }
@@ -108,6 +109,50 @@ fn word(_input: &Path, _output: &Path) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Microsoft Excel
+
+// macOS: not used, for the same reason as Word (Excel for Mac is sandboxed).
+#[cfg(target_os = "macos")]
+fn excel(_input: &Path, _output: &Path) -> Result<(), String> {
+    Err("not used on macOS (Excel is sandboxed)".into())
+}
+
+#[cfg(windows)]
+fn excel(input: &Path, output: &Path) -> Result<(), String> {
+    // Every visible sheet, with each sheet's own print setup (as File > Export does).
+    // Paths come in through environment variables, so no quoting can break the script.
+    const SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$excel = New-Object -ComObject Excel.Application
+try {
+    $excel.Visible = $false
+    $excel.DisplayAlerts = $false
+    $excel.AskToUpdateLinks = $false
+    $book = $excel.Workbooks.Open($env:FLIPFILE_IN, 0, $true)
+    $book.ExportAsFixedFormat(0, $env:FLIPFILE_OUT)
+    $book.Close($false)
+} finally {
+    $excel.Quit()
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel)
+}
+"#;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut cmd = Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", SCRIPT])
+        .env("FLIPFILE_IN", input)
+        .env("FLIPFILE_OUT", output)
+        .creation_flags(CREATE_NO_WINDOW);
+    run_with_timeout(cmd, APP_TIMEOUT)?;
+    if valid_pdf(output) { Ok(()) } else { Err("Excel produced no PDF".into()) }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn excel(_input: &Path, _output: &Path) -> Result<(), String> {
+    Err("not available on Linux".into())
+}
+
+// ---------------------------------------------------------------------------
 // LibreOffice
 
 fn soffice() -> Option<PathBuf> {
@@ -189,6 +234,43 @@ pub fn word_to_pdf(input: &Path, output: &Path, legacy_doc: bool) -> Result<Engi
     }
     let bytes = fs::read(input).map_err(|e| format!("could not be read: {e}"))?;
     let pdf = super::docx_to_pdf_builtin(&bytes)?;
+    fs::write(output, pdf).map_err(|e| format!("Could not save: {e}"))?;
+    Ok(Engine::BuiltIn)
+}
+
+/// What kind of spreadsheet a file is
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SheetKind {
+    /// .xlsx / .xlsm / .xltx: every engine, including the built-in one
+    Xlsx,
+    /// .csv: every engine, including the built-in one
+    Csv,
+    /// .xls / .ods: Excel or LibreOffice only
+    Other,
+}
+
+/// Spreadsheet -> PDF file, with the best engine available on this computer
+pub fn sheet_to_pdf(input: &Path, output: &Path, kind: SheetKind) -> Result<Engine, String> {
+    if !cfg!(test) {
+        // CSV opens in Excel with the region's own separators; the built-in reader
+        // detects them itself, so Excel is only asked for real workbooks
+        if kind != SheetKind::Csv {
+            match excel(input, output) {
+                Ok(()) => return Ok(Engine::Excel),
+                Err(e) => eprintln!("[flipfile] Excel -> PDF with Microsoft Excel skipped: {e}"),
+            }
+        }
+        match libreoffice(input, output) {
+            Ok(()) => return Ok(Engine::LibreOffice),
+            Err(e) => eprintln!("[flipfile] Excel -> PDF with LibreOffice skipped: {e}"),
+        }
+    }
+    if kind == SheetKind::Other {
+        return Err("old .xls and .ods files can only be converted on a computer with Excel or LibreOffice; open it and save it as .xlsx first".into());
+    }
+    let bytes = fs::read(input).map_err(|e| format!("could not be read: {e}"))?;
+    let name = input.file_name().and_then(|n| n.to_str()).unwrap_or("workbook");
+    let pdf = super::sheet_to_pdf_builtin(&bytes, name, kind == SheetKind::Csv)?;
     fs::write(output, pdf).map_err(|e| format!("Could not save: {e}"))?;
     Ok(Engine::BuiltIn)
 }
