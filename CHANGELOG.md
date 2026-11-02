@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-02
+
 ### Added
 
 - **Excel → PDF** (`.xlsx`, `.xlsm`, `.csv`; `.xls`/`.ods` with Excel or LibreOffice).
@@ -14,6 +16,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
   repeated title rows, page breaks, header/footer, number formats (accounting, Rupiah,
   dates, percentages) in the region's own separators, fonts, fills, borders, merged
   cells, wrapped text and pictures.
+
+### Changed
+
+- README: animated demos of every feature, a download guide, and the details in
+  collapsible sections.
 
 ## [0.1.2] - 2026-10-30
 
@@ -51,7 +58,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/wcksnrdn/flipfile/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/wcksnrdn/flipfile/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/wcksnrdn/flipfile/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/wcksnrdn/flipfile/releases/tag/v0.1.0
