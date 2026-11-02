@@ -1,75 +1,155 @@
+<div align="center">
+
+<img src="src-tauri/icons/128x128@2x.png" width="112" alt="flipfile icon">
+
 # flipfile
 
-A tiny, drag-and-drop file converter for **macOS, Windows and Linux**.
+**Drop a file. Point to a format. Done.**
 
-flipfile lives on your desktop as a single glass circle. Drag files onto it, a ring of formats opens around it, and you drop on the one you want. The converted file appears next to the original. Nothing is uploaded: every conversion runs locally on your machine.
+A tiny file converter that lives on your desktop.<br>
+Photos, PDFs, Word, Excel and scans, converted right on your computer.<br>
+No uploads. No accounts. No waiting.
 
-Built with [Tauri v2](https://tauri.app), React + TypeScript (Vite) and Rust.
+[![Download](https://img.shields.io/github/v/release/wcksnrdn/flipfile?label=download&color=1d1d1f&style=for-the-badge)](https://github.com/wcksnrdn/flipfile/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/wcksnrdn/flipfile/ci.yml?branch=main&label=build&style=for-the-badge)](https://github.com/wcksnrdn/flipfile/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-6e6e73?style=for-the-badge)](LICENSE)
 
----
+![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%26%20Intel-f5f5f7?logo=apple&logoColor=1d1d1f)
+![Windows](https://img.shields.io/badge/Windows-10%20%26%2011-f5f5f7?logo=windows&logoColor=0078d4)
+![Linux](https://img.shields.io/badge/Linux-deb%20%C2%B7%20rpm%20%C2%B7%20AppImage-f5f5f7?logo=linux&logoColor=1d1d1f)
 
-## Contents
+<br>
 
-- [Features](#features)
-- [Using flipfile](#using-flipfile)
-  - [Converting by drag and drop](#converting-by-drag-and-drop)
-  - [Word ↔ PDF](#word--pdf)
-  - [Excel → PDF](#excel--pdf)
-  - [More formats and "Back"](#more-formats-and-back)
-  - [Resize and compress](#resize-and-compress)
-  - [Pasting from the clipboard](#pasting-from-the-clipboard)
-  - [After a conversion](#after-a-conversion)
-  - [Menu bar / system tray](#menu-bar--system-tray)
-  - [Keyboard shortcuts](#keyboard-shortcuts)
-- [Supported formats](#supported-formats)
-- [Where results are saved](#where-results-are-saved)
-- [Platform notes](#platform-notes)
-- [Privacy and stored data](#privacy-and-stored-data)
-- [Security](#security)
-- [Development](#development)
-- [Project structure](#project-structure)
-- [How it works](#how-it-works)
-- [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
+<img src="docs/media/hero.webp" width="100%" alt="flipfile on a Mac desktop: a photo is dragged onto the glass circle, the ring of formats opens, JPG is picked and the converted file appears next to the original">
 
----
+<br>
 
-## Features
+[**Download**](https://github.com/wcksnrdn/flipfile/releases/latest) &nbsp;·&nbsp; [See it in action](#see-it-in-action) &nbsp;·&nbsp; [How to use](#how-to-use) &nbsp;·&nbsp; [Formats](#supported-formats)
 
-- **Drag-and-drop conversion** between JPG, PNG, WEBP, BMP, TIFF, GIF, ICO, AVIF and PDF.
-- **Forgiving, direction-based targeting.** Move *toward* a format; you don't need to land on it exactly.
-- **iPhone photos (HEIC) and AVIF input** through the operating system's own codecs.
-- **Word → PDF and PDF → Word**, built in: no office suite needed (Microsoft Word or LibreOffice are used automatically when already installed, for an exact match).
-- **Excel → PDF**, built in: workbooks print the way Excel prints them (number formats, Rupiah/accounting, page setup, repeated titles). Excel or LibreOffice are used when installed.
-- **PDF → images** (every page, 200 DPI) with PDFium, the PDF engine used by Chrome.
-- **Images → one PDF.** Drop several images on PDF and get a single multi-page document.
-- **Resize and compress**, either as a default in the tray menu or for one drop by holding ⌥ Option / Alt.
-- **Strip metadata** (EXIF, GPS location, camera info, comments) losslessly for JPG and PNG.
-- **Phone photos come out upright**: EXIF orientation is applied.
-- **Paste** an image or copied files with ⌘V / Ctrl+V.
-- **Never overwrites anything**: results get a new name next to the original.
-- **Recent conversions and undo** (moves results to the Trash / Recycle Bin).
-- **Progress** for batches and multi-page PDFs, and a spinner for anything that takes a moment.
-- **Native Liquid Glass** on macOS 26+ (classic blur on older macOS, CSS glass on Windows/Linux).
+</div>
 
----
+<br>
 
-## Using flipfile
+## Why flipfile
 
-### Converting by drag and drop
+| **Private by design** | **Instant** | **Does the boring stuff** |
+|---|---|---|
+| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone photos, PDF ⇄ Word, Excel → PDF, scans → editable text, resize and compress, metadata cleaning. |
 
-1. Drag one or more files onto the circle.
-2. A ring of formats opens. Move toward a format; its slice lights up and the center shows what will happen.
-3. Release to convert. Release over the center circle to cancel.
+<br>
 
-Each format owns a whole slice of the ring, so you only need to move in its direction. The center text always shows the format that will be used when you let go.
+## See it in action
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Drag, point, let go**<br>
+<sub>Move toward a format, its slice lights up, release. The result lands next to the original.</sub>
+
+<img src="docs/media/drag.webp" width="100%" alt="Dragging a HEIC photo onto flipfile and releasing it on JPG">
+
+</td>
+<td width="50%" valign="top">
+
+**Works offline**<br>
+<sub>Turn the Wi-Fi off: everything still converts, because nothing is ever uploaded.</sub>
+
+<img src="docs/media/offline.webp" width="100%" alt="Switching Wi-Fi off from the menu bar">
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**A whole batch at once**<br>
+<sub>Select ten photos, drop them together, watch them finish one by one.</sub>
+
+<img src="docs/media/batch.webp" width="100%" alt="Ten photos converted to WEBP at once, each getting a check mark">
+
+</td>
+<td width="50%" valign="top">
+
+**PDF → Word you can edit**<br>
+<sub>Tables, columns, headers and pictures are rebuilt, not pasted as images.</sub>
+
+<img src="docs/media/pdf.webp" width="100%" alt="A PDF converted to Word and opened, with its table and two columns highlighted">
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**Scans and photos → text**<br>
+<sub>WORD OCR reads receipts and scanned pages with your computer's own text recognition.</sub>
+
+<img src="docs/media/ocr.webp" width="100%" alt="A photo of a receipt turned into an editable Word document">
+
+</td>
+<td width="50%" valign="top">
+
+**Resize and compress**<br>
+<sub>Hold ⌥ Option (Alt on Windows) while dragging for 4K, 1080p, 720p, 50% or a smaller file.</sub>
+
+<img src="docs/media/compress.webp" width="100%" alt="Holding Option shows the size ring; Compress makes the photo 85% smaller">
+
+</td>
+</tr>
+</table>
+
+### Excel → PDF that looks like Excel printed it
+
+<img align="right" src="docs/media/excel-to-pdf.webp" width="46%" alt="A profit and loss statement printed from Excel by flipfile, with Rupiah accounting formats and a double-underlined total">
+
+Drop a workbook on **PDF** and every visible sheet prints the way Excel prints it: page setup and fit to page, repeated title rows, headers and footers with page numbers, merged cells, borders and fills, logos, and **number formats exactly as Excel shows them**, including accounting and Rupiah formats with negatives in brackets.
+
+Separators follow your region (1.234.567,89 in Indonesia, 1,234,567.89 in the US), and dates follow your language.
+
+Excel or LibreOffice are used when installed; otherwise flipfile's own engine does it. Nothing to install either way.
+
+<br clear="right">
+
+<br>
+
+## Download
+
+Get the latest version from **[Releases](https://github.com/wcksnrdn/flipfile/releases/latest)**:
+
+| Your computer | File |
+|---|---|
+| Mac with Apple Silicon (M1 to M4) | `flipfile_x.y.z_aarch64.dmg` |
+| Mac with Intel | `flipfile_x.y.z_x64.dmg` |
+| Windows 10 / 11 | `flipfile_x.y.z_x64-setup.exe` |
+| Linux | Debian/Ubuntu `.deb` &nbsp;·&nbsp; Fedora `.rpm` &nbsp;·&nbsp; any distro `.AppImage` |
+
+<details>
+<summary><b>First launch: "can't be verified" or "Windows protected your PC"</b></summary>
+
+flipfile isn't notarized by Apple or code-signed for Windows yet, so the first launch needs one extra click:
+
+- **macOS**: open flipfile, click **Done**, then go to **System Settings → Privacy & Security** and click **Open Anyway**. Only once.
+- **Windows**: click **More info → Run anyway**.
+- **Linux**: `sudo apt install ./flipfile_*.deb`, `sudo dnf install ./flipfile-*.rpm`, or `chmod +x` the AppImage and run it.
+
+</details>
+
+<br>
+
+## How to use
+
+1. **Drag** files onto the glass circle. A ring of formats opens around it.
+2. **Point** toward a format. You don't have to hit it exactly: its whole slice lights up, and the centre tells you what will happen.
+3. **Let go.** The converted file appears next to the original. Click the circle to show it.
 
 | Ring | Formats |
 |---|---|
 | Main | JPG · JPEG · PNG · WEBP · BMP · PDF · WORD · **More** |
-| More | TIFF · GIF · ICO · AVIF · **Clean** metadata · **Back** |
+| More | TIFF · GIF · ICO · AVIF · **Clean** metadata · **WORD OCR** · **Back** |
 
-### Word ↔ PDF
+Also handy: **⌘V / Ctrl+V** pastes an image or copied files, **⌘⇧K / Ctrl+Shift+K** shows or hides flipfile from anywhere, and the menu bar / tray icon keeps your recent conversions with **Undo**.
+
+<details>
+<summary><b>Word ↔ PDF</b></summary>
 
 - **Word → PDF**: drop a `.docx` on **PDF**. Several Word files become one PDF each. Dropping a Word file on an image format gives one image per page.
 - **PDF → Word**: drop a PDF on **WORD** to get an editable `.docx`.
@@ -97,7 +177,10 @@ Pages filled to the bottom edge get their gaps tightened by a few points, so not
 
 Scanned pages without text are kept as page images by **WORD**; use **WORD OCR** to get their text.
 
-### Excel → PDF
+</details>
+
+<details>
+<summary><b>Excel → PDF</b></summary>
 
 Drop an Excel workbook (`.xlsx`, `.xlsm`) or a `.csv` on **PDF**; on an image format it gives one image per page. Like Word → PDF, Microsoft Excel (Windows) or LibreOffice are used when installed; otherwise flipfile's built-in engine prints the workbook itself, so nothing has to be installed. Old `.xls` and `.ods` files need Excel or LibreOffice.
 
@@ -110,7 +193,10 @@ The built-in engine prints what Excel would print:
 
 Charts, shapes and conditional formatting are not drawn by the built-in engine yet.
 
-### WORD OCR (scans and photos)
+</details>
+
+<details>
+<summary><b>WORD OCR (scans and photos)</b></summary>
 
 In the **More** ring, **WORD OCR** turns scanned PDFs and photos of documents (JPG, PNG, HEIC, …) into an editable Word document. The text is read by the operating system's own engine, offline, with nothing to install:
 
@@ -120,13 +206,19 @@ In the **More** ring, **WORD OCR** turns scanned PDFs and photos of documents (J
 | Windows 10/11 | Windows.Media.Ocr | the languages installed in Windows' settings |
 | Linux | none built in | flipfile says so instead of converting |
 
-The recognised text goes through the same layout reconstruction as PDF → Word (paragraphs, columns, alignment, running headers/footers, page numbers), keeps its colour, and the scan itself — with the text taken out of it — becomes the page's background, so logos, stamps, signatures, lines and photos stay where they were. A file without any readable text gives a clear message instead of an empty document.
+The recognised text goes through the same layout reconstruction as PDF → Word (paragraphs, columns, alignment, running headers/footers, page numbers), keeps its colour, and the scan itself, with the text taken out of it, becomes the page's background, so logos, stamps, signatures, lines and photos stay where they were. A file without any readable text gives a clear message instead of an empty document.
 
-### More formats and "Back"
+</details>
+
+<details>
+<summary><b>More formats and "Back"</b></summary>
 
 Moving onto **More** swaps in the second ring. **Back** sits in the same direction as More, so the way back is where you came from. The ring only switches when you *enter* one of these slices, so it never flips back and forth while you hold still.
 
-### Resize and compress
+</details>
+
+<details>
+<summary><b>Resize and compress</b></summary>
 
 There are two ways, and they work together:
 
@@ -158,7 +250,10 @@ When resizing or compressing in the same format, the result shows the size chang
 
 > **Windows note:** holding Alt while dragging from File Explorer normally means "create shortcut". flipfile always reads the dragged files and never moves, links or changes the originals.
 
-### Pasting from the clipboard
+</details>
+
+<details>
+<summary><b>Pasting from the clipboard</b></summary>
 
 Click the circle, press **⌘V** (macOS) or **Ctrl+V** (Windows/Linux), then point at a format and **click**. Press **Esc** or click the center to cancel.
 
@@ -168,13 +263,19 @@ Click the circle, press **⌘V** (macOS) or **Ctrl+V** (Windows/Linux), then poi
 | Files copied in Finder / File Explorer | Converted next to the originals, exactly like a drop |
 | Nothing usable | "Nothing to paste" |
 
-### After a conversion
+</details>
+
+<details>
+<summary><b>After a conversion</b></summary>
 
 - **Click the circle** (within a few seconds) to show the result in Finder / File Explorer.
 - **Press and drag** the circle to move the window anywhere on screen.
 - Errors are shown in red in the circle, for example `"notes.txt" is not a supported image`.
 
-### Menu bar / system tray
+</details>
+
+<details>
+<summary><b>Menu bar / system tray</b></summary>
 
 | Item | What it does |
 |---|---|
@@ -186,7 +287,10 @@ Click the circle, press **⌘V** (macOS) or **Ctrl+V** (Windows/Linux), then poi
 
 On macOS the icon adapts to light and dark menu bars and clicking it opens the menu; the Dock icon brings back a hidden window. On Windows, left-click shows/hides the window and right-click opens the menu. On Linux the menu is the only entry point (tray implementations there don't report clicks).
 
-### Keyboard shortcuts
+</details>
+
+<details>
+<summary><b>Keyboard shortcuts</b></summary>
 
 | Shortcut | Action |
 |---|---|
@@ -196,7 +300,9 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | **Esc** | Cancel a paste |
 | **⌘Q** / **Ctrl+Q** | Quit |
 
----
+</details>
+
+<br>
 
 ## Supported formats
 
@@ -212,16 +318,15 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | AVIF | ✓ *(OS codec)* | ✓ | Quality follows the Quality setting |
 | HEIC / HEIF | ✓ *(OS codec)* | — | Same-format presets save iPhone photos as JPG |
 | PDF | ✓ *(PDFium)* | ✓ | Images → PDF (one page per image); PDF → images at 200 DPI |
-| Word (DOCX) | ✓ | ✓ | Word → PDF / images; PDF → Word. See [Word ↔ PDF](#word--pdf) |
+| Word (DOCX) | ✓ | ✓ | Word → PDF / images; PDF → Word. See [How to use](#how-to-use) |
 | Word 97–2003 (DOC) | ✓ *(Word/LibreOffice)* | — | Needs Word or LibreOffice installed |
-| Excel (XLSX, XLSM), CSV | ✓ | — | Excel → PDF / images. See [Excel → PDF](#excel--pdf) |
+| Excel (XLSX, XLSM), CSV | ✓ | — | Excel → PDF / images. See [Excel → PDF](#excel--pdf-that-looks-like-excel-printed-it) |
 | Excel 97–2003 (XLS), ODS | ✓ *(Excel/LibreOffice)* | — | Needs Excel or LibreOffice installed |
 
 **Clean metadata** removes EXIF, GPS, XMP, IPTC and text comments. JPG and PNG are cleaned **losslessly**; color profiles are kept. Photos with a rotation tag are re-saved upright so they don't end up sideways. Other formats are re-encoded. HEIC, AVIF and PDF can't be cleaned yet.
 
----
-
-## Where results are saved
+<details>
+<summary><b>Where results are saved</b></summary>
 
 flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is appended.
 
@@ -239,9 +344,10 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Preset dropped in the same format | `photo_compressed.jpg` / `photo_resized.jpg` |
 | Pasted clipboard image | `~/Downloads/Clipboard 2026-10-20 at 14.03.12.png` |
 
----
+</details>
 
-## Platform notes
+<details>
+<summary><b>Platform notes</b></summary>
 
 | | macOS | Windows | Linux |
 |---|---|---|---|
@@ -251,11 +357,16 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Tray click | Opens menu | Left: show/hide · Right: menu | Menu only |
 | Dock / taskbar icon | ✓ | ✓ | ✓ |
 
----
+</details>
 
-## Privacy and stored data
+<br>
 
-flipfile works **offline**. Files never leave your computer, and the app makes no network requests.
+## Privacy
+
+flipfile works **offline**: files never leave your computer, the app makes no network requests and has no telemetry. It only remembers your recent conversions and your resize and quality choices.
+
+<details>
+<summary><b>Stored data, in detail</b></summary>
 
 It stores two small files in the app data folder:
 
@@ -272,9 +383,10 @@ It stores two small files in the app data folder:
 
 Pasted clipboard images are first written to the app's cache folder; that copy is replaced on the next paste and cleared on every launch. *Clear History* in the tray menu empties `history.json`.
 
----
+</details>
 
-## Security
+<details>
+<summary><b>Security</b></summary>
 
 flipfile opens files from anywhere, so it is built to stay safe even if something goes wrong in one layer.
 
@@ -296,9 +408,14 @@ Download flipfile **only from this repository's GitHub Releases page**.
 
 To report a vulnerability, please don't open a public issue; contact the maintainer privately (see `SECURITY.md` once added).
 
----
+</details>
 
-## Development
+<br>
+
+## For developers
+
+<details>
+<summary><b>Development: run, build, test</b></summary>
 
 ### Prerequisites
 
@@ -380,9 +497,10 @@ VITE_DEBUG_DROP=1 npm run tauri dev
 
 This shows a red dot where flipfile thinks the cursor is, plus a readout of the raw Tauri position, `devicePixelRatio`, the window scale factor, the converted position, the angle, the current ring and the format that would be used. Every drag event is also logged to the console with the prefix `[drop-debug]`. It is off by default; adding `?debug` to the page URL works too.
 
----
+</details>
 
-## Project structure
+<details>
+<summary><b>Project structure</b></summary>
 
 ```
 ├── .github/workflows/
@@ -440,9 +558,10 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
             └── history.rs   #   recent conversions + undo, persisted
 ```
 
----
+</details>
 
-## How it works
+<details>
+<summary><b>How it works</b></summary>
 
 **One source of truth for the ring.** `src/dropTarget.ts` defines the rings (items, start angle, sector size) and the geometry (core size, ring radii). The segment shapes, the label positions and the hit-testing are all derived from it, so what you see and what gets selected cannot drift apart.
 
@@ -464,9 +583,10 @@ Dividing the macOS value by `devicePixelRatio`, as the first version did, halved
 
 **Conversions** run on a worker pool sized to your CPU, off the UI thread, and report progress through a Tauri channel. PDFium renders PDFs page by page, so large documents never sit in memory all at once.
 
----
+</details>
 
-## Troubleshooting
+<details>
+<summary><b>Troubleshooting</b></summary>
 
 | Problem | What to do |
 |---|---|
@@ -477,19 +597,34 @@ Dividing the macOS value by `devicePixelRatio`, as the first version did, halved
 | A drop picks the wrong format | Run with `VITE_DEBUG_DROP=1` and check that the red dot follows the cursor. Please report the readout. |
 | "Already compact" after Compress | The file was already smaller than what the preset produces (common for PNG screenshots). The new copy is kept, so you can compare. |
 
----
+</details>
+
+<br>
 
 ## Roadmap
 
+- [x] Custom app icon, light and dark
+- [x] Builds for every OS on each release (`.dmg`, `.exe`/`.msi`, `.deb`/`.rpm`/`.AppImage`)
+- [x] Text recognition (OCR) for scans and photos → Word
+- [x] Real tables in PDF → Word
+- [x] Excel → PDF
+- [ ] macOS notarization and Windows code signing
 - [ ] Remember the window position between sessions
 - [ ] Let clicks pass through the transparent area around the circle
-- [ ] Custom app icon
-- [ ] GitHub Actions builds for every `v*` tag (`.dmg`, `.msi`/`.exe`, `.AppImage`/`.deb`), with macOS signing and notarization
 - [ ] Auto-update
 - [ ] Launch at login
-- [ ] Text recognition (OCR) for scanned PDFs → Word, with the OS's own OCR
-- [ ] Real tables and equation layout in PDF → Word
+- [ ] Charts in Excel → PDF (built-in engine)
 
-## License
+<br>
 
-[MIT](LICENSE) © wcksnrdn
+<div align="center">
+
+<img src="src-tauri/icons/128x128.png" width="64" alt="">
+
+**flipfile** &nbsp;·&nbsp; Drop. Flip. Done.
+
+[**Try it for free**](https://github.com/wcksnrdn/flipfile/releases/latest)
+
+<sub>[MIT](LICENSE) © wcksnrdn</sub>
+
+</div>
