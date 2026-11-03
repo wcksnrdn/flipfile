@@ -3,7 +3,17 @@ import type { PhysicalPosition } from "@tauri-apps/api/dpi";
 // Single source of truth for the ring layout. Both the segment layout (App.tsx)
 // and the drop hit-testing below are derived from these values, so they cannot drift.
 
-export type RingId = "main" | "more" | "size";
+export type RingId =
+  | "category"
+  | "photo"
+  | "photo-formats"
+  | "photo-tools"
+  | "photo-compress"
+  | "photo-transform"
+  | "office"
+  | "video"
+  | "music"
+  | "size";
 
 export type Item = {
   id: string;
@@ -21,6 +31,8 @@ export type Ring = {
   sector: number;
 };
 
+const IS_MAC = /Mac/i.test(navigator.userAgent);
+
 const ring = (id: RingId, items: Item[], start: number): Ring => ({
   id,
   items,
@@ -28,38 +40,152 @@ const ring = (id: RingId, items: Item[], start: number): Ring => ({
   sector: (2 * Math.PI) / items.length,
 });
 
-const MAIN = ring(
-  "main",
+// Places a sub-ring so its "Back" segment sits at the exact angle of the parent
+// segment that opened it, so the way back is where the cursor came from.
+const alignedSubRing = (id: RingId, items: Item[], parent: Ring, viaNav: RingId, backNav: RingId): Ring => {
+  const enterIdx = parent.items.findIndex((i) => i.nav === viaNav);
+  const enterAngle = parent.start + (enterIdx >= 0 ? enterIdx : 0) * parent.sector;
+  const backIdx = items.findIndex((i) => i.nav === backNav);
+  const sector = (2 * Math.PI) / items.length;
+  return ring(id, items, enterAngle - (backIdx >= 0 ? backIdx : 0) * sector);
+};
+
+// ─── Category lobby (shown first on drag) ───────────────────────────────
+const CATEGORY = ring(
+  "category",
   [
-    { id: "jpg", label: "JPG" },
-    { id: "jpeg", label: "JPEG" },
-    { id: "png", label: "PNG" },
-    { id: "webp", label: "WEBP" },
-    { id: "bmp", label: "BMP" },
-    { id: "pdf", label: "PDF" },
-    { id: "docx", label: "WORD" },
-    { id: "more", label: "More", sub: "•••", nav: "more" },
+    { id: "cat-photo", label: "Photo", nav: "photo" },
+    { id: "cat-office", label: "Office", nav: "office" },
+    { id: "cat-video", label: "Video", nav: "video" },
+    { id: "cat-music", label: "Music", nav: "music" },
   ],
-  -Math.PI / 2 // first format sits straight up
+  -Math.PI / 2 // first category sits straight up
 );
 
-const MORE_ITEMS: Item[] = [
-  { id: "tiff", label: "TIFF" },
-  { id: "gif", label: "GIF" },
-  { id: "ico", label: "ICO" },
-  { id: "avif", label: "AVIF" },
-  { id: "clean", label: "Clean", sub: "metadata" },
-  // Scanned PDFs and photos of documents -> editable Word, through the OS's own OCR
-  { id: "docx-ocr", label: "WORD", sub: "OCR" },
-  { id: "back", label: "Back", sub: "‹", nav: "main" },
-];
+// ─── Photo room (main) ──────────────────────────────────────────────────
+const PHOTO = ring(
+  "photo",
+  [
+    { id: "jpg", label: "JPG" },
+    { id: "png", label: "PNG" },
+    { id: "webp", label: "WEBP" },
+    { id: "heic", label: "HEIC", disabled: !IS_MAC },
+    { id: "pdf", label: "PDF" },
+    { id: "photo-formats-nav", label: "Formats", sub: "•••", nav: "photo-formats" },
+    { id: "photo-tools-nav", label: "Tools", sub: "✦", nav: "photo-tools" },
+    { id: "back", label: "Back", sub: "‹", nav: "category" },
+  ],
+  -Math.PI / 2
+);
 
-// "Back" sits in exactly the same direction as "More", so the way back is
-// where the user came from.
-const moreAngle = MAIN.start + MAIN.items.findIndex((i) => i.nav === "more") * MAIN.sector;
-const backIndex = MORE_ITEMS.findIndex((i) => i.nav === "main");
-const MORE = ring("more", MORE_ITEMS, moreAngle - backIndex * ((2 * Math.PI) / MORE_ITEMS.length));
+// ─── Photo > Formats ────────────────────────────────────────────────────
+const PHOTO_FORMATS = alignedSubRing(
+  "photo-formats",
+  [
+    { id: "jpeg", label: "JPEG" },
+    { id: "avif", label: "AVIF" },
+    { id: "tiff", label: "TIFF" },
+    { id: "gif", label: "GIF" },
+    { id: "bmp", label: "BMP" },
+    { id: "ico", label: "ICO", sub: "multi" },
+    { id: "icns", label: "ICNS", sub: "macOS" },
+    { id: "back", label: "Back", sub: "‹", nav: "photo" },
+  ],
+  PHOTO,
+  "photo-formats",
+  "photo"
+);
 
+// ─── Photo > Tools ──────────────────────────────────────────────────────
+const PHOTO_TOOLS = alignedSubRing(
+  "photo-tools",
+  [
+    { id: "photo-compress-nav", label: "Compress", sub: "size", nav: "photo-compress" },
+    { id: "nobg", label: "Remove", sub: "BG", disabled: !IS_MAC },
+    { id: "photo-transform-nav", label: "Transform", sub: "↻", nav: "photo-transform" },
+    { id: "square", label: "Square", sub: "1:1" },
+    { id: "gif-anim", label: "GIF", sub: "anim" },
+    { id: "clean", label: "Clean", sub: "EXIF" },
+    { id: "back", label: "Back", sub: "‹", nav: "photo" },
+  ],
+  PHOTO,
+  "photo-tools",
+  "photo"
+);
+
+// ─── Photo > Tools > Compress (target byte budgets & lossless) ──────────
+const PHOTO_COMPRESS = alignedSubRing(
+  "photo-compress",
+  [
+    { id: "cmp-auto", label: "Auto", sub: "smaller" },
+    { id: "cmp-1m", label: "1 MB", sub: "max" },
+    { id: "cmp-500k", label: "500 KB", sub: "max" },
+    { id: "cmp-200k", label: "200 KB", sub: "max" },
+    { id: "cmp-100k", label: "100 KB", sub: "max" },
+    { id: "cmp-lossless", label: "Lossless", sub: "exact" },
+    { id: "back", label: "Back", sub: "‹", nav: "photo-tools" },
+  ],
+  PHOTO_TOOLS,
+  "photo-compress",
+  "photo-tools"
+);
+
+// ─── Photo > Tools > Transform ──────────────────────────────────────────
+const PHOTO_TRANSFORM = alignedSubRing(
+  "photo-transform",
+  [
+    { id: "rot-r", label: "Rotate", sub: "90° ›" },
+    { id: "rot-l", label: "Rotate", sub: "‹ 90°" },
+    { id: "rot-180", label: "Rotate", sub: "180°" },
+    { id: "flip-h", label: "Flip", sub: "horiz" },
+    { id: "flip-v", label: "Flip", sub: "vert" },
+    { id: "grayscale", label: "B&W", sub: "gray" },
+    { id: "back", label: "Back", sub: "‹", nav: "photo-tools" },
+  ],
+  PHOTO_TOOLS,
+  "photo-transform",
+  "photo-tools"
+);
+
+// ─── Office room ────────────────────────────────────────────────────────
+const OFFICE = ring(
+  "office",
+  [
+    { id: "pdf", label: "PDF" },
+    { id: "docx", label: "WORD" },
+    { id: "docx-ocr", label: "WORD", sub: "OCR" },
+    { id: "back", label: "Back", sub: "‹", nav: "category" },
+  ],
+  -Math.PI / 2
+);
+
+// ─── Video room (placeholder — formats coming soon) ─────────────────────
+const VIDEO = ring(
+  "video",
+  [
+    { id: "mp4", label: "MP4", disabled: true },
+    { id: "webm", label: "WEBM", disabled: true },
+    { id: "mov", label: "MOV", disabled: true },
+    { id: "avi", label: "AVI", disabled: true },
+    { id: "back", label: "Back", sub: "‹", nav: "category" },
+  ],
+  -Math.PI / 2
+);
+
+// ─── Music room (placeholder — formats coming soon) ─────────────────────
+const MUSIC = ring(
+  "music",
+  [
+    { id: "mp3", label: "MP3", disabled: true },
+    { id: "wav", label: "WAV", disabled: true },
+    { id: "flac", label: "FLAC", disabled: true },
+    { id: "ogg", label: "OGG", disabled: true },
+    { id: "back", label: "Back", sub: "‹", nav: "category" },
+  ],
+  -Math.PI / 2
+);
+
+// ─── Size / quality presets (Option/Alt ring, unchanged) ────────────────
 // Shown while Option/Alt is held during a drag. Ids match the presets in settings.rs.
 const SIZE = ring(
   "size",
@@ -74,14 +200,52 @@ const SIZE = ring(
   -Math.PI / 2
 );
 
-export const RINGS: Record<RingId, Ring> = { main: MAIN, more: MORE, size: SIZE };
+export const RINGS: Record<RingId, Ring> = {
+  category: CATEGORY,
+  photo: PHOTO,
+  "photo-formats": PHOTO_FORMATS,
+  "photo-tools": PHOTO_TOOLS,
+  "photo-compress": PHOTO_COMPRESS,
+  "photo-transform": PHOTO_TRANSFORM,
+  office: OFFICE,
+  video: VIDEO,
+  music: MUSIC,
+  size: SIZE,
+};
+
+// The default ring when opening (drag enter or paste)
+export const DEFAULT_RING: RingId = "category";
+
+const CUSTOM_LABELS: Record<string, string> = {
+  "docx-ocr": "WORD OCR",
+  nobg: "Remove BG",
+  "gif-anim": "Animated GIF",
+  "cmp-auto": "Auto Compress",
+  "cmp-1m": "Max 1 MB",
+  "cmp-500k": "Max 500 KB",
+  "cmp-200k": "Max 200 KB",
+  "cmp-100k": "Max 100 KB",
+  "cmp-lossless": "Lossless",
+  "rot-r": "Rotate 90° CW",
+  "rot-l": "Rotate 90° CCW",
+  "rot-180": "Rotate 180°",
+  "flip-h": "Flip Horizontal",
+  "flip-v": "Flip Vertical",
+  grayscale: "Grayscale",
+  square: "Square 1:1",
+};
 
 export function labelOf(id: string): string | undefined {
+  if (CUSTOM_LABELS[id]) return CUSTOM_LABELS[id];
   for (const r of Object.values(RINGS)) {
     const item = r.items.find((i) => i.id === id);
-    // "WORD" + "OCR" reads as one name in titles
-    if (item) return item.id === "docx-ocr" ? "WORD OCR" : item.label;
+    if (item) return item.label;
   }
+}
+
+// Whether a ring is a category (lobby) ring
+export function isCategoryRing(id: RingId): boolean {
+  return id === "category";
 }
 
 export const STAGE_SIZE = 300;

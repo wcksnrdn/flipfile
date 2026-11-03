@@ -9,12 +9,14 @@ import { DEBUG_DROP, DebugOverlay, type DropDebugInfo } from "./DebugOverlay";
 import {
   CORE_OPEN_SCALE,
   CORE_SIZE,
+  DEFAULT_RING,
   HOVER_POP,
   LABEL_RADIUS,
   RINGS,
   RING_OUTER,
   STAGE_SIZE,
   angleOf,
+  isCategoryRing,
   labelOf,
   segmentPath,
   toCssPoint,
@@ -95,6 +97,19 @@ const clipboardName = (d = new Date()) => {
   return `Clipboard ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} at ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}`;
 };
 
+// Category ring labels for the core center text
+const CATEGORY_LABELS: Partial<Record<RingId, string>> = {
+  category: "Convert",
+  photo: "Photo",
+  "photo-formats": "Formats",
+  "photo-tools": "Tools",
+  "photo-compress": "Compress",
+  "photo-transform": "Transform",
+  office: "Office",
+  video: "Video",
+  music: "Music",
+};
+
 export default function App() {
   const [dragging, setDragging] = useState(false);
   const [picking, setPicking] = useState<Picking | null>(null);
@@ -103,13 +118,13 @@ export default function App() {
   const presetRef = useRef<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const altRef = useRef(false);
-  const ringBeforeAlt = useRef<RingId>("main");
+  const ringBeforeAlt = useRef<RingId>(DEFAULT_RING);
   const lastPoint = useRef<Point | null>(null);
   const [fileCount, setFileCount] = useState(0);
   // Several *images* dropped on PDF are merged into one; Word documents become one PDF each
   const [mergeable, setMergeable] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  const [ringId, setRingId] = useState<RingId>("main");
+  const [ringId, setRingId] = useState<RingId>(DEFAULT_RING);
   const [status, setStatus] = useState<Status | null>(null);
   const resetTimer = useRef<number | undefined>(undefined);
   const [debugInfo, setDebugInfo] = useState<DropDebugInfo | null>(null);
@@ -117,7 +132,7 @@ export default function App() {
   const scaleRef = useRef(window.devicePixelRatio || 1);
   const lastHover = useRef<{ id: string; at: number } | null>(null);
   // Drag handlers are synchronous, so the current ring and last segment live in refs too.
-  const ringRef = useRef<RingId>("main");
+  const ringRef = useRef<RingId>(DEFAULT_RING);
   const lastIndex = useRef<number | null>(null);
   const press = useRef<{ x: number; y: number } | null>(null);
   const [nativeGlass, setNativeGlass] = useState(false);
@@ -185,8 +200,9 @@ export default function App() {
     const center = coreCenter();
     let detail = zoneAt(point, center, RINGS[ringRef.current]);
 
-    // Entering a "More"/"Back" segment swaps the ring. Only on entering, so the
-    // aligned "Back" under the cursor right after a swap does not swap straight back.
+    // Entering a navigation segment (category items, "More"/"Back") swaps the ring.
+    // Only on entering, so the aligned segment under the cursor right after a swap
+    // does not swap straight back.
     const moving = type === "over" || type === "move";
     if (moving && detail.zone.kind === "item" && detail.zone.index !== lastIndex.current) {
       const nav = detail.zone.item.nav;
@@ -240,7 +256,7 @@ export default function App() {
     lastPoint.current = null;
     altRef.current = false;
     choosePreset(null);
-    switchRing("main");
+    switchRing(DEFAULT_RING);
     setDragging(false);
     setPicking(null);
     setHovered(null);
@@ -284,12 +300,15 @@ export default function App() {
 
     const { outputs, errors, pages, bytes_before, bytes_after, note } = result;
     const merged = format === "pdf" && many && outputs.length === 1;
+    const mergedGif = format === "gif-anim" && outputs.length === 1;
     // Resizing/compressing in place: the size change is what the user wants to see
-    const sizes = (same || preset === "compress") && bytes_before > 0;
+    const sizes = (same || preset === "compress" || format.startsWith("cmp-")) && bytes_before > 0;
     const done = sizes
       ? `${note ? `${note} · ` : bytes_after >= bytes_before ? "Already compact · " : ""}${formatBytes(bytes_before)} → ${formatBytes(bytes_after)}`
       : merged
       ? `${plural(paths.length - errors.length, "image")} → 1 PDF${presetLabel}`
+      : mergedGif
+      ? `${plural(paths.length - errors.length, "image")} → GIF${presetLabel}`
       : pages > 0 // PDF pages rendered to images (multi-page PDFs give a folder each)
         ? `${plural(pages, "page")} → ${label}`
         : `${plural(outputs.length, "file")} → ${label}`;
@@ -370,7 +389,7 @@ export default function App() {
       const down = await invoke<boolean>("option_key_down").catch(() => false);
       if (down === altRef.current) return;
       altRef.current = down;
-      if (down) ringBeforeAlt.current = ringRef.current === "size" ? "main" : ringRef.current;
+      if (down) ringBeforeAlt.current = ringRef.current === "size" ? DEFAULT_RING : ringRef.current;
       switchRing(down ? "size" : ringBeforeAlt.current);
       lastIndex.current = null;
       // Re-evaluate where the cursor already is, so nothing waits for the next mouse move
@@ -430,7 +449,7 @@ export default function App() {
 
     window.clearTimeout(resetTimer.current);
     setStatus(null);
-    switchRing("main");
+    switchRing(DEFAULT_RING);
     lastIndex.current = null;
     if (pasted.kind === "files") {
       setFileCount(pasted.paths.length);
@@ -499,6 +518,7 @@ export default function App() {
   };
 
   const hoveredLabel = hovered ? labelOf(hovered) : undefined;
+  const inCategory = isCategoryRing(ringId);
 
   let title = "Convert";
   let hint = "Drop files here";
@@ -513,18 +533,36 @@ export default function App() {
   } else if (open) {
     const verb = dragging ? "Release" : "Click";
     badge = presetLabel ? `Size: ${presetLabel}` : ALT_SUPPORTED ? `Hold ${ALT_KEY} to resize` : summary;
-    if (hoveredLabel) {
+    if (inCategory) {
+      // Category lobby — show room names
+      title = "Convert";
+      hint = "Pick a category";
+    } else if (hoveredLabel) {
       title = hoveredLabel;
       hint =
         hovered === "clean"
           ? `${verb} to strip metadata`
+          : hovered === "nobg"
+            ? `${verb} to remove background`
+          : hovered === "square"
+            ? `${verb} to pad to 1:1 square`
+          : hovered === "gif-anim"
+            ? `${verb} to combine into animated GIF`
+          : hovered === "ico"
+            ? `${verb} for multi-size .ico`
+          : hovered === "icns"
+            ? `${verb} for macOS .icns icon`
+          : hovered?.startsWith("cmp-")
+            ? `${verb} to compress file size`
+          : hovered?.startsWith("rot-") || hovered?.startsWith("flip-") || hovered === "grayscale"
+            ? `${verb} to transform photo`
           : hovered === "docx-ocr"
             ? `${verb} to read scanned text into Word`
           : hovered === "pdf" && fileCount > 1 && mergeable
             ? `${verb} to merge into 1 PDF`
             : `${verb} to convert`;
     } else {
-      title = ringId === "more" ? "More" : picking?.image ? "Image" : plural(fileCount, "file");
+      title = CATEGORY_LABELS[ringId] ?? (picking?.image ? "Image" : plural(fileCount, "file"));
       hint = dragging ? "Point to a format" : "Pick a format · Esc to cancel";
     }
   } else if (status) {
@@ -595,6 +633,7 @@ export default function App() {
                   (hovered === item.id || (item.preset && preset === item.id)) && "active",
                   item.disabled && "disabled",
                   item.nav && "nav",
+                  r.id === "category" && "category-item",
                 ]
                   .filter(Boolean)
                   .join(" ");

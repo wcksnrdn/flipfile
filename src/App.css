@@ -168,6 +168,26 @@ main.pick-ready {
   font-size: 9px;
 }
 
+/* Category items (lobby) */
+.segment.category-item .segment-body {
+  fill: rgba(255, 255, 255, 0.06);
+}
+
+.stage.native .segment.category-item .segment-body {
+  fill: rgba(255, 255, 255, 0.09);
+}
+
+.segment.category-item.active .segment-body {
+  fill: url(#seg-active);
+  filter: drop-shadow(0 0 10px var(--accent-glow));
+}
+
+.segment.category-item .segment-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
 /* ===== Glass surface (main circle) ===== */
 .glass {
   background:
