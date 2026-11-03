@@ -34,7 +34,7 @@ No uploads. No accounts. No waiting.
 
 | **Private by design** | **Instant** | **Does the boring stuff** |
 |---|---|---|
-| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone photos, PDF ⇄ Word, Excel → PDF, scans → editable text, resize and compress, metadata cleaning. |
+| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone HEIC ⇄ JPG/PNG/WEBP, remove background, compress to exact KB/MB, PDF ⇄ Word, Excel → PDF, scans → editable text, multi-size ICO/ICNS, animated GIF. |
 
 <br>
 
@@ -137,16 +137,34 @@ flipfile isn't notarized by Apple or code-signed for Windows yet, so the first l
 
 ## How to use
 
-1. **Drag** files onto the glass circle. A ring of formats opens around it.
-2. **Point** toward a format. You don't have to hit it exactly: its whole slice lights up, and the centre tells you what will happen.
+1. **Drag** files onto the glass circle. The **category lobby** opens around it (**Photo · Office · Video · Music**).
+2. **Point** toward a room to enter it, then point toward a format or tool. Each **Back ‹** slice sits right where you entered from, so moving back is effortless.
 3. **Let go.** The converted file appears next to the original. Click the circle to show it.
 
-| Ring | Formats |
+| Ring | Items |
 |---|---|
-| Main | JPG · JPEG · PNG · WEBP · BMP · PDF · WORD · **More** |
-| More | TIFF · GIF · ICO · AVIF · **Clean** metadata · **WORD OCR** · **Back** |
+| **Category Lobby** | **Photo** · **Office** · **Video** *(soon)* · **Music** *(soon)* |
+| **Photo** | JPG · PNG · WEBP · HEIC *(macOS)* · PDF · **Formats •••** · **Tools ✦** · **Back ‹** |
+| **Photo → Formats** | JPEG · AVIF · TIFF · GIF · BMP · ICO *(multi-size)* · ICNS *(macOS)* · **Back ‹** |
+| **Photo → Tools** | **Compress** · **Remove BG** *(macOS)* · **Transform** · **Square 1:1** · **GIF anim** · **Clean EXIF** · **Back ‹** |
+| **Photo → Compress** | Auto · **1 MB** max · **500 KB** max · **200 KB** max · **100 KB** max · **Lossless** · **Back ‹** |
+| **Photo → Transform** | Rotate 90° › · Rotate ‹ 90° · Rotate 180° · Flip horiz · Flip vert · B&W gray · **Back ‹** |
+| **Office** | PDF · WORD · **WORD OCR** · **Back ‹** |
 
 Also handy: **⌘V / Ctrl+V** pastes an image or copied files, **⌘⇧K / Ctrl+Shift+K** shows or hides flipfile from anywhere, and the menu bar / tray icon keeps your recent conversions with **Undo**.
+
+<details>
+<summary><b>Photo tools (Remove BG, target-size compress, transform, square, animated GIF)</b></summary>
+
+- **Remove BG** *(macOS 14+)*: uses macOS Vision's built-in subject-lifting model (`VNGenerateForegroundInstanceMaskRequest`) completely offline to cut out the foreground subject and save a transparent PNG (`photo_nobg.png`).
+- **Compress to target size** (**1 MB · 500 KB · 200 KB · 100 KB**): binary-searches encoder quality (and progressively scales resolution down if needed) so the output strictly fits under your byte budget—ideal for web forms and upload portals.
+- **Lossless compress**: runs `oxipng` on PNGs, strips metadata losslessly from JPEGs, writes lossless WebP, or Deflate-compresses TIFFs without changing a single pixel.
+- **Transform**: rotate 90° clockwise, 90° counter-clockwise, 180°, flip horizontally or vertically, or convert to grayscale (B&W) in the file's own format.
+- **Square 1:1**: pads non-square photos to a 1:1 square without cropping (transparent backdrop for PNG/WEBP/AVIF/TIFF, white backdrop for JPG/BMP).
+- **GIF anim**: drop several photos onto **GIF anim** to combine them into a looping animated GIF (`first_animated.gif`).
+- **Multi-size ICO & macOS ICNS**: **ICO** packs `16, 32, 48, 64, 128, 256` px slices into one Windows icon; **ICNS** packs `16` through `1024` px retina slices (`icp4`–`ic10`) for macOS app bundles.
+
+</details>
 
 <details>
 <summary><b>Word ↔ PDF</b></summary>
@@ -309,14 +327,15 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | Format | Read | Write | Notes |
 |---|:-:|:-:|---|
 | JPG / JPEG | ✓ | ✓ | Transparency becomes white |
-| PNG | ✓ | ✓ | Lossless |
-| WEBP | ✓ | ✓ | Written lossless |
+| PNG | ✓ | ✓ | Lossless; *Compress* and *Lossless* optimise with `oxipng` |
+| WEBP | ✓ | ✓ | Lossy (follows the Quality setting); *Lossless* writes lossless WebP |
+| HEIC / HEIF | ✓ *(OS codec)* | ✓ *(macOS)* | Read via ImageIO (macOS) / WIC (Windows); written natively via ImageIO on macOS |
+| AVIF | ✓ *(OS codec)* | ✓ | Quality follows the Quality setting |
 | BMP | ✓ | ✓ | Uncompressed by design; written 24-bit when there is no transparency (25% smaller) |
 | TIFF | ✓ | ✓ | 24-bit when opaque; *Compress* uses lossless Deflate |
-| GIF | ✓ (first frame) | ✓ | |
-| ICO | ✓ | ✓ | Fitted into a square of at most 256 × 256 |
-| AVIF | ✓ *(OS codec)* | ✓ | Quality follows the Quality setting |
-| HEIC / HEIF | ✓ *(OS codec)* | — | Same-format presets save iPhone photos as JPG |
+| GIF | ✓ (first frame) | ✓ | Single image → GIF, or multiple images → looping animated GIF via **GIF anim** |
+| ICO | ✓ | ✓ | Multi-resolution icon containing `16, 32, 48, 64, 128, 256` px square slices |
+| ICNS | — | ✓ | Apple `.icns` icon bundle (`16` to `1024` px PNG slices) |
 | PDF | ✓ *(PDFium)* | ✓ | Images → PDF (one page per image); PDF → images at 200 DPI |
 | Word (DOCX) | ✓ | ✓ | Word → PDF / images; PDF → Word. See [How to use](#how-to-use) |
 | Word 97–2003 (DOC) | ✓ *(Word/LibreOffice)* | — | Needs Word or LibreOffice installed |
@@ -341,6 +360,11 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | One-page PDF → PNG | `document_converted.png` |
 | Multi-page PDF → PNG | folder `document_pages/` with `page-01.png`, `page-02.png`, … |
 | Clean metadata | `photo_clean.jpg` |
+| Remove background | `photo_nobg.png` |
+| Target-size / lossless compress | `photo_200kb.jpg` / `photo_lossless.png` |
+| Rotate / flip / grayscale | `photo_rotated.jpg` / `photo_flipped.jpg` / `photo_grayscale.jpg` |
+| Square 1:1 pad | `photo_square.jpg` |
+| Several images → Animated GIF | `firstimage_animated.gif` |
 | Preset dropped in the same format | `photo_compressed.jpg` / `photo_resized.jpg` |
 | Pasted clipboard image | `~/Downloads/Clipboard 2026-10-20 at 14.03.12.png` |
 
@@ -526,7 +550,8 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         ├── convert/         # conversion pipeline behind `convert_batch`
         │   ├── mod.rs       #   batching, progress, dispatch per file
         │   ├── input.rs     #   file detection, decoding with EXIF orientation
-        │   ├── encode.rs    #   resize + every image encoder
+        │   ├── encode.rs    #   resize + every image encoder (incl. lossy WEBP, oxipng, ICO/ICNS)
+        │   ├── tools.rs     #   photo tools: remove BG, target-size compress, transform, square, animated GIF
         │   ├── pdf.rs       #   PDF → images, images → merged PDF
         │   ├── word.rs      #   Word → PDF/images, OCR → Word
         │   ├── clean.rs     #   metadata removal (strip.rs: lossless JPEG/PNG)
@@ -547,7 +572,8 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         │   ├── sheet_pdf.rs #   prints sheets into pages, like Excel
         │   └── apps.rs      #   uses Word / Excel / LibreOffice when installed, else built-in
         ├── platform/        # OS integration
-        │   ├── system_codec.rs # HEIC/AVIF via ImageIO (macOS) / WIC (Windows)
+        │   ├── system_codec.rs # HEIC/AVIF via ImageIO (macOS read/write) / WIC (Windows read)
+        │   ├── background.rs #  subject background removal via macOS Vision
         │   ├── tray.rs      #   menu bar / tray menu, show/hide
         │   ├── clipboard.rs #   ⌘V / Ctrl+V: images and copied files
         │   ├── keys.rs      #   Option/Alt state during a drag
