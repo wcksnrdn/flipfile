@@ -6,6 +6,7 @@
 // - pdf:    PDF -> images, images -> one merged PDF
 // - word:   Word and Excel -> PDF/images, OCR -> Word
 // - clean:  lossless metadata removal (with strip)
+// - tools:  background removal, transforms, square pad, target-size compress, animated GIF
 // - output: unique output paths
 
 mod clean;
@@ -14,6 +15,7 @@ mod input;
 mod output;
 mod pdf;
 mod strip;
+mod tools;
 mod word;
 #[cfg(test)]
 mod tests;
@@ -36,6 +38,7 @@ use encode::{encode, resize};
 use input::{file_name, header, open_oriented, same_format_ext, sheet_kind, word_kind};
 use output::{save_err, unique_output_path};
 use pdf::{merge_to_pdf, pdf_to_images};
+use tools::{is_tool, merge_to_gif, run_tool};
 use word::{from_sheet, from_word, ocr_to_word};
 
 #[derive(Clone, Serialize)]
@@ -118,6 +121,8 @@ pub async fn convert_batch(
         let all_images = paths.iter().all(|p| word_kind(Path::new(p)).is_none() && sheet_kind(Path::new(p)).is_none());
         if format == "pdf" && paths.len() > 1 && all_images {
             merge_to_pdf(&paths, &on_progress, out_dir, &options)
+        } else if format == "gif-anim" && all_images {
+            merge_to_gif(&paths, &on_progress, out_dir, &options)
         } else {
             // A single PDF can take a while: report its pages instead of the one file.
             let single = paths.len() == 1;
@@ -232,10 +237,13 @@ fn convert(
     if format == "clean" {
         return clean(input, out_dir).map(|path| Converted { path, pages: 0, sizes: None, note: None });
     }
+    if is_tool(format) {
+        return run_tool(input, format, out_dir, options);
+    }
 
     let (ext, suffix) = match format {
         SAME_FORMAT => (same_format_ext(input)?, suffix),
-        "jpg" | "jpeg" | "png" | "webp" | "bmp" | "pdf" | "tiff" | "gif" | "ico" | "avif" => {
+        "jpg" | "jpeg" | "png" | "webp" | "heic" | "bmp" | "pdf" | "tiff" | "gif" | "ico" | "icns" | "avif" => {
             (format.to_string(), "converted")
         }
         _ => return Err("This format is not supported yet".into()),

@@ -470,3 +470,91 @@ fn review_ocr() {
     }
     println!("pages: {}", doc.pages().len());
 }
+
+#[test]
+fn webp_is_lossy_and_respects_quality() {
+    let dir = temp_dir("webp-lossy");
+    let src = dir.join("noisy.png");
+    let img = DynamicImage::ImageRgb8(RgbImage::from_fn(400, 300, |x, y| {
+        Rgb([(x * 17 ^ y * 31) as u8, (x * y) as u8, (x * 3 + y * 5) as u8])
+    }));
+    img.save(&src).unwrap();
+
+    let high = run(src.to_str().unwrap(), "webp", None, &Options { resize: Resize::Original, quality: 92 }).unwrap();
+    let low = run(src.to_str().unwrap(), "webp", None, &Options { resize: Resize::Original, quality: 55 }).unwrap();
+    let high_len = fs::metadata(&high).unwrap().len();
+    let low_len = fs::metadata(&low).unwrap().len();
+    let png_len = fs::metadata(&src).unwrap().len();
+    assert!(low_len < high_len, "low {low_len} >= high {high_len}");
+    assert!(high_len < png_len, "webp {high_len} >= png {png_len}");
+}
+
+#[test]
+fn ico_multisize_and_icns_are_valid() {
+    let dir = temp_dir("icons");
+    let src = dir.join("app.png");
+    sample(512, 320).save(&src).unwrap();
+
+    // Multi-size ICO has 6 entries (16, 32, 48, 64, 128, 256) in the ICONDIR header
+    let ico_path = run(src.to_str().unwrap(), "ico", None, &Options::default()).unwrap();
+    let ico_bytes = fs::read(&ico_path).unwrap();
+    let count = u16::from_le_bytes([ico_bytes[4], ico_bytes[5]]);
+    assert_eq!(count, 6);
+    let decoded = image::open(&ico_path).unwrap();
+    assert_eq!(decoded.dimensions(), (256, 256));
+
+    // ICNS starts with "icns" and matches its big-endian length header
+    let icns_path = run(src.to_str().unwrap(), "icns", None, &Options::default()).unwrap();
+    let icns_bytes = fs::read(&icns_path).unwrap();
+    assert_eq!(&icns_bytes[0..4], b"icns");
+    let total_len = u32::from_be_bytes([icns_bytes[4], icns_bytes[5], icns_bytes[6], icns_bytes[7]]) as usize;
+    assert_eq!(total_len, icns_bytes.len());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn encodes_and_decodes_heic() {
+    let dir = temp_dir("heic-out");
+    let src = dir.join("photo.png");
+    sample(120, 80).save(&src).unwrap();
+    let out = run(src.to_str().unwrap(), "heic", None, &Options::default()).unwrap();
+    assert!(out.ends_with(".heic"));
+    let head = fs::read(&out).unwrap();
+    assert!(crate::platform::system_codec::is_heif_family(&head));
+    let decoded = crate::platform::system_codec::decode(Path::new(&out)).unwrap();
+    assert_eq!(decoded.dimensions(), (120, 80));
+}
+
+#[test]
+fn photo_tools_transform_square_and_compress_to_target() {
+    let dir = temp_dir("photo-tools");
+    let src = dir.join("rect.jpg");
+    let img = DynamicImage::ImageRgb8(RgbImage::from_fn(600, 400, |x, y| {
+        Rgb([(x * 13 ^ y * 29) as u8, (x + y * 3) as u8, (x ^ y) as u8])
+    }));
+    img.write_with_encoder(JpegEncoder::new_with_quality(&mut File::create(&src).unwrap(), 96)).unwrap();
+
+    // Rotate 90 CW swaps width and height
+    let rot = run(src.to_str().unwrap(), "rot-r", None, &Options::default()).unwrap();
+    assert_eq!(image::open(&rot).unwrap().dimensions(), (400, 600));
+
+    // Flip and grayscale preserve dimensions
+    let gray = run(src.to_str().unwrap(), "grayscale", None, &Options::default()).unwrap();
+    assert_eq!(image::open(&gray).unwrap().dimensions(), (600, 400));
+
+    // Square pads 600x400 to 600x600
+    let sq = run(src.to_str().unwrap(), "square", None, &Options::default()).unwrap();
+    assert_eq!(image::open(&sq).unwrap().dimensions(), (600, 600));
+
+    // Target-size compression fits strictly under 100 KB
+    let c100 = run(src.to_str().unwrap(), "cmp-100k", None, &Options::default()).unwrap();
+    let size = fs::metadata(&c100).unwrap().len();
+    assert!(size <= 100_000, "expected <= 100 KB, got {size}");
+
+    // Lossless compression works on PNG
+    let png = dir.join("graphic.png");
+    sample(200, 150).save(&png).unwrap();
+    let lossless = run(png.to_str().unwrap(), "cmp-lossless", None, &Options::default()).unwrap();
+    assert_eq!(image::open(&lossless).unwrap().to_rgb8(), image::open(&png).unwrap().to_rgb8());
+}
+

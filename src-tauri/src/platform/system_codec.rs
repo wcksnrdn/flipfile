@@ -117,6 +117,42 @@ pub fn decode(_path: &Path) -> Result<DynamicImage, String> {
     Err("HEIC and AVIF photos are not supported on Linux yet".into())
 }
 
+/// Writes HEIC (the iPhone's own format: about half the size of JPG at the same
+/// quality) with ImageIO. `quality` is 1..=100, as for JPG.
+#[cfg(target_os = "macos")]
+pub fn encode_heic(img: &DynamicImage, quality: u8, output: &Path) -> Result<(), String> {
+    use objc2_core_foundation::{CFData, CFDictionary, CFNumber, CFString, CFType, CFURL};
+    use objc2_image_io::{kCGImageDestinationLossyCompressionQuality, CGImageDestination, CGImageSource};
+
+    let failed = || "macOS could not write HEIC".to_string();
+    // ImageIO reads the pixels back from PNG (lossless), keeping transparency
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| e.to_string())?;
+    let data = CFData::from_bytes(&png);
+    let source = unsafe { CGImageSource::with_data(&data, None) }.ok_or_else(failed)?;
+
+    let url = CFURL::from_file_path(output).ok_or_else(failed)?;
+    let heic = CFString::from_static_str("public.heic");
+    let destination = unsafe { CGImageDestination::with_url(&url, &heic, 1, None) }.ok_or_else(failed)?;
+    let q = CFNumber::new_f64(f64::from(quality.clamp(1, 100)) / 100.0);
+    let q: &CFType = &q;
+    let properties =
+        unsafe { CFDictionary::<CFString, CFType>::from_slices(&[kCGImageDestinationLossyCompressionQuality], &[q]) };
+    unsafe {
+        destination.add_image_from_source(&source, 0, Some(properties.as_opaque()));
+        if !destination.finalize() {
+            let _ = std::fs::remove_file(output);
+            return Err(failed());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn encode_heic(_img: &DynamicImage, _quality: u8, _output: &Path) -> Result<(), String> {
+    Err("Saving as HEIC is only available on macOS for now".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

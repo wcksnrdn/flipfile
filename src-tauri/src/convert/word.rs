@@ -35,7 +35,7 @@ pub(super) fn from_word(
             };
             Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 0, sizes: None, note: Some(note.into()) })
         }
-        "jpg" | "jpeg" | "png" | "webp" | "bmp" | "tiff" | "gif" | "ico" | "avif" => {
+        "jpg" | "jpeg" | "png" | "webp" | "heic" | "bmp" | "tiff" | "gif" | "ico" | "icns" | "avif" => {
             let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
             let temp = std::env::temp_dir().join(format!("flipfile-word-{}-{nanos}.pdf", std::process::id()));
             let result = office::apps::word_to_pdf(input, &temp, legacy)
@@ -69,7 +69,7 @@ pub(super) fn from_sheet(
             let engine = office::apps::sheet_to_pdf(input, &output, kind).map_err(|e| format!("\"{name}\": {e}"))?;
             Ok(Converted { path: output.to_string_lossy().into_owned(), pages: 0, sizes: None, note: Some(note(engine).into()) })
         }
-        "jpg" | "jpeg" | "png" | "webp" | "bmp" | "tiff" | "gif" | "ico" | "avif" => {
+        "jpg" | "jpeg" | "png" | "webp" | "heic" | "bmp" | "tiff" | "gif" | "ico" | "icns" | "avif" => {
             let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
             let temp = std::env::temp_dir().join(format!("flipfile-sheet-{}-{nanos}.pdf", std::process::id()));
             let result = office::apps::sheet_to_pdf(input, &temp, kind)

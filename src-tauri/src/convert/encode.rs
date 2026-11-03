@@ -1,18 +1,21 @@
 // Image encoding: resizing, per-format encoders and the small pixel helpers they share
-// (alpha handling, white background, square icons, JPEG pages for PDF).
+// (alpha handling, white background, square icons, multi-size ICO/ICNS, lossy WEBP,
+// oxipng lossless PNG, HEIC, and JPEG pages for PDF).
 
 use image::codecs::avif::AvifEncoder;
 use image::codecs::gif::GifEncoder;
+use image::codecs::ico::{IcoEncoder, IcoFrame};
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType as PngFilter, PngEncoder};
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageFormat, Rgb, RgbImage, RgbaImage};
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use image::{DynamicImage, ExtendedColorType, ImageFormat, Rgb, RgbImage, RgbaImage};
+use std::fs::{self, File};
+use std::io::{BufWriter, Cursor, Write};
 use std::path::Path;
 
 use super::output::save_err;
 use crate::pdf::writer::{jpeg_pages_to_pdf, Page};
+use crate::platform::system_codec;
 use crate::state::settings::{Resize, COMPRESS_QUALITY};
 
 // Measured on a 12 MP photo (release build, 8 cores): speed 6 took 6.3 s, speed 9 took
@@ -22,6 +25,16 @@ pub(super) const AVIF_SPEED: u8 = 9; // 1 = smallest file, 10 = fastest
 // than the default 1 on a 12 MP photo for a ~4% larger file.
 pub(super) const GIF_SPEED: i32 = 10;
 pub(super) const ICO_MAX: u32 = 256; // largest size the ICO format allows
+pub(super) const ICO_SIZES: &[u32] = &[16, 32, 48, 64, 128, 256];
+pub(super) const ICNS_ENTRIES: &[(&[u8; 4], u32)] = &[
+    (b"icp4", 16),
+    (b"icp5", 32),
+    (b"icp6", 64),
+    (b"ic07", 128),
+    (b"ic08", 256),
+    (b"ic09", 512),
+    (b"ic10", 1024),
+];
 
 /// BMP and TIFF store raw pixels, so an alpha channel that is fully opaque only wastes
 /// space: 3 bytes per pixel instead of 4 is 25% smaller for an identical image.
@@ -60,6 +73,107 @@ pub(super) fn write_tiff_deflate(img: &DynamicImage, output: &Path) -> Result<()
     .map_err(save_err)
 }
 
+/// Lossy (or lossless at quality >= 100) WebP encoding via libwebp.
+pub(super) fn encode_webp_bytes(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, String> {
+    match drop_opaque_alpha(img) {
+        DynamicImage::ImageRgb8(rgb) => {
+            let enc = webp::Encoder::from_rgb(rgb.as_raw(), rgb.width(), rgb.height());
+            let mem = if quality >= 100 {
+                enc.encode_lossless()
+            } else {
+                enc.encode(f32::from(quality.clamp(1, 100)))
+            };
+            Ok(mem.to_vec())
+        }
+        other => {
+            let rgba = other.to_rgba8();
+            let enc = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height());
+            let mem = if quality >= 100 {
+                enc.encode_lossless()
+            } else {
+                enc.encode(f32::from(quality.clamp(1, 100)))
+            };
+            Ok(mem.to_vec())
+        }
+    }
+}
+
+/// Lossless PNG optimisation via `oxipng`.
+pub(super) fn encode_png_oxipng(img: &DynamicImage, output: &Path) -> Result<(), String> {
+    let mut raw = Vec::new();
+    img.write_with_encoder(PngEncoder::new_with_quality(
+        &mut raw,
+        CompressionType::Best,
+        PngFilter::Adaptive,
+    ))
+    .map_err(save_err)?;
+    let mut opts = oxipng::Options::from_preset(2);
+    opts.strip = oxipng::StripChunks::Safe;
+    let optimized = oxipng::optimize_from_memory(&raw, &opts).unwrap_or(raw);
+    fs::write(output, optimized).map_err(save_err)
+}
+
+/// Multi-resolution Windows `.ico` file containing standard icon sizes up to 256×256.
+pub(super) fn write_ico_multisize(img: &DynamicImage, output: &Path) -> Result<(), String> {
+    let base = square_icon(img);
+    let max_side = base.width().min(ICO_MAX);
+    let mut sizes: Vec<u32> = ICO_SIZES.iter().copied().filter(|&s| s < max_side).collect();
+    sizes.push(max_side);
+
+    let mut rendered: Vec<(u32, RgbaImage)> = Vec::with_capacity(sizes.len());
+    for s in sizes {
+        let frame_img = if s == base.width() {
+            base.clone()
+        } else {
+            image::imageops::resize(&base, s, s, FilterType::Lanczos3)
+        };
+        rendered.push((s, frame_img));
+    }
+
+    let mut frames: Vec<IcoFrame<'_>> = Vec::with_capacity(rendered.len());
+    for (s, rgba) in &rendered {
+        frames.push(IcoFrame::as_png(rgba.as_raw(), *s, *s, ExtendedColorType::Rgba8).map_err(save_err)?);
+    }
+    let file = File::create(output).map(BufWriter::new).map_err(save_err)?;
+    IcoEncoder::new(file).encode_images(&frames).map_err(save_err)
+}
+
+/// Apple `.icns` icon bundle containing PNG slices from 16×16 up to 1024×1024.
+pub(super) fn write_icns(img: &DynamicImage, output: &Path) -> Result<(), String> {
+    let base = square_canvas(img, 1024);
+    let max_side = base.width();
+    let mut chunks: Vec<([u8; 4], Vec<u8>)> = Vec::new();
+
+    for &(ostype, size) in ICNS_ENTRIES {
+        if size > max_side && !chunks.is_empty() {
+            continue;
+        }
+        let target = size.min(max_side);
+        let resized = if target == base.width() {
+            base.clone()
+        } else {
+            image::imageops::resize(&base, target, target, FilterType::Lanczos3)
+        };
+        let mut png = Vec::new();
+        DynamicImage::ImageRgba8(resized)
+            .write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
+            .map_err(save_err)?;
+        chunks.push((*ostype, png));
+    }
+
+    let total_len: u32 = 8 + chunks.iter().map(|(_, d)| 8 + d.len() as u32).sum::<u32>();
+    let mut out = Vec::with_capacity(total_len as usize);
+    out.extend_from_slice(b"icns");
+    out.extend_from_slice(&total_len.to_be_bytes());
+    for (ostype, png) in chunks {
+        let chunk_len = 8 + png.len() as u32;
+        out.extend_from_slice(&ostype);
+        out.extend_from_slice(&chunk_len.to_be_bytes());
+        out.extend_from_slice(&png);
+    }
+    fs::write(output, out).map_err(save_err)
+}
+
 /// Applies the resize setting. Never upscales.
 pub(super) fn resize(img: DynamicImage, resize: Resize) -> DynamicImage {
     let (w, h) = (img.width(), img.height());
@@ -89,25 +203,25 @@ pub(super) fn encode(img: &DynamicImage, ext: &str, output: &Path, quality: u8) 
         "jpg" | "jpeg" => flatten_on_white(img)
             .write_with_encoder(JpegEncoder::new_with_quality(&mut create()?, quality))
             .map_err(save_err),
-        // PNG is lossless; "Compress" / "Smaller File" still squeezes it with the slowest,
-        // strongest deflate setting.
-        "png" if quality <= COMPRESS_QUALITY => img
-            .write_with_encoder(PngEncoder::new_with_quality(&mut create()?, CompressionType::Best, PngFilter::Adaptive))
-            .map_err(save_err),
+        // PNG is lossless; "Compress" / "Smaller File" squeezes it further with oxipng.
+        "png" if quality <= COMPRESS_QUALITY => encode_png_oxipng(img, output),
         "png" => img.save_with_format(output, ImageFormat::Png).map_err(save_err),
-        "webp" => rgba().save_with_format(output, ImageFormat::WebP).map_err(save_err),
+        "webp" => {
+            let bytes = encode_webp_bytes(img, quality)?;
+            fs::write(output, bytes).map_err(save_err)
+        }
+        "heic" => system_codec::encode_heic(img, quality, output),
         "bmp" => drop_opaque_alpha(img).save_with_format(output, ImageFormat::Bmp).map_err(save_err),
         "tiff" if quality <= COMPRESS_QUALITY => write_tiff_deflate(img, output),
         "tiff" => drop_opaque_alpha(img).save_with_format(output, ImageFormat::Tiff).map_err(save_err),
         "gif" => {
             let rgba = img.to_rgba8();
             GifEncoder::new_with_speed(&mut create()?, GIF_SPEED)
-                .encode(rgba.as_raw(), rgba.width(), rgba.height(), image::ExtendedColorType::Rgba8)
+                .encode(rgba.as_raw(), rgba.width(), rgba.height(), ExtendedColorType::Rgba8)
                 .map_err(save_err)
         }
-        "ico" => DynamicImage::ImageRgba8(square_icon(img))
-            .save_with_format(output, ImageFormat::Ico)
-            .map_err(save_err),
+        "ico" => write_ico_multisize(img, output),
+        "icns" => write_icns(img, output),
         "avif" => rgba()
             .write_with_encoder(AvifEncoder::new_with_speed_quality(&mut create()?, AVIF_SPEED, avif_quality(quality)))
             .map_err(save_err),
@@ -121,19 +235,24 @@ pub(super) fn encode(img: &DynamicImage, ext: &str, output: &Path, quality: u8) 
     }
 }
 
-// Icons must be square and at most 256px: fit inside, then center on a transparent canvas.
-pub(super) fn square_icon(img: &DynamicImage) -> RgbaImage {
-    let fitted = if img.width() > ICO_MAX || img.height() > ICO_MAX {
-        img.resize(ICO_MAX, ICO_MAX, FilterType::Lanczos3)
+/// Centers `img` on a square transparent canvas of at most `max_side` px.
+pub(super) fn square_canvas(img: &DynamicImage, max_side: u32) -> RgbaImage {
+    let fitted = if img.width() > max_side || img.height() > max_side {
+        img.resize(max_side, max_side, FilterType::Lanczos3)
     } else {
         img.clone()
     };
-    let side = fitted.width().max(fitted.height());
+    let side = fitted.width().max(fitted.height()).max(1);
     let mut canvas = RgbaImage::new(side, side);
     let x = (side - fitted.width()) / 2;
     let y = (side - fitted.height()) / 2;
     image::imageops::overlay(&mut canvas, &fitted.to_rgba8(), x as i64, y as i64);
     canvas
+}
+
+// Icons must be square and at most 256px: fit inside, then center on a transparent canvas.
+pub(super) fn square_icon(img: &DynamicImage) -> RgbaImage {
+    square_canvas(img, ICO_MAX)
 }
 
 pub(super) fn pdf_page(img: &DynamicImage, quality: u8) -> Result<Page, String> {

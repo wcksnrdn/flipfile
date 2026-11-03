@@ -72,12 +72,14 @@ pub(super) fn sheet_kind(path: &Path) -> Option<crate::office::apps::SheetKind> 
     }
 }
 
-/// The extension to write when keeping a file's own format. HEIC cannot be written,
-/// so iPhone photos become JPG, the format every app can open.
+/// The extension to write when keeping a file's own format.
 pub(super) fn same_format_ext(input: &Path) -> Result<String, String> {
     let head = header(input);
     if system_codec::is_heif_family(&head) {
-        return Ok(if matches!(&head[8..12], b"avif" | b"avis") { "avif" } else { "jpg" }.into());
+        if matches!(&head[8..12], b"avif" | b"avis") {
+            return Ok("avif".into());
+        }
+        return Ok(if cfg!(target_os = "macos") { "heic" } else { "jpg" }.into());
     }
     let own = input.extension().and_then(|e| e.to_str()).map(str::to_lowercase);
     let format = ImageReader::open(input)
