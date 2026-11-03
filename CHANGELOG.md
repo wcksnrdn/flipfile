@@ -6,6 +6,25 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-03
+
+### Added
+
+- **Category Rooms**: dropping or pasting files now opens a category lobby (**Photo · Office · Video · Music**), with dedicated sub-rings per room and aligned **Back ‹** navigation.
+- **Photo → Tools**:
+  - **Remove BG** (macOS 14+): offline subject background removal via macOS Vision (`VNGenerateForegroundInstanceMaskRequest`), saved as a transparent PNG (`_nobg.png`).
+  - **Compress to target size** (**1 MB · 500 KB · 200 KB · 100 KB**): binary search over encoder quality and progressive resolution scaling to fit strict byte budgets.
+  - **Lossless compress**: `oxipng` optimisation for PNG, lossless metadata stripping for JPEG, lossless WebP, and Deflate for TIFF.
+  - **Transform**: rotate 90° CW, 90° CCW, 180°, flip horizontal/vertical, and grayscale (B&W).
+  - **Square 1:1**: pads non-square photos to a 1:1 square without cropping.
+  - **GIF anim**: combines multiple images into a looping animated GIF (`_animated.gif`).
+- **HEIC output** (macOS): native HEIC writing via ImageIO (`CGImageDestination`).
+- **ICNS & multi-size ICO**: `.ico` files now pack `16, 32, 48, 64, 128, 256` px slices; new **ICNS** output packs `16`–`1024` px slices (`icp4`–`ic10`) for macOS app icons.
+
+### Changed
+
+- **WEBP output is now lossy** (via `libwebp`) and follows the Quality setting, producing compact files instead of oversized lossless WebP.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added
