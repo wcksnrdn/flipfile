@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🛡️ Report a Security Vulnerability (Private)
+    url: https://github.com/wcksnrdn/flipfile/security/advisories/new
+    about: Please do not open public issues for security bugs. Submit a confidential report here.
+  - name: 📖 Support & Troubleshooting Guide
+    url: https://github.com/wcksnrdn/flipfile/blob/main/SUPPORT.md
+    about: Check setup solutions for macOS Gatekeeper, Windows HEIF codecs, FFmpeg, and Ring Workshop.
+

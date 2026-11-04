@@ -1,0 +1,86 @@
+name: 🐛 Bug Report
+description: Report a conversion failure, UI glitch, or platform issue in flipfile.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Before submitting, please check [**SUPPORT.md**](https://github.com/wcksnrdn/flipfile/blob/main/SUPPORT.md) for common platform tips.
+        *(If you are reporting a security vulnerability, please stop and use [**Private Vulnerability Reporting**](https://github.com/wcksnrdn/flipfile/security/advisories/new) instead.)*
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS (Apple Silicon M1–M4)
+        - macOS (Intel)
+        - Windows 11
+        - Windows 10
+        - Linux (.deb / Ubuntu / Debian)
+        - Linux (.rpm / Fedora)
+        - Linux (.AppImage)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: flipfile Version & OS Version
+      description: e.g., flipfile v0.3.0 on macOS 15.1 (Sequoia) or Windows 11 23H2
+      placeholder: "v0.3.0 / macOS 15.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category Room / Feature Area
+      options:
+        - Photo (Formats & RAW)
+        - Photo Tools (Remove BG, Compress, Transform, Square, Animated GIF)
+        - Office & Docs (PDF, Word, OCR, EPUB, Markdown, HTML, RTF)
+        - Data & Spreadsheets (Excel, CSV, TSV, JSON, YAML, XML, SQL)
+        - Video Conversions & Tools
+        - Music / Audio Conversions
+        - Ring Workshop (Custom Workspaces & Layout)
+        - Window / Tray / Clipboard / Shortcuts
+    validations:
+      required: true
+
+  - type: input
+    id: formats
+    attributes:
+      label: Conversion Path (Input → Target)
+      description: What file format did you drop/paste, and which slice did you release on?
+      placeholder: "e.g., .heic → WEBP, or .pdf → WORD"
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe what you expected to happen and what actually happened (include any error message shown inside the circle).
+      placeholder: "When I dropped a 12-page PDF onto WORD, the circle showed..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Drag `sample.xlsx` onto the flipfile circle
+        2. Enter the Office room and drop on `PDF`
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sample File / Diagnostics (Optional)
+      description: If a drop selected the wrong slice, run with `VITE_DEBUG_DROP=1` and paste the readout here. Attach a non-sensitive sample file or screenshot if applicable.
+

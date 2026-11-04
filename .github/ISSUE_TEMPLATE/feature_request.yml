@@ -1,0 +1,44 @@
+name: ✨ Feature or Format Request
+description: Suggest a new file format, conversion tool, or Ring Workshop enhancement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature Category
+      options:
+        - New Image / Camera RAW Format
+        - New Photo Tool
+        - New Document / E-Book / Data Format
+        - New Video / Audio Codec or Tool
+        - Ring Workshop / Workspace Preset
+        - Desktop Integration (Tray, Shortcuts, Window Behavior)
+        - Performance / Memory Optimization
+    validations:
+      required: true
+
+  - type: input
+    id: conversion
+    attributes:
+      label: Proposed Format or Tool (if applicable)
+      description: Example `Input → Output` or tool slice name
+      placeholder: "e.g., .dds → .png, or PDF Password Removal"
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use Case & Motivation
+      description: Why is this useful for your daily workflow?
+      placeholder: "I frequently export textures in .dds format and want to convert them to .webp in one drop..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Behavior
+      description: How should it work inside flipfile's radial ring or Ring Workshop while staying 100% offline?
+    validations:
+      required: false
+
