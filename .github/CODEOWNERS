@@ -1,0 +1,14 @@
+# Global Code Owner for flipfile
+# Every Pull Request touching any file in this repository automatically
+# requests review from @wcksnrdn.
+
+*                                   @wcksnrdn
+
+# Critical Security & Build Infrastructure
+/.github/                           @wcksnrdn
+/scripts/fetch-pdfium.mjs           @wcksnrdn
+/src-tauri/build.rs                 @wcksnrdn
+/src-tauri/tauri.conf.json          @wcksnrdn
+/src-tauri/capabilities/            @wcksnrdn
+/src-tauri/src/state/grants.rs      @wcksnrdn
+/SECURITY.md                        @wcksnrdn
