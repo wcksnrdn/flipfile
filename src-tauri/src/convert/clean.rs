@@ -1,13 +1,12 @@
 // "Clean": removes metadata while keeping the format (lossless for JPEG and PNG).
 
-use image::codecs::jpeg::JpegEncoder;
 use image::metadata::Orientation;
 use image::ImageFormat;
 use std::fs::{self, File};
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
-use super::encode::flatten_on_white;
+use super::encode::encode_jpeg;
 use super::input::{file_name, open_oriented};
 use super::output::{save_err, unique_output_path};
 use super::strip::{strip_jpeg, strip_png};
@@ -41,12 +40,11 @@ pub(super) fn clean(input: &Path, out_dir: Option<&Path>) -> Result<String, Stri
         fs::write(&output, bytes).map_err(save_err)?;
     } else {
         match format {
-            ImageFormat::Jpeg => flatten_on_white(&img)
-                .write_with_encoder(JpegEncoder::new_with_quality(
-                    &mut File::create(&output).map(BufWriter::new).map_err(save_err)?,
-                    95,
-                ))
-                .map_err(save_err)?,
+            ImageFormat::Jpeg => {
+                let mut file = File::create(&output).map(BufWriter::new).map_err(save_err)?;
+                encode_jpeg(&img, 95, &mut file)?;
+                file.flush().map_err(save_err)?
+            }
             f if f.writing_enabled() => img.save_with_format(&output, f).map_err(save_err)?,
             _ => return Err(format!("\"{name}\": this format cannot be cleaned yet")),
         }

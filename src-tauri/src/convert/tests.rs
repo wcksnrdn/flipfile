@@ -440,8 +440,9 @@ fn word_documents_convert_through_the_pipeline() {
         let done = convert(page.to_str().unwrap(), "docx-ocr", None, &plain, "converted", none).unwrap();
         let model = crate::office::docx::read(&fs::read(&done.path).unwrap()).unwrap();
         let text = format!("{:?}", model.sections);
-        // (the blocky hand-drawn O may read as C or 0)
-        assert!(text.to_uppercase().contains("HELL"), "{text}");
+        // (the blocky hand-drawn O may read as C or 0; the fast recogniser, used when the
+        // accurate one fails, keeps the gaps between the letters: "H E L L O")
+        assert!(text.to_uppercase().replace(' ', "").contains("HELL"), "{text}");
     }
     // A ZIP that is not a Word document is not treated as one
     let fake = dir.join("archive.docx.zip");
@@ -677,4 +678,128 @@ fn converts_audio_formats_via_system_afconvert() {
     }
 }
 
+#[test]
+fn photos_and_graphics_are_told_apart() {
+    // Sensor-like noise on a gradient: neighbours almost never repeat exactly
+    let mut seed = 7u32;
+    let photo = DynamicImage::ImageRgb8(RgbImage::from_fn(400, 300, |x, y| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        let n = (seed % 7) as u8;
+        Rgb([(x / 2) as u8 + n, (y / 2) as u8 + n, 90 + n])
+    }));
+    // A window: flat panels, lines of "text"
+    let ui = DynamicImage::ImageRgba8(RgbaImage::from_fn(400, 300, |x, y| {
+        let text = y % 20 < 8 && x % 37 < 30 && x > 40;
+        if text { image::Rgba([30, 30, 30, 255]) } else if x < 40 { image::Rgba([240, 240, 245, 255]) } else { image::Rgba([255, 255, 255, 255]) }
+    }));
+    assert!(!looks_like_graphic(&photo));
+    assert!(looks_like_graphic(&ui));
+    assert!(!looks_like_graphic(&DynamicImage::ImageRgb8(RgbImage::new(1, 1))));
+}
 
+#[test]
+fn gray_images_are_stored_as_one_channel() {
+    let dir = temp_dir("gray");
+    // RGB pixels that are all exactly gray, like a rendered text page
+    let src = dir.join("page.png");
+    DynamicImage::ImageRgb8(RgbImage::from_fn(200, 100, |x, y| {
+        let v = if (x / 7 + y / 9) % 3 == 0 { 20 } else { 250 };
+        Rgb([v, v, v])
+    }))
+    .save(&src)
+    .unwrap();
+    let png = run(src.to_str().unwrap(), "png", Some(&dir.join("png")).filter(|d| fs::create_dir_all(d).is_ok()).map(|d| d.as_path()), &Options::default());
+    let png = png.unwrap();
+    assert_eq!(image::open(&png).unwrap().color(), image::ColorType::L8);
+    let jpg = run(src.to_str().unwrap(), "jpg", None, &Options::default()).unwrap();
+    let bytes = fs::read(&jpg).unwrap();
+    // SOF0: … precision, height, width, number of components
+    let sof = bytes.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+    assert_eq!(bytes[sof + 9], 1, "a gray JPEG has one component");
+    // A colour image keeps its colour
+    let color = dir.join("color.png");
+    sample(50, 50).save(&color).unwrap();
+    let out = run(color.to_str().unwrap(), "png", None, &Options::default()).unwrap();
+    assert!(image::open(&out).unwrap().color().has_color());
+}
+
+// Display P3 pixels (what Mac screenshots and iPhone JPEGs hold) only mean the right
+// colour with their profile, which converted files do not keep: they are converted to sRGB.
+#[cfg(target_os = "macos")]
+#[test]
+fn embedded_colour_profiles_become_srgb() {
+    let dir = temp_dir("icc");
+    let red = dir.join("red.png");
+    RgbImage::from_pixel(16, 16, Rgb([255, 0, 0])).save(&red).unwrap();
+    for ext in ["png", "jpeg", "tiff"] {
+        let p3 = dir.join(format!("red-p3.{ext}"));
+        let sips = std::process::Command::new("sips")
+            .args(["-m", "/System/Library/ColorSync/Profiles/Display P3.icc", "-s", "format", ext])
+            .arg(&red)
+            .arg("--out")
+            .arg(&p3)
+            .output()
+            .unwrap();
+        assert!(sips.status.success());
+        // the file itself holds P3 values (~234, 51, 35)...
+        let raw = image::open(&p3).unwrap().to_rgb8().get_pixel(8, 8).0;
+        assert!(raw[0] < 245, "{ext}: {raw:?}");
+        // ...that decode as sRGB red
+        let (img, _) = open_oriented(&p3).unwrap();
+        let px = img.to_rgb8().get_pixel(8, 8).0;
+        assert!(px[0] >= 250 && px[1] <= 8 && px[2] <= 8, "{ext}: {px:?}");
+    }
+    // An sRGB profile changes nothing
+    let srgb = dir.join("srgb.png");
+    let sips = std::process::Command::new("sips")
+        .args(["-m", "/System/Library/ColorSync/Profiles/sRGB Profile.icc"])
+        .arg(&red)
+        .arg("--out")
+        .arg(&srgb)
+        .output()
+        .unwrap();
+    assert!(sips.status.success());
+    assert_eq!(open_oriented(&srgb).unwrap().0.to_rgb8().get_pixel(8, 8).0, [255, 0, 0]);
+}
+
+#[test]
+fn avif_keeps_transparency_and_size() {
+    let dir = temp_dir("avif");
+    let src = dir.join("logo.png");
+    DynamicImage::ImageRgba8(RgbaImage::from_fn(120, 80, |x, _| image::Rgba([200, 40, 40, if x < 60 { 0 } else { 255 }])))
+        .save(&src)
+        .unwrap();
+    let out = run(src.to_str().unwrap(), "avif", None, &Options::default()).unwrap();
+    let bytes = fs::read(&out).unwrap();
+    assert!(crate::platform::system_codec::is_heif_family(&bytes), "not an AVIF file");
+    if cfg!(target_os = "macos") {
+        let back = crate::platform::system_codec::decode(Path::new(&out)).unwrap();
+        assert_eq!(back.dimensions(), (120, 80));
+        let rgba = back.to_rgba8();
+        assert!(rgba.get_pixel(10, 40)[3] < 20 && rgba.get_pixel(110, 40)[3] > 235);
+    }
+}
+
+#[test]
+fn target_size_works_through_webp() {
+    let dir = temp_dir("target-webp");
+    // Transparent, so the budget is met with WEBP
+    let src = dir.join("cutout.png");
+    // noise, so the PNG itself is far over budget
+    let mut seed = 99u32;
+    DynamicImage::ImageRgba8(RgbaImage::from_fn(900, 700, |x, y| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        let n = (seed % 40) as u8;
+        image::Rgba([((x / 5) as u8).saturating_add(n), ((y / 4) as u8).saturating_add(n), 120 + n, if (x / 50 + y / 50) % 4 == 0 { 0 } else { 255 }])
+    }))
+    .save(&src)
+    .unwrap();
+    let c = convert(src.to_str().unwrap(), "cmp-100k", None, &Options::default(), "converted", &|_, _| {}).unwrap();
+    assert!(c.path.ends_with(".webp"), "{}", c.path);
+    assert!(fs::metadata(&c.path).unwrap().len() <= 100_000);
+    assert_eq!(image::open(&c.path).unwrap().dimensions().0 > 0, true);
+}

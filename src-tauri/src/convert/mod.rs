@@ -8,14 +8,20 @@
 // - clean:  lossless metadata removal (with strip)
 // - tools:  background removal, transforms, square pad, target-size compress, animated GIF
 // - output: unique output paths
+// - memory: the memory budget that decides how many files convert at once
 
+#[cfg(test)]
+mod bench;
 mod clean;
 mod encode;
 mod input;
 mod media;
+mod memory;
 mod office_extra;
 mod output;
 mod pdf;
+#[cfg(test)]
+mod stress;
 mod strip;
 mod tools;
 mod word;
@@ -40,7 +46,7 @@ use encode::{encode, resize};
 use input::{file_name, header, open_oriented, same_format_ext, sheet_kind, word_kind};
 use media::{convert_media, is_media_target};
 use office_extra::{convert_office, is_extra_office_input, is_office_target};
-use output::{save_err, unique_output_path};
+use output::{save_err, unique_output_path, Reservations};
 use pdf::{merge_to_pdf, pdf_to_images};
 use tools::{is_tool, merge_to_gif, run_tool};
 use word::{from_sheet, from_word, ocr_to_word};
@@ -113,58 +119,13 @@ pub async fn convert_batch(
         None
     };
     let options = app.state::<Mutex<Settings>>().lock().unwrap().options(preset.as_deref());
-    // Name for same-format results: photo_compressed.jpg / photo_resized.png
-    let suffix = match preset.as_deref() {
-        Some("compress") => "compressed",
-        Some(_) => "resized",
-        None => "converted",
-    };
+    let suffix = preset_suffix(preset.as_deref());
     // Runs on a separate thread so the UI never freezes
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let out_dir = out_dir.as_deref();
-        let all_images = paths.iter().all(|p| {
-            let path = Path::new(p);
-            word_kind(path).is_none() && sheet_kind(path).is_none() && !is_extra_office_input(path)
-        });
-        if format == "pdf" && paths.len() > 1 && all_images {
-            merge_to_pdf(&paths, &on_progress, out_dir, &options)
-        } else if format == "gif-anim" && all_images {
-            merge_to_gif(&paths, &on_progress, out_dir, &options)
-        } else {
-            // A single PDF can take a while: report its pages instead of the one file.
-            let single = paths.len() == 1;
-            let on_page = |done: usize, total: usize| {
-                if single {
-                    let _ = on_progress.send(Progress { done, total, unit: "page" });
-                }
-            };
-            let results = par_map(&paths, &on_progress, |p| convert(p, &format, out_dir, &options, suffix, &on_page));
-            let mut batch = BatchResult {
-                outputs: vec![],
-                errors: vec![],
-                pages: 0,
-                bytes_before: 0,
-                bytes_after: 0,
-                note: None,
-            };
-            for r in results {
-                match r {
-                    Ok(c) => {
-                        batch.outputs.push(c.path);
-                        batch.pages += c.pages;
-                        if let Some((before, after)) = c.sizes {
-                            batch.bytes_before += before;
-                            batch.bytes_after += after;
-                        }
-                        if batch.note.is_none() {
-                            batch.note = c.note;
-                        }
-                    }
-                    Err(e) => batch.errors.push(e),
-                }
-            }
-            Ok(batch)
-        }
+        let result = run_batch(&paths, &format, out_dir.as_deref(), &options, suffix, &on_progress);
+        // An idle flipfile should not hold on to what the last document needed
+        office::typeset::release_caches();
+        result
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -174,10 +135,104 @@ pub async fn convert_batch(
     Ok(result)
 }
 
-/// Runs `f` over all paths on a small worker pool, keeping the input order.
+/// Starts what converting `paths` will need while the user is still picking a format:
+/// the first Office document or PDF -> Word would otherwise wait 0.1-0.8 s for the
+/// computer's fonts to be scanned (once per run; nothing happens for other files).
+/// (On a thread of its own: it reads the files' first bytes, which may be on a slow disk.)
+pub fn warm_up(paths: &[std::path::PathBuf]) {
+    let paths = paths.to_vec();
+    let _ = std::thread::Builder::new().name("warm-up".into()).spawn(move || {
+        let documents = paths.iter().any(|p| {
+            word_kind(p).is_some() || sheet_kind(p).is_some() || is_extra_office_input(p) || pdf_render::is_pdf(&header(p))
+        });
+        if documents {
+            office::typeset::has_font("");
+        }
+    });
+}
+
+/// Name for same-format results: photo_compressed.jpg / photo_resized.png
+fn preset_suffix(preset: Option<&str>) -> &'static str {
+    match preset {
+        Some("compress") => "compressed",
+        Some(_) => "resized",
+        None => "converted",
+    }
+}
+
+/// One drop, without the app around it (grants, output folder, history): what
+/// `convert_batch` runs, and what the tests and benchmarks run.
+fn run_batch(
+    paths: &[String],
+    format: &str,
+    out_dir: Option<&Path>,
+    options: &Options,
+    suffix: &str,
+    on_progress: &Channel<Progress>,
+) -> Result<BatchResult, String> {
+    let _names = Reservations::start();
+    let all_images = paths.iter().all(|p| {
+        let path = Path::new(p);
+        word_kind(path).is_none() && sheet_kind(path).is_none() && !is_extra_office_input(path)
+    });
+    if format == "pdf" && paths.len() > 1 && all_images {
+        return merge_to_pdf(paths, on_progress, out_dir, options);
+    }
+    if format == "gif-anim" && all_images {
+        return merge_to_gif(paths, on_progress, out_dir, options);
+    }
+    // A single PDF can take a while: report its pages instead of the one file.
+    let single = paths.len() == 1;
+    let on_page = |done: usize, total: usize| {
+        if single {
+            let _ = on_progress.send(Progress { done, total, unit: "page" });
+        }
+    };
+    let results = par_map(paths, on_progress, |p| memory::cost(p, format), |p| {
+        isolate(p, || convert(p, format, out_dir, options, suffix, &on_page))
+    });
+    let mut batch = BatchResult {
+        outputs: vec![],
+        errors: vec![],
+        pages: 0,
+        bytes_before: 0,
+        bytes_after: 0,
+        note: None,
+    };
+    for r in results {
+        match r {
+            Ok(c) => {
+                batch.outputs.push(c.path);
+                batch.pages += c.pages;
+                if let Some((before, after)) = c.sizes {
+                    batch.bytes_before += before;
+                    batch.bytes_after += after;
+                }
+                if batch.note.is_none() {
+                    batch.note = c.note;
+                }
+            }
+            Err(e) => batch.errors.push(e),
+        }
+    }
+    Ok(batch)
+}
+
+/// Converting a file runs it through many third-party decoders and encoders: a bug that
+/// panics on some unusual file fails that file only, instead of the batch (and the app;
+/// hence `panic = "unwind"` for release builds in Cargo.toml).
+fn isolate<T>(path: &str, convert: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(convert))
+        .unwrap_or_else(|_| Err(format!("\"{}\" could not be converted (internal error)", file_name(Path::new(path)))))
+}
+
+/// Runs `f` over all paths on a worker pool (one per core), keeping the input order.
+/// Before starting on a file, a worker takes `cost` of it (the memory converting it
+/// needs) from the shared budget, so big files run only as many at once as fit.
 fn par_map<T: Send>(
     paths: &[String],
     progress: &Channel<Progress>,
+    cost: impl Fn(&str) -> u64 + Sync,
     f: impl Fn(&str) -> T + Sync,
 ) -> Vec<T> {
     let total = paths.len();
@@ -193,7 +248,13 @@ fn par_map<T: Send>(
                 if i >= total {
                     break;
                 }
-                let r = f(&paths[i]);
+                let r = {
+                    // (reads the file's header: a decoder bug there must not end the worker)
+                    let bytes = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cost(&paths[i]))).unwrap_or(0);
+                    let _memory = memory::Budget::global().take(bytes);
+                    let _names = Reservations::start();
+                    f(&paths[i])
+                };
                 results.lock().unwrap()[i] = Some(r);
                 let d = done.fetch_add(1, Ordering::Relaxed) + 1;
                 let _ = progress.send(Progress { done: d, total, unit: "file" });

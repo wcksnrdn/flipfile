@@ -70,6 +70,7 @@ pub async fn read_clipboard(app: AppHandle, name: String) -> Result<Pasted, Stri
         Pasted::Image { path } => vec![PathBuf::from(path)],
         Pasted::Empty => vec![],
     };
+    crate::convert::warm_up(&granted);
     app.state::<Grants>().replace(granted);
     Ok(pasted)
 }

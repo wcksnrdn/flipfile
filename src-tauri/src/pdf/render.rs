@@ -44,8 +44,25 @@ pub fn is_pdf(header: &[u8]) -> bool {
     header.starts_with(b"%PDF-")
 }
 
-pub fn page_count(path: &Path) -> Result<usize, String> {
-    Ok(open(path)?.pages().len() as usize)
+pub struct PageInfo {
+    pub pages: usize,
+    /// Bytes of the largest page once rendered (RGBA), read without loading any page
+    pub largest_bitmap: u64,
+}
+
+pub fn page_info(path: &Path) -> Result<PageInfo, String> {
+    let document = open(path)?;
+    let pages = document.pages();
+    let scale = RENDER_DPI / 72.0;
+    let side = |points: f32| u64::from(((points * scale).ceil() as u32).clamp(1, MAX_SIDE as u32));
+    let largest_bitmap = pages
+        .page_sizes()
+        .unwrap_or_default()
+        .iter()
+        .map(|r| side(r.width().value) * side(r.height().value) * 4)
+        .max()
+        .unwrap_or(0);
+    Ok(PageInfo { pages: pages.len() as usize, largest_bitmap })
 }
 
 fn open(path: &Path) -> Result<PdfDocument<'static>, String> {

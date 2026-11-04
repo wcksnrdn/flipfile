@@ -326,11 +326,11 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 
 | Format | Read | Write | Notes |
 |---|:-:|:-:|---|
-| JPG / JPEG | ✓ | ✓ | Transparency becomes white |
+| JPG / JPEG | ✓ | ✓ | Transparency becomes white. Full colour resolution at High/Best; at the size-first qualities colour is stored at half resolution (4:2:0) with MS-SSIM-tuned quantisation tables. Gray images are written as one-channel JPEG |
 | PNG | ✓ | ✓ | Lossless; *Compress* and *Lossless* optimise with `oxipng` |
-| WEBP | ✓ | ✓ | Lossy (follows the Quality setting); *Lossless* writes lossless WebP |
+| WEBP | ✓ | ✓ | Lossy (follows the Quality setting); screenshots, documents and logos use libwebp's *picture* tuning (~4% smaller); *Lossless* writes lossless WebP |
 | HEIC / HEIF | ✓ *(OS codec)* | ✓ *(macOS)* | Read via ImageIO (macOS) / WIC (Windows); written natively via ImageIO on macOS |
-| AVIF | ✓ *(OS codec)* | ✓ | Quality follows the Quality setting |
+| AVIF | ✓ *(OS codec)* | ✓ | Quality follows the Quality setting. Written by macOS's own encoder where available (3-4x faster on photos, 24-58% smaller on screenshots and documents), by rav1e elsewhere |
 | BMP | ✓ | ✓ | Uncompressed by design; written 24-bit when there is no transparency (25% smaller) |
 | TIFF | ✓ | ✓ | 24-bit when opaque; *Compress* uses lossless Deflate |
 | GIF | ✓ (first frame) | ✓ | Single image → GIF, or multiple images → looping animated GIF via **GIF anim** |
@@ -341,6 +341,8 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | Word 97–2003 (DOC) | ✓ *(Word/LibreOffice)* | — | Needs Word or LibreOffice installed |
 | Excel (XLSX, XLSM), CSV | ✓ | — | Excel → PDF / images. See [Excel → PDF](#excel--pdf-that-looks-like-excel-printed-it) |
 | Excel 97–2003 (XLS), ODS | ✓ *(Excel/LibreOffice)* | — | Needs Excel or LibreOffice installed |
+
+**Colours**: images with an embedded colour profile (Mac screenshots and iPhone photos are Display P3) are converted to sRGB, so they look the same in every app after conversion. Gray images stay one channel in PNG, TIFF, BMP and TGA.
 
 **Clean metadata** removes EXIF, GPS, XMP, IPTC and text comments. JPG and PNG are cleaned **losslessly**; color profiles are kept. Photos with a rotation tag are re-saved upright so they don't end up sideways. Other formats are re-encoded. HEIC, AVIF and PDF can't be cleaned yet.
 
@@ -376,6 +378,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | HEIC / AVIF input | Built in (ImageIO) | Needs the free **HEIF Image Extensions** (and **AV1 Video Extension** for AVIF) from the Microsoft Store; flipfile tells you if they're missing | Not supported yet |
+| AVIF output | macOS's encoder (ImageIO), rav1e before macOS 14 | rav1e (built in) | rav1e (built in) |
 | ⌥ / Alt presets | ✓ | ✓ | Tray menu only |
 | Glass effect | Native Liquid Glass (macOS 26+), blur on older versions | CSS glass | CSS glass |
 | Tray click | Opens menu | Left: show/hide · Right: menu | Menu only |
@@ -497,6 +500,19 @@ The tests cover every output format, EXIF orientation, metadata stripping, PDF m
 
 - `renders_pdf_pages_to_images` uses the PDFium library from `npm run fetch-pdfium`.
 - `decodes_heic_and_avif_via_imageio` runs only on macOS; it creates real HEIC/AVIF files with the built-in `sips` tool.
+
+They include stress tests (`src-tauri/src/convert/stress.rs`): about 90 hostile and odd inputs (empty, truncated, random bytes behind every extension, a decompression bomb, hollow Office files, 1 px and 70,000 px images) against every target format, close to 3,000 conversions, each with a time limit, plus batches that mix good and broken files. Every file must come back converted or with an error message: never a crash, a hang, a left-over empty file or two outputs with the same name. `npm run stress` adds the slow ones that go through the system engines (OCR, background removal).
+
+### Benchmarks
+
+```bash
+npm run bench                                   # every scenario
+FLIPFILE_BENCH=heic,pdf npm run bench           # only scenarios whose name contains one of these
+FLIPFILE_BENCH_SAVE=before.tsv npm run bench    # keep the results…
+FLIPFILE_BENCH_BASE=before.tsv npm run bench    # …and compare a later run with them (+/- %)
+```
+
+Each scenario (12 and 48 MP photos to every common format, HEIC, screenshots, icons, batches of 24 photos, PDF pages, Word, Excel) runs in a process of its own and reports its time, peak memory and output size. The inputs are built once and reused, so numbers stay comparable between runs: photos are cut from the macOS wallpapers (real HEIC photos), or from `FLIPFILE_BENCH_PHOTO`, and synthetic elsewhere. The `bench` profile is optimised like a release build, without its long link step.
 
 ### Reviewing Word ↔ PDF and Excel → PDF output
 
@@ -652,5 +668,7 @@ Dividing the macOS value by `devicePixelRatio`, as the first version did, halved
 [**Try it for free**](https://github.com/wcksnrdn/flipfile/releases/latest)
 
 <sub>[MIT](LICENSE) © wcksnrdn</sub>
+
+<sub>This software is based in part on the work of the Independent JPEG Group.</sub>
 
 </div>

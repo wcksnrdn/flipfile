@@ -6,6 +6,68 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Faster conversions, measured on 12 MP photos** (`npm run bench`): resizing 2x faster (SIMD
+  Lanczos3), target-size compression 2.5x, PDF pages to JPG 4.4x and to PNG 1.7x (pages are
+  encoded on every core), HEIC to JPG 2.4x (pixels come straight from ImageIO instead of
+  through a PNG), JPG to HEIC 2x, OCR and background removal skip a PNG per image.
+- **Much less memory**: images are no longer copied two or three times on their way to the
+  encoder (a 48 MP photo to JPG peaks at 185 MB instead of 526 MB, a batch of 24 photos at
+  540 MB instead of 1.2 GB); batches take their share of a memory budget (a quarter of the
+  computer's RAM), so huge photos convert only as many at once as fit; merged PDFs are
+  written page by page.
+- Fonts used for Word/Excel → PDF are memory-mapped instead of read: the app no longer keeps
+  ~190 MB (Apple Color Emoji, a fallback font) in memory after the first conversion.
+- A bug that panics while converting one odd file now fails that file only, instead of
+  closing the app (release builds unwind on panic; the app is 5.5 MB larger for it).
+- **Encoders adapt to the picture** (measured with SSIMULACRA2, at the same perceived
+  quality): screenshots, documents and logos are told apart from photos in 2 ms.
+  - AVIF is written by macOS's own encoder: 3-4x faster on photos (files ~5% larger at the
+    same quality), 24-58% smaller on screenshots, documents, gradients and logos. Elsewhere
+    rav1e encodes those at speed 8 (40% smaller than speed 9).
+  - JPEG at the size-first qualities (Balanced, Smaller File, Compress, target sizes) stores
+    colour at half resolution (4:2:0, as cameras do) with quantisation tables tuned for
+    MS-SSIM: 3% smaller than before on photos, 12-28% on screenshots, documents and
+    gradients. High and Best keep full colour resolution.
+  - WEBP uses libwebp's *picture* tuning for screenshots, documents and logos (4% smaller).
+  - Gray images (rendered text pages, black-and-white scans) are written with one channel:
+    PDF pages to PNG 32% smaller, to JPG 9% smaller.
+  - Compress on PNGs of 8 MP and more is 40% faster (one deflate level lower, +0.6%).
+  - Compress to a target size finds the WEBP quality with libwebp's fast mode, then encodes
+    once with the best one.
+- **Excel → PDF typesets runs of 4 pages side by side** and puts them together into one PDF,
+  with each cell's font and settings written once per document instead of per cell
+  (pixel-identical): a 3,000-row workbook takes 0.6 s and 272 MB instead of 0.9 s and 677 MB,
+  a 15,000-row one 3 s and 1.1 GB instead of 6 s and 2.4 GB. At most four layouts run at once
+  in the whole app (more only slow each other down).
+- Dropping or pasting Office documents or PDFs starts scanning the computer's fonts while you
+  pick a format, so the first conversion doesn't wait for it.
+
+### Fixed
+
+- iPhone photos (Display P3) converted from HEIC had slightly dull colours: they are now
+  converted to sRGB (pure red came out as 232, 52, 35).
+- Memory grew by ~12 MB with every Word or Excel document converted and was only given back
+  when the app quit (Typst's cache is now trimmed after every document).
+- Converting an image wider or taller than 16,383 px to WEBP closed the app.
+- Square 1:1 on a very wide panorama could allocate a canvas of many gigabytes; squares are
+  now at most 16,384 px a side.
+- Two files with the same name converted in one batch (`photo.png` and `photo.jpg` to WEBP)
+  could both write the same output file.
+- A failed conversion could leave an empty or half-written file behind.
+- Word OCR now falls back to the fast recogniser when macOS' accurate one fails (it can
+  break, e.g. after the disk was full).
+- Images with an embedded colour profile (Mac screenshots and iPhone JPEGs are Display P3;
+  also TIFF, whose profile was never read) came out with dull colours: they are converted to
+  sRGB.
+
+### Added
+
+- Stress tests (hostile, broken and extreme inputs against every format; ~3,000
+  conversions, none may crash, hang or leave junk behind) and a benchmark suite
+  (`npm run stress`, `npm run bench`).
+
 ## [0.3.0] - 2026-11-03
 
 ### Added

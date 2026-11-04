@@ -118,6 +118,60 @@ mod tests {
         assert_eq!(model.images.len(), 1);
     }
 
+    /// Two sheets on different paper, many pages each, with a header numbering them all
+    fn long_workbook() -> Vec<u8> {
+        use std::io::Write;
+        let rows = |n: usize, label: &str| -> String {
+            (1..=n)
+                .map(|r| format!(r#"<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>{label} row {r}</t></is></c><c r="B{r}"><v>{}</v></c><c r="C{r}" t="inlineStr"><is><t>Some longer text that spills over</t></is></c></row>"#, r * 1250))
+                .collect()
+        };
+        let sheet = |n: usize, label: &str, landscape: bool| {
+            format!(
+                r#"<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{}</sheetData><pageSetup orientation="{}"/><headerFooter><oddHeader>&amp;CPage &amp;P of &amp;N</oddHeader></headerFooter></worksheet>"#,
+                rows(n, label),
+                if landscape { "landscape" } else { "portrait" }
+            )
+        };
+        let files = [
+            ("[Content_Types].xml".to_string(), r#"<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/></Types>"#.to_string()),
+            ("_rels/.rels".to_string(), r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#.to_string()),
+            ("xl/workbook.xml".to_string(), r#"<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="One" sheetId="1" r:id="rId1"/><sheet name="Two" sheetId="2" r:id="rId2"/></sheets></workbook>"#.to_string()),
+            ("xl/_rels/workbook.xml.rels".to_string(), r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>"#.to_string()),
+            ("xl/worksheets/sheet1.xml".to_string(), sheet(260, "First", false)),
+            ("xl/worksheets/sheet2.xml".to_string(), sheet(130, "Second", true)),
+        ];
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (name, body) in files {
+            zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(body.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap().into_inner()
+    }
+
+    // Workbooks are typeset in runs of pages on every core, then put together: the pages
+    // must come out exactly as from one document.
+    #[test]
+    fn workbook_typeset_in_runs_matches_one_document() {
+        let wb = xlsx::read(&long_workbook()).unwrap();
+        let printed = sheet_pdf::print(&wb, numfmt::Separators::US, "long.xlsx").unwrap();
+        let whole = typeset::to_pdf(printed.markup(), printed.files.clone()).unwrap();
+        let runs = sheet_pdf::to_pdf(&wb, numfmt::Separators::US, "long.xlsx").unwrap();
+
+        let pdfium = crate::pdf::render::pdfium().unwrap();
+        let (a, b) = (pdfium.load_pdf_from_byte_slice(&whole, None).unwrap(), pdfium.load_pdf_from_byte_slice(&runs, None).unwrap());
+        assert!(a.pages().len() > 8, "{} pages: too few to be split", a.pages().len());
+        assert_eq!(a.pages().len(), b.pages().len());
+        let config = PdfRenderConfig::new().set_target_width(500);
+        for (i, (pa, pb)) in a.pages().iter().zip(b.pages().iter()).enumerate() {
+            assert_eq!((pa.width(), pa.height()), (pb.width(), pb.height()), "page {} size", i + 1);
+            let (ia, ib) = (pa.render_with_config(&config).unwrap().as_rgba_bytes(), pb.render_with_config(&config).unwrap().as_rgba_bytes());
+            assert!(ia == ib, "page {} differs", i + 1);
+        }
+        // and each font once, not once per run
+        assert!(runs.len() < whole.len() * 11 / 10, "{} vs {} bytes", runs.len(), whole.len());
+    }
+
     /// Visual check during development:
     /// `FLIPFILE_DOCX=in.docx FLIPFILE_OUT=dir cargo test review_docx -- --ignored`
     /// writes the PDF and a PNG per page into `dir`.
@@ -157,10 +211,10 @@ mod tests {
         let sep = if std::env::var("FLIPFILE_SEP").as_deref() == Ok(",") { numfmt::Separators::COMMA } else { numfmt::Separators::US };
         let printed = sheet_pdf::print(&wb, sep, "review.xlsx").unwrap();
         if std::env::var("FLIPFILE_MARKUP").is_ok() {
-            println!("{}", printed.markup);
+            println!("{}", printed.markup());
         }
         let start = std::time::Instant::now();
-        let pdf = typeset::to_pdf(printed.markup, printed.files).unwrap();
+        let pdf = typeset::to_pdf(printed.markup(), printed.files).unwrap();
         println!("typeset in {:?}", start.elapsed());
         std::fs::write(out.join("review.pdf"), &pdf).unwrap();
         let pdfium = crate::pdf::render::pdfium().unwrap();

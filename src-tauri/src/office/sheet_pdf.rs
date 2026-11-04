@@ -16,10 +16,41 @@ use super::xlsx::{Edge, HAlign, Line, Range, Sheet, Style, VAlign, Workbook};
 /// Space between a cell's edge and its text (Excel leaves ~2 px)
 const PAD: f32 = 1.5;
 
-/// Everything needed to typeset the PDF
+/// Everything needed to typeset the PDF. Pages are positioned absolutely and numbered
+/// by this engine, so any run of them is a document of its own (see `chunk`).
 pub struct Printed {
-    pub markup: String,
+    /// Document settings, first in every document
+    preamble: String,
+    /// Each sheet's page settings
+    sheets: Vec<String>,
+    /// Each page: its sheet, then its content
+    pages: Vec<(usize, String)>,
     pub files: Vec<(String, Vec<u8>)>,
+}
+
+impl Printed {
+    /// The pages in `range` as a document of their own
+    pub fn chunk(&self, range: std::ops::Range<usize>) -> String {
+        let mut markup = self.preamble.clone();
+        let mut sheet = None;
+        for (i, (si, body)) in self.pages[range].iter().enumerate() {
+            if sheet != Some(*si) {
+                markup.push_str(&self.sheets[*si]);
+                sheet = Some(*si);
+            }
+            if i > 0 {
+                markup.push_str("#pagebreak()\n");
+            }
+            markup.push_str(body);
+        }
+        markup
+    }
+
+    /// The whole workbook as one document
+    #[cfg(test)]
+    pub fn markup(&self) -> String {
+        self.chunk(0..self.pages.len())
+    }
 }
 
 /// Font families to try for an Excel font: itself, then metric-compatible and common look-alikes
@@ -83,14 +114,23 @@ fn rgb(c: [u8; 3]) -> String {
 }
 
 /// A Typst expression for `text` (with hidden padding runs) in a style
-fn text_expr(text: &str, style: &Style, color: Option<[u8; 3]>, scale: f32, size_override: Option<f32>) -> String {
+/// Typst's list of `families` for an Excel font name
+fn font_list(name: &str) -> String {
+    families(name).iter().map(|s| typst_str(s)).collect::<Vec<_>>().join(", ")
+}
+
+/// `default_font` is the `font_list` the document sets for all text (see `print`), so
+/// only cells in another font name theirs: a workbook has tens of thousands of cells, and
+/// every byte of markup per cell costs Typst time and memory.
+fn text_expr(text: &str, style: &Style, color: Option<[u8; 3]>, scale: f32, size_override: Option<f32>, default_font: &str) -> String {
     let f = &style.font;
-    let fams = families(&f.name);
-    let fams_list = fams.iter().map(|s| typst_str(s)).collect::<Vec<_>>().join(", ");
+    let fams_list = font_list(&f.name);
     let size = size_override.unwrap_or(f.size) * scale;
     let fill = color.or(f.color).unwrap_or([0, 0, 0]);
-    // the box spans ascender to descender, so g/j/p are not clipped at the cell bottom
-    let mut base = format!("font: ({fams_list},), size: {size:.2}pt, top-edge: \"ascender\", bottom-edge: \"descender\"");
+    let mut base = format!("size: {size:.2}pt");
+    if fams_list != default_font {
+        base = format!("font: ({fams_list},), {base}");
+    }
     if f.bold {
         base.push_str(", weight: \"bold\"");
     }
@@ -407,7 +447,17 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
     }
 
     let total: usize = plans.iter().map(|p| p.pages.len()).sum();
-    let mut out = String::new();
+    let mut preamble = String::new();
+    // What every text and cell would otherwise repeat: the workbook's own font, and a
+    // line box from ascender to descender (so g/j/p are not clipped at a cell's bottom)
+    let default_font = wb.styles.first().map(|s| font_list(&s.font.name)).unwrap_or_default();
+    let _ = write!(preamble, "#set text(top-edge: \"ascender\", bottom-edge: \"descender\"");
+    if !default_font.is_empty() {
+        let _ = write!(preamble, ", font: ({default_font},)");
+    }
+    preamble.push_str(")\n");
+    let mut sheets = vec![];
+    let mut pages = vec![];
     let mut files = vec![];
     let mut page_no = 0usize;
     let mut pic_files: HashMap<(usize, usize), String> = HashMap::new();
@@ -417,12 +467,19 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
         let s = plan.scale;
         let (pw, ph) = plan.page_size;
         let [ml, mr, mt, mb, mh, mf] = p.margins;
+        let mut out = String::new();
         let _ = writeln!(out, "#set page(width: {pw:.2}pt, height: {ph:.2}pt, margin: 0pt)");
+        // A cell clips its text and keeps it off the gridlines (at this sheet's scale)
+        let _ = writeln!(
+            out,
+            "#let cell(w, h, body) = block(width: w, height: h, clip: true, inset: (left: {:.2}pt, right: {:.2}pt, top: 0.5pt, bottom: 1pt), body)",
+            PAD * s,
+            PAD * s
+        );
+        sheets.push(out);
         let first_page = p.first_page.map(|n| n as usize).unwrap_or(page_no + 1);
         for (pi, page) in plan.pages.iter().enumerate() {
-            if page_no > 0 {
-                out.push_str("#pagebreak()\n");
-            }
+            let mut out = String::new();
             page_no += 1;
             let grid = &plan.grid;
             // rows on this page: the title rows (unless they are already here), then the band
@@ -550,7 +607,7 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                         let full_l = grid.x(m.1.max(grid.range.1));
                         let full_r = grid.x(m.3.min(grid.range.3) + 1);
                         let vis_l = grid.x(c.max(page.cols.0));
-                        let markup = cell_text(&shown, style, h, is_number, full_r - full_l, ch, s);
+                        let markup = cell_text(&shown, style, h, is_number, full_r - full_l, ch, s, &default_font);
                         let _ = writeln!(
                             out,
                             "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, block(width: {:.2}pt, height: {:.2}pt, clip: true, place(top + left, dx: {:.2}pt, {markup})))",
@@ -562,7 +619,7 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                         );
                         continue;
                     }
-                    let markup = cell_text(&shown, style, h, is_number, right - left, ch, s);
+                    let markup = cell_text(&shown, style, h, is_number, right - left, ch, s, &default_font);
                     let _ = writeln!(out, "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, {markup})", px(left), py(ry[&r]));
                 }
             }
@@ -628,14 +685,15 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                     let align = ["left", "center", "right"][i];
                     let y = if top { format!("dy: {mh:.2}pt") } else { format!("dy: {:.2}pt", ph - mf - 14.0) };
                     let style = Style { font: wb.styles[0].font.clone(), ..Default::default() };
-                    let t = text_expr(text, &style, None, 1.0, None);
+                    let t = text_expr(text, &style, None, 1.0, None, &default_font);
                     let _ = writeln!(out, "#place(top + left, dx: {ml:.2}pt, {y}, block(width: {:.2}pt, align({align}, {t})))", pw - ml - mr);
                 }
             }
             out.push('\n');
+            pages.push((sheets.len() - 1, out));
         }
     }
-    Ok(Printed { markup: out, files })
+    Ok(Printed { preamble, sheets, pages, files })
 }
 
 /// Width and height of a cell (or of its merged region, limited to what this page shows)
@@ -651,7 +709,8 @@ fn cell_box(grid: &Grid, merged: &HashMap<(u32, u32), Range>, r: u32, c: u32, ro
 }
 
 /// A cell's text block: clipped to the cell (or its overflow room), aligned like Excel
-fn cell_text(shown: &Shown, style: &Style, h: HAlign, is_number: bool, w: f32, ch: f32, s: f32) -> String {
+#[allow(clippy::too_many_arguments)]
+fn cell_text(shown: &Shown, style: &Style, h: HAlign, is_number: bool, w: f32, ch: f32, s: f32, default_font: &str) -> String {
     let fams = families(&style.font.name);
     let indent = style.indent as f32 * 9.0;
     let inner = (w - 2.0 * PAD - indent).max(1.0);
@@ -666,6 +725,10 @@ fn cell_text(shown: &Shown, style: &Style, h: HAlign, is_number: bool, w: f32, c
             HAlign::Right => (PAD, PAD + indent),
             _ => (PAD, PAD),
         };
+        if (il, ir) == (PAD, PAD) {
+            // the usual cell: `cell`, defined once per sheet (see `print`)
+            return format!("cell({:.2}pt, {:.2}pt, align({align} + {v}, {content}))", w * s, ch * s);
+        }
         format!(
             "block(width: {:.2}pt, height: {:.2}pt, clip: true, inset: (left: {:.2}pt, right: {:.2}pt, top: 0.5pt, bottom: 1pt), align({align} + {v}, {content}))",
             w * s,
@@ -679,10 +742,10 @@ fn cell_text(shown: &Shown, style: &Style, h: HAlign, is_number: bool, w: f32, c
     // accounting-style formats: the part before the fill hugs the left, the rest the right
     if let (Some(_), Some(after)) = (shown.fill, &shown.after_fill) {
         if text_w(&shown.text) + text_w(after) > inner + 0.5 && is_number {
-            return block(text_expr(&"#".repeat(hashes(&fams, style, inner)), style, shown.color, s, None), "right");
+            return block(text_expr(&"#".repeat(hashes(&fams, style, inner)), style, shown.color, s, None, default_font), "right");
         }
-        let left = text_expr(&shown.text, style, shown.color, s, None);
-        let right = text_expr(after, style, shown.color, s, None);
+        let left = text_expr(&shown.text, style, shown.color, s, None, default_font);
+        let right = text_expr(after, style, shown.color, s, None, default_font);
         return block(format!("box(width: 100%, {left} + h(1fr) + {right})"), "left");
     }
 
@@ -710,7 +773,7 @@ fn cell_text(shown: &Shown, style: &Style, h: HAlign, is_number: bool, w: f32, c
         HAlign::Center | HAlign::CenterContinuous => "center",
         _ => "left",
     };
-    let t = text_expr(&text, style, shown.color, s, size);
+    let t = text_expr(&text, style, shown.color, s, size, default_font);
     if style.wrap {
         block(format!("par(justify: {}, leading: 0.14em, {t})", h == HAlign::Justify), align)
     } else {
@@ -771,7 +834,12 @@ fn picture_bytes(data: &[u8], ext: &str) -> (Vec<u8>, &'static str) {
 /// Workbook -> PDF bytes with the built-in engine
 pub fn to_pdf(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Vec<u8>, String> {
     let printed = print(wb, sep, file_name)?;
-    super::typeset::to_pdf(printed.markup, printed.files).map_err(|e| format!("the workbook could not be laid out ({e})"))
+    // Typeset in runs of 4 pages, side by side, into one PDF: measured best (8 pages per
+    // run is slower, and a whole workbook at once needs twice the memory and time)
+    let per_run = 4;
+    let runs: Vec<String> =
+        (0..printed.pages.len()).step_by(per_run).map(|i| printed.chunk(i..(i + per_run).min(printed.pages.len()))).collect();
+    super::typeset::to_pdf_in_runs(runs, printed.files).map_err(|e| format!("the workbook could not be laid out ({e})"))
 }
 
 #[cfg(test)]

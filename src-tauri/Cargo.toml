@@ -40,10 +40,22 @@ roxmltree = "0.21.1"
 typst-layout = "0.15"
 # Font metrics (Word line heights); already part of the build through Typst
 ttf-parser = "0.25"
+# Fonts are memory-mapped, not read whole (src/office/typeset.rs); already part of the
+# build through Typst's font scanning
+memmap2 = "0.9"
 # Lossy WEBP (libwebp): the `image` crate only writes lossless WEBP, often larger than JPG
 webp = { version = "0.3.1", default-features = false }
 # Lossless PNG optimisation ("Lossless" in Photo > Tools > Compress)
 oxipng = { version = "10.2.1", default-features = false, features = ["parallel"] }
+# JPEG output: the `image` crate's encoder always stores colour at full resolution with
+# no way to subsample it; this one encodes 2x faster and, for the size-first qualities,
+# writes 4:2:0 like cameras do (~17% smaller). AVX2 is detected at run time.
+jpeg-encoder = { version = "0.7.1", features = ["simd"] }
+# SIMD resizing (NEON, SSE4.1, AVX2): Lanczos3 3-4x faster than `image`'s own resize
+fast_image_resize = { version = "6.1.0", features = ["image"] }
+# Colour management (embedded ICC profiles -> sRGB, src/convert/input.rs); already part of
+# the build through `image`
+moxcms = "0.8"
 
 # Native glass view (src/glass.rs) and HEIC/AVIF decoding via ImageIO (src/system_codec.rs).
 # Mostly already compiled as part of Tauri/wry on macOS; these enable a few extra bindings.
@@ -63,10 +75,15 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSImage",
 ] }
 objc2-core-foundation = "0.3"
+# Decoding into / encoding from plain pixel buffers (src/platform/system_codec.rs), and
+# handing them to Vision without a PNG in between; already compiled as part of Tauri.
+objc2-core-graphics = { version = "0.3", default-features = false, features = [
+  "std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGDataProvider", "CGImage",
+] }
 # Text recognition (Word OCR) and background removal with macOS' built-in Vision framework
 objc2-vision = { version = "0.3", default-features = false, features = [
   "std", "objc2-core-foundation", "VNRequest", "VNRecognizeTextRequest", "VNRequestHandler", "VNObservation", "VNTypes",
-  "VNGenerateForegroundInstanceMaskRequest", "objc2-core-video",
+  "VNGenerateForegroundInstanceMaskRequest", "objc2-core-video", "objc2-core-graphics",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange", "NSData", "NSString", "NSUserDefaults", "NSLocale", "NSIndexSet", "NSArray", "NSDictionary", "NSError"] }
 objc2-image-io = { version = "0.3", default-features = false, features = [
@@ -78,6 +95,11 @@ objc2-image-io = { version = "0.3", default-features = false, features = [
 # Reading the background-removal mask (src/platform/background.rs)
 objc2-core-video = { version = "0.3.2", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn"] }
 
+# The computer's memory size (src/convert/memory.rs) and peak memory in benchmarks;
+# already part of the build.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # HEIC/AVIF decoding via WIC (src/system_codec.rs) and the Alt key state (src/keys.rs);
 # already part of Tauri's dependency tree on Windows.
 [target.'cfg(windows)'.dependencies]
@@ -87,6 +109,8 @@ windows = { version = "0.62", features = [
   "Foundation", "Foundation_Collections", "Graphics_Imaging", "Media_Ocr", "Security_Cryptography", "Storage_Streams",
   # The region's decimal and thousands separators (Excel -> PDF)
   "Win32_Globalization",
+  # The computer's memory size (src/convert/memory.rs)
+  "Win32_System_SystemInformation",
 ] }
 
 
@@ -101,10 +125,21 @@ docx-rs = "0.4"
 [profile.dev.package."*"]
 opt-level = 3
 
+# `npm run bench` (src/convert/bench.rs): optimised like a release build, without the
+# long single-unit LTO link, and with line tables so profilers can name hot functions.
+[profile.bench]
+lto = false
+codegen-units = 16
+debug = "line-tables-only"
+strip = false
+
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
 lto = true
 opt-level = 3
-panic = "abort"
+# Not "abort": flipfile opens whatever files people drop through dozens of third-party
+# decoders, and a panic on one odd file must fail that file (src/convert/mod.rs,
+# `isolate`), not close the app. Costs 5.5 MB of binary.
+panic = "unwind"
 strip = true

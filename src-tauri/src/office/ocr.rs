@@ -18,29 +18,52 @@ pub struct TextLine {
     pub words: Vec<(String, [f32; 4])>,
 }
 
+/// Set once the accurate recogniser has failed where the fast one worked: macOS' machine
+/// learning runtime can break (e.g. a model cache damaged while the disk was full) and
+/// then fails every accurate request after a minute. The rest of the session goes
+/// straight to the fast recogniser.
+#[cfg(target_os = "macos")]
+static ACCURATE_BROKEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 #[cfg(target_os = "macos")]
 pub fn recognize(image: &image::RgbaImage) -> Result<Vec<TextLine>, String> {
+    use std::sync::atomic::Ordering;
     // Conversions run on worker threads, which have no autorelease pool of their own
-    objc2::rc::autoreleasepool(|_| recognize_in_pool(image))
+    objc2::rc::autoreleasepool(|_| {
+        if ACCURATE_BROKEN.load(Ordering::Relaxed) {
+            return recognize_in_pool(image, false);
+        }
+        let accurate = recognize_in_pool(image, true);
+        let Err(e) = accurate else { return accurate };
+        // The same image read by the fast recogniser tells a broken engine from a bad image
+        let fast = recognize_in_pool(image, false).map_err(|_| e.clone())?;
+        eprintln!("[flipfile] accurate text recognition failed ({e}); using the fast recogniser from now on");
+        ACCURATE_BROKEN.store(true, Ordering::Relaxed);
+        Ok(fast)
+    })
 }
 
 #[cfg(target_os = "macos")]
-fn recognize_in_pool(image: &image::RgbaImage) -> Result<Vec<TextLine>, String> {
+fn recognize_in_pool(image: &image::RgbaImage, accurate: bool) -> Result<Vec<TextLine>, String> {
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2::AnyThread;
-    use objc2_foundation::{NSArray, NSData, NSDictionary, NSString};
+    use objc2_foundation::{NSArray, NSDictionary, NSString};
     use objc2_vision::{VNImageOption, VNImageRequestHandler, VNRecognizeTextRequest, VNRequest, VNRequestTextRecognitionLevel};
 
     let failed = |e: &dyn std::fmt::Debug| format!("text recognition failed ({e:?})");
-    let mut png = Vec::new();
-    image::DynamicImage::ImageRgba8(image.clone()).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| failed(&e))?;
-    let data = NSData::with_bytes(&png);
+    // The pixels go to Vision as they are (scans are opaque), not through a PNG
+    let pixels = crate::platform::system_codec::cg_image(image.as_raw(), image.width(), image.height(), 4, true)
+        .ok_or_else(|| failed(&"image"))?;
     let options: Retained<NSDictionary<VNImageOption, AnyObject>> = NSDictionary::new();
-    let handler = VNImageRequestHandler::initWithData_options(VNImageRequestHandler::alloc(), &data, &options);
+    let handler = unsafe { VNImageRequestHandler::initWithCGImage_options(VNImageRequestHandler::alloc(), &pixels, &options) };
 
     let request = VNRecognizeTextRequest::new();
-    request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
+    request.setRecognitionLevel(if accurate {
+        VNRequestTextRecognitionLevel::Accurate
+    } else {
+        VNRequestTextRecognitionLevel::Fast
+    });
     request.setUsesLanguageCorrection(true);
     // Indonesian and English first when this macOS knows them, else its own choice
     let wanted = ["id-ID", "en-US"];

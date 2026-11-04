@@ -23,7 +23,7 @@ fn remove_in_pool(image: &RgbaImage) -> Result<RgbaImage, String> {
         CVPixelBufferGetBytesPerRow, CVPixelBufferGetHeight, CVPixelBufferGetPixelFormatType, CVPixelBufferGetWidth,
         CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags, CVPixelBufferUnlockBaseAddress,
     };
-    use objc2_foundation::{NSArray, NSData, NSDictionary};
+    use objc2_foundation::{NSArray, NSDictionary};
     use objc2_vision::{VNGenerateForegroundInstanceMaskRequest, VNImageOption, VNImageRequestHandler, VNRequest};
 
     // The request only exists from macOS 14; asking for a missing class would abort.
@@ -32,13 +32,12 @@ fn remove_in_pool(image: &RgbaImage) -> Result<RgbaImage, String> {
     }
     let failed = |e: &dyn std::fmt::Debug| format!("background removal failed ({e:?})");
 
-    let mut png = Vec::new();
-    image::DynamicImage::ImageRgba8(image.clone())
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .map_err(|e| failed(&e))?;
-    let data = NSData::with_bytes(&png);
+    // The pixels go to Vision as they are, not through a PNG
+    let opaque = image.pixels().all(|p| p[3] == u8::MAX);
+    let pixels = crate::platform::system_codec::cg_image(image.as_raw(), image.width(), image.height(), 4, opaque)
+        .ok_or_else(|| failed(&"image"))?;
     let options: Retained<NSDictionary<VNImageOption, AnyObject>> = NSDictionary::new();
-    let handler = VNImageRequestHandler::initWithData_options(VNImageRequestHandler::alloc(), &data, &options);
+    let handler = unsafe { VNImageRequestHandler::initWithCGImage_options(VNImageRequestHandler::alloc(), &pixels, &options) };
 
     let request = unsafe { VNGenerateForegroundInstanceMaskRequest::new() };
     let requests: Retained<NSArray<VNRequest>> =

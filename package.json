@@ -11,7 +11,9 @@
     "tauri": "tauri",
     "fetch-pdfium": "node scripts/fetch-pdfium.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run fetch-pdfium && cd src-tauri && cargo test"
+    "test": "npm run fetch-pdfium && cd src-tauri && cargo test",
+    "stress": "npm run fetch-pdfium && cd src-tauri && cargo test --lib convert::stress -- --include-ignored",
+    "bench": "npm run fetch-pdfium && cd src-tauri && cargo test --profile bench --lib convert::bench::bench -- --exact --ignored --nocapture"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.3.0",

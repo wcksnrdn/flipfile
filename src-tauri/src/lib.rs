@@ -58,6 +58,7 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
                 window.state::<grants::Grants>().replace(paths.iter().cloned());
+                convert::warm_up(paths);
             }
             // The system switched between light and dark: swap the app icon to match
             tauri::WindowEvent::ThemeChanged(theme) => appearance::apply(window.app_handle(), *theme),

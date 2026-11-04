@@ -29,8 +29,12 @@ pub(super) fn open_oriented(path: &Path) -> Result<(DynamicImage, Orientation), 
         .and_then(|r| r.into_decoder().map_err(|_| ()))
         .and_then(|mut decoder| {
             let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+            let profile = decoder.icc_profile().ok().flatten().or_else(|| tiff_icc_profile(path));
             let mut img = DynamicImage::from_decoder(decoder).map_err(|_| ())?;
             img.apply_orientation(orientation);
+            if let Some(profile) = profile {
+                to_srgb(&mut img, &profile);
+            }
             Ok((img, orientation))
         });
 
@@ -45,6 +49,74 @@ pub(super) fn open_oriented(path: &Path) -> Result<(DynamicImage, Orientation), 
     }
 
     Err(not_image())
+}
+
+/// Converts pixels described by an embedded ICC profile into sRGB, the colour space
+/// every file flipfile writes is read in (they carry no profile). Mac screenshots and
+/// iPhone photos are Display P3: without this their colours come out dull (pure red
+/// as 232, 52, 35). Pixels already in sRGB are left untouched; 18 ms for 12 MP.
+pub(super) fn to_srgb(img: &mut DynamicImage, profile: &[u8]) {
+    use moxcms::{ColorProfile, DataColorSpace, Layout, TransformOptions};
+    let Ok(source) = ColorProfile::new_from_slice(profile) else { return };
+    if source.color_space != DataColorSpace::Rgb {
+        return; // gray and CMYK profiles describe other pixels than these
+    }
+    let srgb = ColorProfile::new_srgb();
+    let options = TransformOptions::default();
+    let layout = |alpha: bool| if alpha { Layout::Rgba } else { Layout::Rgb };
+    match img {
+        DynamicImage::ImageRgb8(_) | DynamicImage::ImageRgba8(_) => {
+            let alpha = img.color().has_alpha();
+            let Ok(t) = source.create_transform_8bit(layout(alpha), &srgb, layout(alpha), options) else { return };
+            let channels = if alpha { 4 } else { 3 };
+            // 125 colours across the cube tell an sRGB profile (any version) from others
+            let probe: Vec<u8> = (0..125u32)
+                .flat_map(|i| [(i % 5 * 63) as u8, (i / 5 % 5 * 63) as u8, (i / 25 * 63) as u8, 255].into_iter().take(channels))
+                .collect();
+            let mut probed = vec![0; probe.len()];
+            if t.transform(&probe, &mut probed).is_err() || probe.iter().zip(&probed).all(|(a, b)| a.abs_diff(*b) <= 1) {
+                return;
+            }
+            let data: &mut [u8] = match img {
+                DynamicImage::ImageRgb8(p) => p,
+                DynamicImage::ImageRgba8(p) => p,
+                _ => unreachable!(),
+            };
+            transform_in_place(|src, dst| t.transform(src, dst).is_ok(), data, channels);
+        }
+        DynamicImage::ImageRgb16(_) | DynamicImage::ImageRgba16(_) => {
+            let alpha = img.color().has_alpha();
+            let Ok(t) = source.create_transform_16bit(layout(alpha), &srgb, layout(alpha), options) else { return };
+            let data: &mut [u16] = match img {
+                DynamicImage::ImageRgb16(p) => p,
+                DynamicImage::ImageRgba16(p) => p,
+                _ => unreachable!(),
+            };
+            transform_in_place(|src, dst| t.transform(src, dst).is_ok(), data, if alpha { 4 } else { 3 });
+        }
+        _ => {}
+    }
+}
+
+/// The ICC profile of a TIFF file: the `image` crate's TIFF decoder never hands it over.
+fn tiff_icc_profile(path: &Path) -> Option<Vec<u8>> {
+    let head = header(path);
+    if !head.starts_with(b"II*\0") && !head.starts_with(b"MM\0*") {
+        return None;
+    }
+    let file = std::io::BufReader::new(File::open(path).ok()?);
+    tiff::decoder::Decoder::new(file).ok()?.get_tag_u8_vec(tiff::tags::Tag::IccProfile).ok()
+}
+
+/// Runs `transform` over `data` a slice at a time, so no second copy of the image is needed.
+fn transform_in_place<V: Copy + Default>(transform: impl Fn(&[V], &mut [V]) -> bool, data: &mut [V], channels: usize) {
+    let mut scratch = vec![V::default(); (channels << 16).min(data.len())];
+    for part in data.chunks_mut(channels << 16) {
+        let out = &mut scratch[..part.len()];
+        if transform(part, out) {
+            part.copy_from_slice(out);
+        }
+    }
 }
 
 pub(super) fn header(path: &Path) -> [u8; 12] {

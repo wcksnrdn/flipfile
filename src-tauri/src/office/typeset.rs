@@ -7,12 +7,13 @@ use std::sync::OnceLock;
 
 use typst::diag::{FileError, FileResult};
 use typst::foundations::{Bytes, Datetime, Duration};
+use typst::model::Document;
 use typst_layout::PagedDocument;
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
-use typst_kit::fonts::FontStore;
+use typst_kit::fonts::{FontPath, FontSource, FontStore};
 
 /// The computer's own fonts, so documents use the fonts they were written with when
 /// installed (and look-alikes otherwise). Scanned once per run.
@@ -20,7 +21,7 @@ fn fonts() -> &'static FontStore {
     static FONTS: OnceLock<FontStore> = OnceLock::new();
     FONTS.get_or_init(|| {
         let mut store = FontStore::new();
-        store.extend(typst_kit::fonts::system());
+        store.extend(typst_kit::fonts::system().map(|(path, info)| (MappedFont(path), info)));
         // Microsoft Office on macOS keeps Calibri, Cambria, Aptos, … inside its app
         // bundles instead of the system font folder. Using them (only when Office is
         // installed) makes text exactly as wide as in Word.
@@ -28,12 +29,30 @@ fn fonts() -> &'static FontStore {
         for app in ["Microsoft Word", "Microsoft Excel", "Microsoft PowerPoint", "Microsoft Outlook"] {
             let dir = std::path::PathBuf::from(format!("/Applications/{app}.app/Contents/Resources/DFonts"));
             if dir.is_dir() {
-                store.extend(typst_kit::fonts::scan(&dir));
+                store.extend(typst_kit::fonts::scan(&dir).map(|(path, info)| (MappedFont(path), info)));
                 break; // every Office app ships the same set
             }
         }
         store
     })
+}
+
+/// A font file mapped into memory rather than read into it: only the parts typesetting
+/// touches take up memory, and the system can drop them again. Read whole, fonts stay
+/// in memory for as long as flipfile runs, and the fallback for any missing glyph is
+/// Apple Color Emoji, 188 MB.
+struct MappedFont(FontPath);
+
+impl FontSource for MappedFont {
+    fn load(&self) -> Option<Font> {
+        let file = std::fs::File::open(&self.0.path).ok()?;
+        // Safety: font files are not changed while mapped (the system's are on a
+        // read-only volume); a font that cannot be mapped is read instead.
+        match unsafe { memmap2::Mmap::map(&file) } {
+            Ok(map) => Font::new(Bytes::new(map), self.0.index),
+            Err(_) => self.0.load(),
+        }
+    }
 }
 
 /// Word's line box for a font, in ems: (ascent, descent) from its Windows metrics.
@@ -146,21 +165,105 @@ impl World for DocWorld {
 /// Compiles `markup` to PDF. `files` are virtual files the markup can reference by
 /// path (e.g. `/img/1.png`).
 pub fn to_pdf(markup: String, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, String> {
-    let main = Source::new(file_id("/main.typ")?, markup);
-    let mut map = HashMap::new();
-    for (path, data) in files {
-        map.insert(file_id(&path)?, Bytes::new(data));
+    let files = virtual_files(files)?;
+    let pdf = compile(markup, files).and_then(|document| export(&document));
+    trim_cache();
+    pdf
+}
+
+/// Like `to_pdf` for markup split into runs of pages that need nothing from each other
+/// (absolutely positioned, numbered by the caller): runs are laid out side by side, and
+/// their pages make one PDF, with each font and picture in it once. Typst's cache is
+/// emptied after every run, as runs share almost nothing: a 313-page workbook then
+/// peaks at 1.1 GB instead of 2.4 GB, in 3.3 s instead of 6.2 s.
+pub fn to_pdf_in_runs(runs: Vec<String>, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, String> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
+    let files = virtual_files(files)?;
+    if runs.len() == 1 {
+        let pdf = compile(runs.into_iter().next().unwrap(), files).and_then(|document| export(&document));
+        trim_cache();
+        return pdf;
     }
+    let workers = MAX_LAYOUTS.min(runs.len());
+    let next = AtomicUsize::new(0);
+    let laid_out: Mutex<Vec<Option<Result<PagedDocument, String>>>> = Mutex::new((0..runs.len()).map(|_| None).collect());
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some(markup) = runs.get(i) else { break };
+                let document = compile(markup.clone(), files.clone());
+                typst::comemo::evict(0);
+                laid_out.lock().unwrap()[i] = Some(document);
+            });
+        }
+    });
+    let mut pages = vec![];
+    let mut info = None;
+    for document in laid_out.into_inner().unwrap() {
+        let document = document.expect("every run was laid out")?;
+        info.get_or_insert_with(|| document.info().clone());
+        pages.extend_from_slice(document.pages());
+    }
+    let document = PagedDocument::new(pages.into_iter().collect(), info.unwrap_or_default());
+    let pdf = export(&document);
+    trim_cache();
+    pdf
+}
+
+fn virtual_files(files: Vec<(String, Vec<u8>)>) -> Result<HashMap<FileId, Bytes>, String> {
+    files.into_iter().map(|(path, data)| Ok((file_id(&path)?, Bytes::new(data)))).collect()
+}
+
+/// Layouts that run at the same time, in the whole app: Typst's layouts share one
+/// cache, and beyond four they only slow each other down (measured on 8 cores).
+const MAX_LAYOUTS: usize = 4;
+
+fn compile(markup: String, files: HashMap<FileId, Bytes>) -> Result<PagedDocument, String> {
+    use std::sync::{Condvar, Mutex};
+    static RUNNING: (Mutex<usize>, Condvar) = (Mutex::new(0), Condvar::new());
+    struct Slot;
+    impl Drop for Slot {
+        fn drop(&mut self) {
+            *RUNNING.0.lock().unwrap() -= 1;
+            RUNNING.1.notify_one();
+        }
+    }
+
     if fonts().book().families().next().is_none() {
         return Err("no fonts were found on this computer".into());
     }
-    let world = DocWorld { main, files: map };
+    let world = DocWorld { main: Source::new(file_id("/main.typ")?, markup), files };
+    let _slot = {
+        let mut running = RUNNING.0.lock().unwrap();
+        while *running >= MAX_LAYOUTS {
+            running = RUNNING.1.wait(running).unwrap();
+        }
+        *running += 1;
+        Slot
+    };
+    typst::compile::<PagedDocument>(&world).output.map_err(messages)
+}
 
-    let document = typst::compile::<PagedDocument>(&world)
-        .output
-        .map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))?;
-    typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default())
-        .map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))
+fn export(document: &PagedDocument) -> Result<Vec<u8>, String> {
+    typst_pdf::pdf(document, &typst_pdf::PdfOptions::default()).map_err(messages)
+}
+
+fn messages(errors: impl IntoIterator<Item = typst::diag::SourceDiagnostic>) -> String {
+    errors.into_iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; ")
+}
+
+/// Typst keeps its work in a global cache that only grows (12 MB more with every Word
+/// document, kept until flipfile quits). What the last document did not reuse is
+/// dropped, so a batch of similar documents stays fast and memory stays flat.
+fn trim_cache() {
+    typst::comemo::evict(1);
+}
+
+/// Empties Typst's cache, once a batch is done.
+pub fn release_caches() {
+    typst::comemo::evict(0);
 }
 
 #[cfg(test)]

@@ -1,28 +1,30 @@
 // Photo room tools: background removal, geometric transforms (rotate, flip, grayscale),
 // 1:1 square padding, lossless and target-size compression, and animated GIF creation.
 
-use image::codecs::avif::AvifEncoder;
 use image::codecs::gif::{GifEncoder, Repeat};
-use image::codecs::jpeg::JpegEncoder;
-use image::imageops::FilterType;
 use image::metadata::Orientation;
-use image::{Delay, DynamicImage, Frame, ImageFormat, Rgba, RgbaImage};
+use image::{Delay, DynamicImage, Frame, ImageFormat, Rgb, RgbImage, RgbaImage};
 use std::fs::{self, File};
 use std::io::BufWriter;
 use std::path::Path;
 use tauri::ipc::Channel;
 
 use super::encode::{
-    avif_quality, drop_opaque_alpha, encode, encode_png_oxipng, encode_webp_bytes, flatten_on_white, resize,
-    write_tiff_deflate, AVIF_SPEED, GIF_SPEED,
+    encode, encode_avif, encode_jpeg, encode_png_oxipng, encode_webp_bytes, flatten_on_white, has_transparency, resize,
+    resize_exact, resize_to_fit, write_tiff_deflate, GIF_SPEED, JPEG_FULL_CHROMA,
 };
 use super::input::{file_name, header, open_oriented, same_format_ext};
+use super::memory;
 use super::output::{save_err, unique_output_path};
 use super::strip::strip_jpeg;
-use super::{par_map, BatchResult, Converted, Progress};
+use super::{isolate, par_map, BatchResult, Converted, Progress};
 use crate::pdf::render as pdf_render;
 use crate::platform::background;
 use crate::state::settings::{Options, Resize, COMPRESS_QUALITY};
+
+/// The largest square the Square tool makes (a 1 GB canvas); bigger images are scaled
+/// down to fit.
+pub(super) const SQUARE_MAX: u32 = 16_384;
 
 /// True if `format` is one of the Photo tools handled by this module.
 pub(super) fn is_tool(format: &str) -> bool {
@@ -110,22 +112,37 @@ fn transform_file(input: &Path, tool: &str, out_dir: Option<&Path>, options: &Op
 fn square_file(input: &Path, out_dir: Option<&Path>, options: &Options) -> Result<Converted, String> {
     let ext = same_format_ext(input)?;
     let (img, _) = open_oriented(input)?;
-    let img = resize(img, options.resize);
+    let mut img = resize(img, options.resize);
+    // A 70 000 px panorama would otherwise need a 20 GB canvas
+    let mut note = None;
+    if img.width().max(img.height()) > SQUARE_MAX {
+        img = resize_to_fit(&img, SQUARE_MAX, SQUARE_MAX);
+        note = Some(format!("Scaled to {SQUARE_MAX} px"));
+    }
     let (w, h) = (img.width(), img.height());
     let side = w.max(h).max(1);
-    let fill = if matches!(ext.as_str(), "jpg" | "jpeg" | "bmp" | "pdf") {
-        Rgba([255, 255, 255, 255])
+    let (x, y) = ((side - w) / 2, (side - h) / 2);
+    let canvas = if matches!(ext.as_str(), "jpg" | "jpeg" | "bmp" | "pdf") {
+        // Opaque: 3 bytes per pixel, the photo's rows copied onto white
+        let rgb = flatten_on_white(&img);
+        let mut canvas = RgbImage::from_pixel(side, side, Rgb([255, 255, 255]));
+        let row = w as usize * 3;
+        for (i, line) in rgb.as_raw().chunks_exact(row).enumerate() {
+            let at = ((y as usize + i) * side as usize + x as usize) * 3;
+            canvas.as_mut()[at..at + row].copy_from_slice(line);
+        }
+        DynamicImage::ImageRgb8(canvas)
     } else {
-        Rgba([0, 0, 0, 0])
+        let mut canvas = RgbaImage::new(side, side);
+        image::imageops::overlay(&mut canvas, &img.to_rgba8(), i64::from(x), i64::from(y));
+        DynamicImage::ImageRgba8(canvas)
     };
-    let mut canvas = RgbaImage::from_pixel(side, side, fill);
-    let x = (side - w) / 2;
-    let y = (side - h) / 2;
-    image::imageops::overlay(&mut canvas, &img.to_rgba8(), i64::from(x), i64::from(y));
 
     let output = unique_output_path(input, out_dir, "square", &ext);
-    encode(&DynamicImage::ImageRgba8(canvas), &ext, &output, options.quality)?;
-    Ok(Converted::file(input, &output))
+    encode(&canvas, &ext, &output, options.quality)?;
+    let mut converted = Converted::file(input, &output);
+    converted.note = note;
+    Ok(converted)
 }
 
 /// Smart auto-compression in the image's own format at `COMPRESS_QUALITY` (65%).
@@ -179,7 +196,7 @@ fn compress_lossless_file(input: &Path, out_dir: Option<&Path>, options: &Option
     match ext.as_str() {
         "png" => encode_png_oxipng(&img, &output)?,
         "webp" => {
-            let bytes = encode_webp_bytes(&img, 100)?;
+            let bytes = encode_webp_bytes(&img, 100, false)?;
             fs::write(&output, bytes).map_err(save_err)?;
         }
         "tiff" => write_tiff_deflate(&img, &output)?,
@@ -189,28 +206,15 @@ fn compress_lossless_file(input: &Path, out_dir: Option<&Path>, options: &Option
 }
 
 /// Encodes `img` into memory in a lossy format (`jpg`, `webp`, or `avif`) at `quality`.
-fn encode_lossy_mem(img: &DynamicImage, ext: &str, quality: u8) -> Result<Vec<u8>, String> {
+/// `trial`: only to find the quality that fits, where WEBP can use its faster method.
+fn encode_lossy_mem(img: &DynamicImage, ext: &str, quality: u8, trial: bool) -> Result<Vec<u8>, String> {
+    let mut buf = Vec::new();
     match ext {
-        "webp" => encode_webp_bytes(img, quality),
-        "avif" => {
-            let mut buf = Vec::new();
-            let rgba = DynamicImage::ImageRgba8(img.to_rgba8());
-            rgba.write_with_encoder(AvifEncoder::new_with_speed_quality(
-                &mut buf,
-                AVIF_SPEED,
-                avif_quality(quality),
-            ))
-            .map_err(save_err)?;
-            Ok(buf)
-        }
-        _ => {
-            let mut buf = Vec::new();
-            flatten_on_white(img)
-                .write_with_encoder(JpegEncoder::new_with_quality(&mut buf, quality))
-                .map_err(save_err)?;
-            Ok(buf)
-        }
+        "webp" => return encode_webp_bytes(img, quality, trial),
+        "avif" => encode_avif(img, quality, &mut buf)?,
+        _ => encode_jpeg(img, quality, &mut buf)?,
     }
+    Ok(buf)
 }
 
 /// Compresses an image so the output file is at most `target_bytes` (e.g. 1 MB, 500 KB, 200 KB, 100 KB).
@@ -238,15 +242,14 @@ fn compress_target_file(
     }
 
     // Lossless formats (PNG/BMP/TIFF/GIF) switch to WEBP (if transparent) or JPG to hit tight byte budgets.
-    let has_transparency = match drop_opaque_alpha(&img) {
-        DynamicImage::ImageRgba8(_) => true,
-        _ => false,
-    };
     let (ext, switched) = match own_ext.as_str() {
         "jpg" | "jpeg" | "webp" | "avif" => (own_ext.as_str(), false),
-        _ if has_transparency => ("webp", true),
+        _ if has_transparency(&img) => ("webp", true),
         _ => ("jpg", true),
     };
+    // JPEG keeps colour at half resolution below `JPEG_FULL_CHROMA`, which is where a
+    // byte budget is best spent
+    let max_q = if matches!(ext, "jpg" | "jpeg") { JPEG_FULL_CHROMA - 1 } else { 92 };
 
     let mut current = img;
     let mut best_bytes: Option<Vec<u8>> = None;
@@ -259,31 +262,39 @@ fn compress_target_file(
             if nw == w && nh == h {
                 break;
             }
-            current = current.resize_exact(nw, nh, FilterType::Lanczos3);
+            current = resize_exact(&current, nw, nh);
         }
 
         // Fast check: does minimum reasonable quality at this resolution fit?
         let min_q = 15u8;
-        let min_attempt = encode_lossy_mem(&current, ext, min_q)?;
+        let min_attempt = encode_lossy_mem(&current, ext, min_q, true)?;
         if min_attempt.len() > target_bytes {
             best_bytes = Some(min_attempt);
             continue;
         }
 
-        // Binary search for the highest quality in min_q..=92 that fits in `target_bytes`.
-        let (mut lo, mut hi) = (min_q, 92u8);
-        let mut fit = min_attempt;
+        // Binary search for the highest quality in min_q..=max_q that fits in `target_bytes`.
+        let (mut lo, mut hi) = (min_q, max_q);
+        let (mut fit, mut fit_q) = (min_attempt, min_q);
         while lo <= hi {
             let mid = lo + (hi - lo) / 2;
-            let candidate = encode_lossy_mem(&current, ext, mid)?;
+            let candidate = encode_lossy_mem(&current, ext, mid, true)?;
             if candidate.len() <= target_bytes {
-                fit = candidate;
+                (fit, fit_q) = (candidate, mid);
                 lo = mid + 1;
             } else {
                 if mid == 0 {
                     break;
                 }
                 hi = mid - 1;
+            }
+        }
+        // The quality was found with the fast trial encoder; the real one usually makes
+        // the file smaller still (and better looking), but must fit too
+        if ext == "webp" {
+            let final_bytes = encode_lossy_mem(&current, ext, fit_q, false)?;
+            if final_bytes.len() <= target_bytes {
+                fit = final_bytes;
             }
         }
         best_bytes = Some(fit);
@@ -307,17 +318,19 @@ pub(super) fn merge_to_gif(
     out_dir: Option<&Path>,
     options: &Options,
 ) -> Result<BatchResult, String> {
-    let decoded = par_map(paths, progress, |p| {
-        let path = Path::new(p);
-        if pdf_render::is_pdf(&header(path)) {
-            return Err(format!("\"{}\": PDFs cannot be turned into animated GIFs", file_name(path)));
-        }
-        let (img, _) = open_oriented(path)?;
-        let effective_resize = match options.resize {
-            Resize::Original => Resize::MaxEdge(720),
-            other => other,
-        };
-        Ok(resize(img, effective_resize))
+    let decoded = par_map(paths, progress, |p| memory::cost(p, "gif-anim"), |p| {
+        isolate(p, || {
+            let path = Path::new(p);
+            if pdf_render::is_pdf(&header(path)) {
+                return Err(format!("\"{}\": PDFs cannot be turned into animated GIFs", file_name(path)));
+            }
+            let (img, _) = open_oriented(path)?;
+            let effective_resize = match options.resize {
+                Resize::Original => Resize::MaxEdge(720),
+                other => other,
+            };
+            Ok(resize(img, effective_resize))
+        })
     });
 
     let mut images = Vec::new();
@@ -349,7 +362,7 @@ pub(super) fn merge_to_gif(
 
     for img in &images {
         let fitted = if img.width() != canvas_w || img.height() != canvas_h {
-            let scaled = img.resize(canvas_w, canvas_h, FilterType::Lanczos3);
+            let scaled = resize_to_fit(img, canvas_w, canvas_h);
             let mut canvas = RgbaImage::new(canvas_w, canvas_h);
             let x = (canvas_w - scaled.width()) / 2;
             let y = (canvas_h - scaled.height()) / 2;
