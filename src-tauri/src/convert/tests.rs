@@ -356,8 +356,9 @@ fn spreadsheets_convert_through_the_pipeline() {
     let (_, text) = pdf_text(&pdf.path);
     assert!(text.contains("Setoran awal") && text.contains("2500000"), "{text}");
 
-    // Word formats make no sense for a spreadsheet
-    assert!(convert(xlsx.to_str().unwrap(), "docx", None, &plain, "converted", none).is_err());
+    // Spreadsheets also convert into Word documents as tables
+    let docx_out = convert(xlsx.to_str().unwrap(), "docx", None, &plain, "converted", none).unwrap();
+    assert!(docx_out.path.ends_with(".docx"));
 }
 
 #[test]
@@ -557,4 +558,123 @@ fn photo_tools_transform_square_and_compress_to_target() {
     let lossless = run(png.to_str().unwrap(), "cmp-lossless", None, &Options::default()).unwrap();
     assert_eq!(image::open(&lossless).unwrap().to_rgb8(), image::open(&png).unwrap().to_rgb8());
 }
+
+#[test]
+fn encodes_and_decodes_pro_3d_photo_formats() {
+    let dir = temp_dir("photo-pro");
+    let src = dir.join("texture.png");
+    sample(64, 48).save(&src).unwrap();
+
+    for fmt in ["tga", "qoi", "exr", "hdr", "ppm"] {
+        let out = run(src.to_str().unwrap(), fmt, None, &Options::default()).unwrap();
+        assert!(out.ends_with(&format!(".{fmt}")), "expected .{fmt}, got {out}");
+        let back = run(&out, "png", None, &Options::default()).unwrap();
+        assert_eq!(image::open(&back).unwrap().dimensions(), (64, 48));
+    }
+
+    let svg = run(src.to_str().unwrap(), "svg", None, &Options::default()).unwrap();
+    assert!(svg.ends_with(".svg"));
+    let svg_text = fs::read_to_string(&svg).unwrap();
+    assert!(svg_text.contains("<svg") && svg_text.contains("data:image/png;base64,"));
+}
+
+#[test]
+fn cross_converts_office_data_and_spreadsheets() {
+    let dir = temp_dir("office-data");
+    let csv = dir.join("sales.csv");
+    fs::write(&csv, "item,qty,price\nWidget,12,9.50\nGadget,5,19.99\n").unwrap();
+
+    // CSV -> XLSX -> JSON -> YAML -> XML -> SQL -> MD Table -> TSV
+    let xlsx = run(csv.to_str().unwrap(), "xlsx", None, &Options::default()).unwrap();
+    assert!(xlsx.ends_with(".xlsx"));
+
+    let json = run(&xlsx, "json", None, &Options::default()).unwrap();
+    let json_text = fs::read_to_string(&json).unwrap();
+    assert!(json_text.contains("\"Widget\"") && json_text.contains("12"));
+
+    let yaml = run(&json, "yaml", None, &Options::default()).unwrap();
+    let yaml_text = fs::read_to_string(&yaml).unwrap();
+    assert!(yaml_text.contains("item: Widget"));
+
+    let xml = run(&yaml, "xml", None, &Options::default()).unwrap();
+    let xml_text = fs::read_to_string(&xml).unwrap();
+    assert!(xml_text.contains("<item>Widget</item>"));
+
+    let sql = run(&xml, "sql", None, &Options::default()).unwrap();
+    let sql_text = fs::read_to_string(&sql).unwrap();
+    assert!(sql_text.contains("CREATE TABLE") && sql_text.contains("INSERT INTO") && sql_text.contains("'Widget'"));
+
+    let md_tbl = run(csv.to_str().unwrap(), "md-table", None, &Options::default()).unwrap();
+    let md_text = fs::read_to_string(&md_tbl).unwrap();
+    assert!(md_text.contains("| item | qty | price |") && md_text.contains("| --- | --- | --- |"));
+
+    let tsv = run(csv.to_str().unwrap(), "tsv", None, &Options::default()).unwrap();
+    let tsv_text = fs::read_to_string(&tsv).unwrap();
+    assert!(tsv_text.contains("item\tqty\tprice"));
+}
+
+#[test]
+fn cross_converts_office_documents_and_ebooks() {
+    let dir = temp_dir("office-docs");
+    let md = dir.join("guide.md");
+    fs::write(&md, "# Flipfile Guide\n\nConvert documents locally.\n\n- Fast\n- Offline\n").unwrap();
+
+    let html = run(md.to_str().unwrap(), "html", None, &Options::default()).unwrap();
+    assert!(fs::read_to_string(&html).unwrap().contains("<h1>Flipfile Guide</h1>"));
+
+    let epub = run(md.to_str().unwrap(), "epub", None, &Options::default()).unwrap();
+    assert!(epub.ends_with(".epub"));
+    let txt_from_epub = run(&epub, "txt", None, &Options::default()).unwrap();
+    assert!(fs::read_to_string(&txt_from_epub).unwrap().contains("Flipfile Guide"));
+
+    let odt = run(md.to_str().unwrap(), "odt", None, &Options::default()).unwrap();
+    assert!(odt.ends_with(".odt"));
+    let md_from_odt = run(&odt, "md", None, &Options::default()).unwrap();
+    assert!(fs::read_to_string(&md_from_odt).unwrap().contains("# Flipfile Guide"));
+
+    let rtf = run(md.to_str().unwrap(), "rtf", None, &Options::default()).unwrap();
+    assert!(fs::read_to_string(&rtf).unwrap().starts_with("{\\rtf1"));
+
+    let docx = run(md.to_str().unwrap(), "docx", None, &Options::default()).unwrap();
+    assert!(docx.ends_with(".docx"));
+
+    let pdf = run(md.to_str().unwrap(), "pdf", None, &Options::default()).unwrap();
+    assert!(pdf.ends_with(".pdf"));
+    assert!(fs::metadata(&pdf).unwrap().len() > 200);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn converts_audio_formats_via_system_afconvert() {
+    let dir = temp_dir("audio-conv");
+    let wav = dir.join("tone.wav");
+
+    // Write a valid 0.1s 8kHz mono 16-bit PCM WAV file (800 samples = 1600 bytes)
+    let samples: Vec<i16> = (0..800).map(|i| ((i * 40) % 4000 - 2000) as i16).collect();
+    let data_len = (samples.len() * 2) as u32;
+    let mut bytes = Vec::with_capacity(44 + data_len as usize);
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    bytes.extend_from_slice(&1u16.to_le_bytes()); // 1 channel
+    bytes.extend_from_slice(&8000u32.to_le_bytes()); // 8000 Hz
+    bytes.extend_from_slice(&16000u32.to_le_bytes()); // byte rate
+    bytes.extend_from_slice(&2u16.to_le_bytes()); // block align
+    bytes.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_len.to_le_bytes());
+    for s in samples {
+        bytes.extend_from_slice(&s.to_le_bytes());
+    }
+    fs::write(&wav, &bytes).unwrap();
+
+    for (fmt, ext) in [("m4a", ".m4a"), ("flac", ".flac"), ("aiff", ".aiff"), ("caf", ".caf")] {
+        let out = run(wav.to_str().unwrap(), fmt, None, &Options::default()).unwrap();
+        assert!(out.ends_with(ext), "expected {ext}, got {out}");
+        assert!(fs::metadata(&out).unwrap().len() > 32);
+    }
+}
+
 

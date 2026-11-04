@@ -17,6 +17,27 @@ fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+#[tauri::command]
+fn set_workshop_window(window: tauri::WebviewWindow, open: bool, width: Option<f64>, height: Option<f64>) {
+    if open {
+        let w = width.unwrap_or(940.0).clamp(720.0, 1800.0);
+        let h = height.unwrap_or(620.0).clamp(480.0, 1200.0);
+        let min = tauri::Size::Logical(tauri::LogicalSize::new(720.0, 480.0));
+        let target = tauri::Size::Logical(tauri::LogicalSize::new(w, h));
+        let _ = window.set_resizable(true);
+        let _ = window.set_min_size(Some(min));
+        let _ = window.set_max_size(None::<tauri::Size>);
+        let _ = window.set_size(target);
+    } else {
+        let orb = tauri::Size::Logical(tauri::LogicalSize::new(320.0, 320.0));
+        let _ = window.set_resizable(true);
+        let _ = window.set_min_size(Some(orb));
+        let _ = window.set_max_size(Some(orb));
+        let _ = window.set_size(orb);
+        let _ = window.set_resizable(false);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -67,6 +88,7 @@ pub fn run() {
             keys::option_key_down,
             tray::settings_summary,
             quit_app,
+            set_workshop_window,
             glass::set_glass
         ])
         .build(tauri::generate_context!())

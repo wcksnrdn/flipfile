@@ -23,15 +23,28 @@ pub(super) fn open_oriented(path: &Path) -> Result<(DynamicImage, Orientation), 
         return Ok((img, Orientation::NoTransforms));
     }
 
-    let mut decoder = ImageReader::open(path)
+    let decoded = ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
-        .map_err(|_| not_image())?
-        .into_decoder()
-        .map_err(|_| not_image())?;
-    let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
-    let mut img = DynamicImage::from_decoder(decoder).map_err(|_| not_image())?;
-    img.apply_orientation(orientation);
-    Ok((img, orientation))
+        .map_err(|_| ())
+        .and_then(|r| r.into_decoder().map_err(|_| ()))
+        .and_then(|mut decoder| {
+            let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+            let mut img = DynamicImage::from_decoder(decoder).map_err(|_| ())?;
+            img.apply_orientation(orientation);
+            Ok((img, orientation))
+        });
+
+    if let Ok(pair) = decoded {
+        return Ok(pair);
+    }
+
+    // Fallback to OS codec (ImageIO on macOS / WIC on Windows) for PSD, JPEG 2000,
+    // and 25+ camera RAW formats (DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, PEF, …).
+    if let Ok(img) = system_codec::decode(path) {
+        return Ok((img, Orientation::NoTransforms));
+    }
+
+    Err(not_image())
 }
 
 pub(super) fn header(path: &Path) -> [u8; 12] {
@@ -97,7 +110,12 @@ pub(super) fn same_format_ext(input: &Path) -> Result<String, String> {
         ImageFormat::Gif => "gif".into(),
         ImageFormat::Ico => "ico".into(),
         ImageFormat::Avif => "avif".into(),
-        // Formats that can be read but not written (e.g. TGA, PNM) become PNG
+        ImageFormat::Tga => "tga".into(),
+        ImageFormat::Qoi => "qoi".into(),
+        ImageFormat::OpenExr => "exr".into(),
+        ImageFormat::Hdr => "hdr".into(),
+        ImageFormat::Pnm => "ppm".into(),
+        // Formats that can be read but not written (e.g. DDS, Farbfeld) become PNG
         _ => "png".into(),
     })
 }

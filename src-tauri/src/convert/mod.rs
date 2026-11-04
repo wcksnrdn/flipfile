@@ -12,6 +12,8 @@
 mod clean;
 mod encode;
 mod input;
+mod media;
+mod office_extra;
 mod output;
 mod pdf;
 mod strip;
@@ -36,6 +38,8 @@ use crate::state::settings::{Options, Settings, COMPRESS_QUALITY};
 use clean::clean;
 use encode::{encode, resize};
 use input::{file_name, header, open_oriented, same_format_ext, sheet_kind, word_kind};
+use media::{convert_media, is_media_target};
+use office_extra::{convert_office, is_extra_office_input, is_office_target};
 use output::{save_err, unique_output_path};
 use pdf::{merge_to_pdf, pdf_to_images};
 use tools::{is_tool, merge_to_gif, run_tool};
@@ -118,7 +122,10 @@ pub async fn convert_batch(
     // Runs on a separate thread so the UI never freezes
     let result = tauri::async_runtime::spawn_blocking(move || {
         let out_dir = out_dir.as_deref();
-        let all_images = paths.iter().all(|p| word_kind(Path::new(p)).is_none() && sheet_kind(Path::new(p)).is_none());
+        let all_images = paths.iter().all(|p| {
+            let path = Path::new(p);
+            word_kind(path).is_none() && sheet_kind(path).is_none() && !is_extra_office_input(path)
+        });
         if format == "pdf" && paths.len() > 1 && all_images {
             merge_to_pdf(&paths, &on_progress, out_dir, &options)
         } else if format == "gif-anim" && all_images {
@@ -207,12 +214,21 @@ fn convert(
 ) -> Result<Converted, String> {
     let input = Path::new(path);
     let name = file_name(input);
+    if is_media_target(format) {
+        return convert_media(input, format, out_dir);
+    }
+    if is_office_target(format) {
+        return convert_office(input, format, out_dir, options, on_page);
+    }
     let is_pdf = pdf_render::is_pdf(&header(input));
     if let Some(legacy) = word_kind(input) {
         return from_word(input, legacy, format, out_dir, options, on_page);
     }
     if let Some(kind) = sheet_kind(input) {
         return from_sheet(input, kind, format, out_dir, options, on_page);
+    }
+    if is_extra_office_input(input) {
+        return convert_office(input, format, out_dir, options, on_page);
     }
     if format == "docx-ocr" {
         return ocr_to_word(input, is_pdf, out_dir, on_page);
@@ -243,9 +259,8 @@ fn convert(
 
     let (ext, suffix) = match format {
         SAME_FORMAT => (same_format_ext(input)?, suffix),
-        "jpg" | "jpeg" | "png" | "webp" | "heic" | "bmp" | "pdf" | "tiff" | "gif" | "ico" | "icns" | "avif" => {
-            (format.to_string(), "converted")
-        }
+        "jpg" | "jpeg" | "png" | "webp" | "heic" | "bmp" | "pdf" | "tiff" | "gif" | "ico" | "icns" | "avif"
+        | "tga" | "qoi" | "exr" | "hdr" | "ppm" | "svg" => (format.to_string(), "converted"),
         _ => return Err("This format is not supported yet".into()),
     };
     let ext = ext.as_str();

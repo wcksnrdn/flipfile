@@ -8,12 +8,18 @@
     "core:event:allow-unlisten",
     "core:window:allow-scale-factor",
     "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-set-min-size",
+    "core:window:allow-set-max-size",
+    "core:window:allow-set-resizable",
     "opener:allow-reveal-item-in-dir",
     "allow-convert-batch",
     "allow-read-clipboard",
     "allow-option-key-down",
     "allow-settings-summary",
     "allow-set-glass",
+    "allow-set-workshop-window",
     "allow-quit-app"
   ]
 }

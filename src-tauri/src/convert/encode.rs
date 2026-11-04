@@ -174,6 +174,41 @@ pub(super) fn write_icns(img: &DynamicImage, output: &Path) -> Result<(), String
     fs::write(output, out).map_err(save_err)
 }
 
+/// Writes an `.svg` wrapper around a lossless PNG data URI so any image or icon can be
+/// embedded in SVG tools and web pages at its exact viewBox dimensions.
+pub(super) fn write_svg(img: &DynamicImage, output: &Path) -> Result<(), String> {
+    let mut png = Vec::new();
+    drop_opaque_alpha(img)
+        .write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
+        .map_err(save_err)?;
+    let b64 = base64_encode(&png);
+    let (w, h) = (img.width(), img.height());
+    let svg = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">
+  <image width="{w}" height="{h}" href="data:image/png;base64,{b64}"/>
+</svg>
+"#
+    );
+    fs::write(output, svg).map_err(save_err)
+}
+
+pub(super) fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(*chunk.get(1).unwrap_or(&0));
+        let b2 = u32::from(*chunk.get(2).unwrap_or(&0));
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[((n >> 18) & 63) as usize] as char);
+        out.push(TABLE[((n >> 12) & 63) as usize] as char);
+        out.push(if chunk.len() > 1 { TABLE[((n >> 6) & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { TABLE[(n & 63) as usize] as char } else { '=' });
+    }
+    out
+}
+
 /// Applies the resize setting. Never upscales.
 pub(super) fn resize(img: DynamicImage, resize: Resize) -> DynamicImage {
     let (w, h) = (img.width(), img.height());
@@ -205,7 +240,7 @@ pub(super) fn encode(img: &DynamicImage, ext: &str, output: &Path, quality: u8) 
             .map_err(save_err),
         // PNG is lossless; "Compress" / "Smaller File" squeezes it further with oxipng.
         "png" if quality <= COMPRESS_QUALITY => encode_png_oxipng(img, output),
-        "png" => img.save_with_format(output, ImageFormat::Png).map_err(save_err),
+        "png" => drop_opaque_alpha(img).save_with_format(output, ImageFormat::Png).map_err(save_err),
         "webp" => {
             let bytes = encode_webp_bytes(img, quality)?;
             fs::write(output, bytes).map_err(save_err)
@@ -222,6 +257,18 @@ pub(super) fn encode(img: &DynamicImage, ext: &str, output: &Path, quality: u8) 
         }
         "ico" => write_ico_multisize(img, output),
         "icns" => write_icns(img, output),
+        "tga" => drop_opaque_alpha(img).save_with_format(output, ImageFormat::Tga).map_err(save_err),
+        "qoi" => drop_opaque_alpha(img).save_with_format(output, ImageFormat::Qoi).map_err(save_err),
+        "exr" => DynamicImage::ImageRgba32F(img.to_rgba32f())
+            .save_with_format(output, ImageFormat::OpenExr)
+            .map_err(save_err),
+        "hdr" => DynamicImage::ImageRgb32F(img.to_rgb32f())
+            .save_with_format(output, ImageFormat::Hdr)
+            .map_err(save_err),
+        "ppm" => DynamicImage::ImageRgb8(img.to_rgb8())
+            .save_with_format(output, ImageFormat::Pnm)
+            .map_err(save_err),
+        "svg" => write_svg(img, output),
         "avif" => rgba()
             .write_with_encoder(AvifEncoder::new_with_speed_quality(&mut create()?, AVIF_SPEED, avif_quality(quality)))
             .map_err(save_err),

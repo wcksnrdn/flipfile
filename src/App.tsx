@@ -1,29 +1,37 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { DEBUG_DROP, DebugOverlay, type DropDebugInfo } from "./DebugOverlay";
+import WorkshopPanel, { MAX_RING_SLOTS } from "./WorkshopPanel";
 import {
   CORE_OPEN_SCALE,
   CORE_SIZE,
-  DEFAULT_RING,
   HOVER_POP,
   LABEL_RADIUS,
-  RINGS,
   RING_OUTER,
   STAGE_SIZE,
   angleOf,
   isCategoryRing,
   labelOf,
-  segmentPath,
   toCssPoint,
   zoneAt,
   type Point,
+  type Ring,
   type RingId,
 } from "./dropTarget";
+import {
+  DEFAULT_ROOM_SLOTS,
+  buildWorkspaceRings,
+  getSlotsForRing,
+  loadWorkspacesState,
+  saveWorkspacesState,
+  type CatalogEntry,
+  type WorkspacesState,
+} from "./workshop";
 import "./App.css";
 
 type Status = {
@@ -51,8 +59,9 @@ type BatchResult = {
   note: string | null; // e.g. "BMP can't be compressed further"
 };
 
-// Office documents convert one by one; only images can be merged into one PDF
-const OFFICE_FILE = /\.(docx|docm|dotx|dotm|doc|dot|xlsx|xlsm|xltx|xltm|xls|xlt|ods|csv)$/i;
+// Office documents, data tables, and audio/video files convert one by one; only images merge into one PDF
+const OFFICE_FILE =
+  /\.(docx|docm|dotx|dotm|doc|dot|xlsx|xlsm|xltx|xltm|xls|xlt|ods|csv|tsv|tab|json|yaml|yml|xml|odt|rtf|md|markdown|txt|text|log|html|htm|epub|pptx|ppt|odp|mp3|wav|wave|m4a|flac|ogg|oga|aif|aiff|opus|aac|caf|wma|mp4|m4v|mov|webm|mkv|avi|flv|wmv|mpg|mpeg|ts|mts|3gp)$/i;
 
 // Dropping on a size preset keeps each file's own format (see SAME_FORMAT in convert.rs)
 const SAME_FORMAT = "same";
@@ -62,11 +71,6 @@ type Progress = { done: number; total: number; unit: "file" | "page" };
 const HOVER_GRACE_MS = 150;
 // Mouse travel (px) before a press on the core becomes a window drag instead of a click.
 const DRAG_THRESHOLD = 3;
-
-const RING_LIST = Object.values(RINGS);
-const SEGMENT_PATHS = Object.fromEntries(
-  RING_LIST.map((r) => [r.id, r.items.map((_, i) => segmentPath(r, i))])
-) as Record<RingId, string[]>;
 
 // Native glass disc (macOS): core-sized while idle, covers the whole ring while dragging.
 const GLASS_IDLE = CORE_SIZE;
@@ -100,17 +104,47 @@ const clipboardName = (d = new Date()) => {
 // Category ring labels for the core center text
 const CATEGORY_LABELS: Partial<Record<RingId, string>> = {
   category: "Convert",
+  custom: "Custom",
   photo: "Photo",
   "photo-formats": "Formats",
+  "photo-pro": "Pro / 3D",
   "photo-tools": "Tools",
   "photo-compress": "Compress",
   "photo-transform": "Transform",
   office: "Office",
+  "office-docs": "Docs",
+  "office-data": "Data",
   video: "Video",
+  "video-tools": "Video Tools",
   music: "Music",
+  "music-more": "More Audio",
+};
+
+type ChipDrag = {
+  item: CatalogEntry;
+  fromSlotIndex: number | null;
+  x: number;
+  y: number;
+  targetSlice: number | "core" | null;
 };
 
 export default function App() {
+  const [wsState, setWsState] = useState<WorkspacesState>(() => loadWorkspacesState());
+  const [workshopOpen, setWorkshopOpen] = useState(false);
+  const [editingRing, setEditingRing] = useState<RingId>("photo");
+  const [chipDrag, setChipDrag] = useState<ChipDrag | null>(null);
+
+  const activeWorkspace = useMemo(
+    () => wsState.workspaces.find((w) => w.id === wsState.activeId) ?? wsState.workspaces[0],
+    [wsState]
+  );
+  const built = useMemo(() => buildWorkspaceRings(activeWorkspace), [activeWorkspace]);
+  const ringsRef = useRef<Record<RingId, Ring>>(built.rings);
+  ringsRef.current = built.rings;
+  const entryRingRef = useRef<RingId>(built.entryRing);
+  entryRingRef.current = built.entryRing;
+  const ringList = useMemo(() => Object.values(built.rings), [built.rings]);
+
   const [dragging, setDragging] = useState(false);
   const [picking, setPicking] = useState<Picking | null>(null);
   // Size/quality preset chosen with Option/Alt for the current drop, and the tray defaults
@@ -118,13 +152,13 @@ export default function App() {
   const presetRef = useRef<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const altRef = useRef(false);
-  const ringBeforeAlt = useRef<RingId>(DEFAULT_RING);
+  const ringBeforeAlt = useRef<RingId>(built.entryRing);
   const lastPoint = useRef<Point | null>(null);
   const [fileCount, setFileCount] = useState(0);
   // Several *images* dropped on PDF are merged into one; Word documents become one PDF each
   const [mergeable, setMergeable] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  const [ringId, setRingId] = useState<RingId>(DEFAULT_RING);
+  const [ringId, setRingId] = useState<RingId>(built.entryRing);
   const [status, setStatus] = useState<Status | null>(null);
   const resetTimer = useRef<number | undefined>(undefined);
   const [debugInfo, setDebugInfo] = useState<DropDebugInfo | null>(null);
@@ -132,7 +166,7 @@ export default function App() {
   const scaleRef = useRef(window.devicePixelRatio || 1);
   const lastHover = useRef<{ id: string; at: number } | null>(null);
   // Drag handlers are synchronous, so the current ring and last segment live in refs too.
-  const ringRef = useRef<RingId>(DEFAULT_RING);
+  const ringRef = useRef<RingId>(built.entryRing);
   const lastIndex = useRef<number | null>(null);
   const press = useRef<{ x: number; y: number } | null>(null);
   const [nativeGlass, setNativeGlass] = useState(false);
@@ -141,8 +175,8 @@ export default function App() {
   draggingRef.current = dragging;
   const statusRef = useRef<Status | null>(null);
   statusRef.current = status;
-  // The ring is open while dragging files in, or while choosing a format for a paste.
-  const open = dragging || picking !== null;
+  // The ring is open while dragging files in, choosing a format for a paste, or editing in the Workshop.
+  const open = dragging || picking !== null || workshopOpen;
 
   const coreCenter = () => {
     const rect = coreRef.current?.getBoundingClientRect();
@@ -164,6 +198,162 @@ export default function App() {
   const switchRing = (id: RingId) => {
     ringRef.current = id;
     setRingId(id);
+  };
+
+  const updateWorkspaces = (updater: (prev: WorkspacesState) => WorkspacesState) => {
+    setWsState((prev) => {
+      const next = updater(prev);
+      saveWorkspacesState(next);
+      return next;
+    });
+  };
+
+  const toggleWorkshop = (nextOpen?: boolean) => {
+    setWorkshopOpen((prev) => {
+      const target = nextOpen ?? !prev;
+      const win = getCurrentWindow();
+      const w = target ? 940 : 320;
+      const h = target ? 620 : 320;
+      invoke("set_workshop_window", { open: target, width: w, height: h }).catch(() => {});
+      if (target) {
+        win
+          .setResizable(true)
+          .then(() => win.setMinSize(new LogicalSize(720, 480)))
+          .then(() => win.setMaxSize(null))
+          .then(() => win.setSize(new LogicalSize(w, h)))
+          .catch(() => {});
+      } else {
+        win
+          .setResizable(true)
+          .then(() => win.setMinSize(new LogicalSize(320, 320)))
+          .then(() => win.setMaxSize(new LogicalSize(320, 320)))
+          .then(() => win.setSize(new LogicalSize(320, 320)))
+          .then(() => win.setResizable(false))
+          .catch(() => {});
+      }
+
+      if (target) {
+        const ringToEdit: RingId = activeWorkspace.mode === "direct" ? "custom" : editingRing;
+        switchRing(ringToEdit);
+      } else {
+        switchRing(entryRingRef.current);
+        setHovered(null);
+      }
+      // Recenter native glass after window resize
+      window.setTimeout(() => sendGlass(target ? GLASS_OPEN : GLASS_IDLE).catch(() => {}), 80);
+      return target;
+    });
+  };
+
+  // Keep native glass disc aligned with the ring center whenever the Workshop window is resized
+  useEffect(() => {
+    if (!workshopOpen) return;
+    const onResize = () => {
+      sendGlass(GLASS_OPEN).catch(() => {});
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [workshopOpen]);
+
+  const updateSlotsForRing = (targetRing: RingId, nextSlots: string[]) => {
+    updateWorkspaces((prev) => ({
+      ...prev,
+      workspaces: prev.workspaces.map((ws) => {
+        if (ws.id !== prev.activeId) return ws;
+        if (targetRing === "custom") {
+          return { ...ws, customSlots: nextSlots };
+        }
+        return {
+          ...ws,
+          roomSlots: { ...ws.roomSlots, [targetRing]: nextSlots },
+        };
+      }),
+    }));
+  };
+
+  const handleStartChipDrag = (
+    item: CatalogEntry,
+    fromSlotIndex: number | null,
+    clientX: number,
+    clientY: number
+  ) => {
+    const activeEditRing: RingId = activeWorkspace.mode === "direct" ? "custom" : editingRing;
+    switchRing(activeEditRing);
+    setChipDrag({ item, fromSlotIndex, x: clientX, y: clientY, targetSlice: null });
+
+    const onMove = (ev: PointerEvent) => {
+      const pt = { x: ev.clientX, y: ev.clientY };
+      const center = coreCenter();
+      const ringObj = ringsRef.current[activeEditRing];
+      const slots = getSlotsForRing(activeWorkspace, activeEditRing);
+      const editableCount = slots.length;
+      const dist = Math.hypot(pt.x - center.x, pt.y - center.y);
+
+      let targetSlice: number | "core" | null = null;
+      if (dist <= RING_OUTER + 32) {
+        const detail = zoneAt(pt, center, ringObj);
+        if (detail.zone.kind === "core") {
+          targetSlice = "core";
+          setHovered(null);
+        } else if (detail.zone.index < editableCount) {
+          targetSlice = detail.zone.index;
+          setHovered(detail.zone.item.id);
+        } else {
+          targetSlice = "core";
+          setHovered(null);
+        }
+      } else {
+        setHovered(null);
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const slotChip = el?.closest("[data-slot-index]") as HTMLElement | null;
+        if (slotChip && slotChip.dataset.slotIndex !== undefined) {
+          targetSlice = Number(slotChip.dataset.slotIndex);
+        } else if (el?.closest('[data-drop-zone="workbench"]')) {
+          targetSlice = "core";
+        }
+      }
+
+      setChipDrag({ item, fromSlotIndex, x: ev.clientX, y: ev.clientY, targetSlice });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setHovered(null);
+      setChipDrag((last) => {
+        if (!last || last.targetSlice === null) return null;
+        const currentSlots = [...getSlotsForRing(activeWorkspace, activeEditRing)];
+
+        if (last.targetSlice === "core") {
+          if (!currentSlots.includes(item.id) && currentSlots.length < MAX_RING_SLOTS) {
+            currentSlots.push(item.id);
+            updateSlotsForRing(activeEditRing, currentSlots);
+          }
+        } else if (typeof last.targetSlice === "number") {
+          const targetIdx = Math.min(last.targetSlice, currentSlots.length - 1);
+          if (fromSlotIndex !== null) {
+            // Reorder existing slot
+            const [moved] = currentSlots.splice(fromSlotIndex, 1);
+            currentSlots.splice(targetIdx, 0, moved);
+            updateSlotsForRing(activeEditRing, currentSlots);
+          } else {
+            // Replace or move catalog item into targetIdx
+            const existingIdx = currentSlots.indexOf(item.id);
+            if (existingIdx >= 0 && existingIdx !== targetIdx) {
+              const [moved] = currentSlots.splice(existingIdx, 1);
+              currentSlots.splice(targetIdx, 0, moved);
+            } else {
+              currentSlots[targetIdx] = item.id;
+            }
+            updateSlotsForRing(activeEditRing, currentSlots);
+          }
+        }
+        return null;
+      });
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   // Native glass is only available on macOS; elsewhere the command returns false
@@ -198,7 +388,8 @@ export default function App() {
   // "over"/"move" may swap rings; "drop" may fall back to a hover from the last moment.
   const resolve = (type: "enter" | "over" | "drop" | "move" | "click", point: Point, raw: Point = point) => {
     const center = coreCenter();
-    let detail = zoneAt(point, center, RINGS[ringRef.current]);
+    const activeRings = ringsRef.current;
+    let detail = zoneAt(point, center, activeRings[ringRef.current]);
 
     // Entering a navigation segment (category items, "More"/"Back") swaps the ring.
     // Only on entering, so the aligned segment under the cursor right after a swap
@@ -208,7 +399,7 @@ export default function App() {
       const nav = detail.zone.item.nav;
       if (nav) {
         switchRing(nav);
-        detail = zoneAt(point, center, RINGS[nav]);
+        detail = zoneAt(point, center, activeRings[nav]);
       }
     }
     lastIndex.current = detail.zone.kind === "item" ? detail.zone.index : null;
@@ -256,7 +447,7 @@ export default function App() {
     lastPoint.current = null;
     altRef.current = false;
     choosePreset(null);
-    switchRing(DEFAULT_RING);
+    switchRing(entryRingRef.current);
     setDragging(false);
     setPicking(null);
     setHovered(null);
@@ -302,7 +493,9 @@ export default function App() {
     const merged = format === "pdf" && many && outputs.length === 1;
     const mergedGif = format === "gif-anim" && outputs.length === 1;
     // Resizing/compressing in place: the size change is what the user wants to see
-    const sizes = (same || preset === "compress" || format.startsWith("cmp-")) && bytes_before > 0;
+    const sizes =
+      (same || preset === "compress" || format.startsWith("cmp-") || format === "vid-compress") &&
+      bytes_before > 0;
     const done = sizes
       ? `${note ? `${note} · ` : bytes_after >= bytes_before ? "Already compact · " : ""}${formatBytes(bytes_before)} → ${formatBytes(bytes_after)}`
       : merged
@@ -384,19 +577,32 @@ export default function App() {
   // Holding Option/Alt while the ring is open swaps in the size/quality presets.
   // Polled, because OS drag events carry no modifier keys (see keys.rs).
   useEffect(() => {
-    if (!open || !ALT_SUPPORTED) return;
+    if (!open || workshopOpen || !ALT_SUPPORTED) return;
     const timer = window.setInterval(async () => {
       const down = await invoke<boolean>("option_key_down").catch(() => false);
       if (down === altRef.current) return;
       altRef.current = down;
-      if (down) ringBeforeAlt.current = ringRef.current === "size" ? DEFAULT_RING : ringRef.current;
+      if (down) ringBeforeAlt.current = ringRef.current === "size" ? entryRingRef.current : ringRef.current;
       switchRing(down ? "size" : ringBeforeAlt.current);
       lastIndex.current = null;
       // Re-evaluate where the cursor already is, so nothing waits for the next mouse move
       setHover(lastPoint.current ? resolve("over", lastPoint.current) : null);
     }, ALT_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [open]);
+  }, [open, workshopOpen]);
+
+  // "Ring Workshop..." from the tray menu
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    let cancelled = false;
+    listen("toggle-workshop", () => {
+      toggleWorkshop();
+    }).then((fn) => (cancelled ? fn() : (unlisten = fn)));
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   // Tray resize/quality defaults, shown under the core when not the defaults
   useEffect(() => {
@@ -449,7 +655,7 @@ export default function App() {
 
     window.clearTimeout(resetTimer.current);
     setStatus(null);
-    switchRing(DEFAULT_RING);
+    switchRing(entryRingRef.current);
     lastIndex.current = null;
     if (pasted.kind === "files") {
       setFileCount(pasted.paths.length);
@@ -461,7 +667,7 @@ export default function App() {
     }
   };
 
-  // Cmd+Q quits, Cmd/Ctrl+V pastes, Esc cancels a paste
+  // Cmd+Q quits, Cmd/Ctrl+V pastes, Cmd/Ctrl+, toggles Workshop, Esc cancels a paste or closes Workshop
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -469,16 +675,24 @@ export default function App() {
       if (mod && key === "q") {
         e.preventDefault();
         invoke("quit_app");
+      } else if (mod && key === ",") {
+        e.preventDefault();
+        toggleWorkshop();
       } else if (mod && key === "v") {
+        if ((e.target as HTMLElement)?.tagName === "INPUT") return;
         e.preventDefault();
         if (!draggingRef.current && statusRef.current?.tone !== "busy") paste();
       } else if (key === "escape") {
-        closeRing();
+        if (workshopOpen) {
+          toggleWorkshop(false);
+        } else {
+          closeRing();
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [workshopOpen]);
 
   // The core both moves the window (press + drag) and opens the result (click).
   // data-tauri-drag-region would start a window drag on every press and swallow clicks.
@@ -503,11 +717,42 @@ export default function App() {
     if (first) revealItemInDir(first).catch(() => {});
   };
 
+  const onCoreContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    toggleWorkshop();
+  };
+
   // While choosing a format for a paste, the mouse plays the role of the dragged file.
+  // While in the Ring Workshop, moving/clicking on the ring previews slices and navigates sub-rings.
   const onPickMove = (e: MouseEvent) => {
-    if (picking) setHover(resolve("move", { x: e.clientX, y: e.clientY }));
+    if (picking) {
+      setHover(resolve("move", { x: e.clientX, y: e.clientY }));
+    } else if (workshopOpen && !chipDrag) {
+      const center = coreCenter();
+      const pt = { x: e.clientX, y: e.clientY };
+      if (Math.hypot(pt.x - center.x, pt.y - center.y) <= RING_OUTER + 18) {
+        const detail = zoneAt(pt, center, ringsRef.current[ringRef.current]);
+        setHovered(detail.zone.kind === "item" ? detail.zone.item.id : null);
+      } else {
+        setHovered(null);
+      }
+    }
   };
   const onPickClick = (e: MouseEvent) => {
+    if (workshopOpen && !picking) {
+      const center = coreCenter();
+      const pt = { x: e.clientX, y: e.clientY };
+      const dist = Math.hypot(pt.x - center.x, pt.y - center.y);
+      if (dist > CORE_SIZE / 2 && dist <= RING_OUTER + 18) {
+        const detail = zoneAt(pt, center, ringsRef.current[ringRef.current]);
+        if (detail.zone.kind === "item" && detail.zone.item.nav && activeWorkspace.mode === "rooms") {
+          const targetNav = detail.zone.item.nav;
+          setEditingRing(targetNav);
+          switchRing(targetNav);
+        }
+      }
+      return;
+    }
     if (!picking || coreRef.current?.contains(e.target as Node)) return;
     const format = resolve("click", { x: e.clientX, y: e.clientY });
     if (!format) return;
@@ -523,8 +768,28 @@ export default function App() {
   let title = "Convert";
   let hint = "Drop files here";
   const presetLabel = preset ? labelOf(preset) : undefined;
-  let badge: string | null = summary;
-  if (open && ringId === "size") {
+  let badge: string | null =
+    summary ?? (activeWorkspace.id !== "all-rooms" ? activeWorkspace.name : "Customize");
+  if (workshopOpen) {
+    if (chipDrag) {
+      title = chipDrag.item.label;
+      hint =
+        chipDrag.targetSlice === "core"
+          ? "+ Add to ring"
+          : typeof chipDrag.targetSlice === "number"
+            ? `Replace slot #${chipDrag.targetSlice + 1}`
+            : "Drop on a slice";
+      badge = "Workshop";
+    } else if (hoveredLabel) {
+      title = hoveredLabel;
+      hint = "Drop to replace";
+      badge = "Workshop";
+    } else {
+      title = activeWorkspace.mode === "direct" ? activeWorkspace.name : (CATEGORY_LABELS[ringId] ?? "Ring");
+      hint = "Drop on a slice";
+      badge = "Workshop";
+    }
+  } else if (open && ringId === "size") {
     title = presetLabel ?? "Size";
     hint = presetLabel
       ? `${dragging ? "Drop" : "Click"}: same format, or release ${ALT_KEY}`
@@ -558,6 +823,20 @@ export default function App() {
             ? `${verb} to transform photo`
           : hovered === "docx-ocr"
             ? `${verb} to read scanned text into Word`
+          : hovered === "vid-compress"
+            ? `${verb} to shrink video file size`
+          : hovered === "vid-mute"
+            ? `${verb} to strip audio track`
+          : hovered === "vid-mp3"
+            ? `${verb} to extract audio track`
+          : hovered === "vid-gif"
+            ? `${verb} to convert video clip to GIF`
+          : hovered === "vid-1080p" || hovered === "vid-720p"
+            ? `${verb} to resize video resolution`
+          : hovered === "sql"
+            ? `${verb} to generate SQL table & inserts`
+          : hovered === "md-table"
+            ? `${verb} to export Markdown table`
           : hovered === "pdf" && fileCount > 1 && mergeable
             ? `${verb} to merge into 1 PDF`
             : `${verb} to convert`;
@@ -577,7 +856,7 @@ export default function App() {
 
   return (
     <main
-      className={picking && hovered ? "pick-ready" : undefined}
+      className={[picking && hovered && "pick-ready", workshopOpen && "workshop-open"].filter(Boolean).join(" ")}
       onMouseMove={onPickMove}
       onClick={onPickClick}
     >
@@ -617,7 +896,7 @@ export default function App() {
             </linearGradient>
           </defs>
 
-          {RING_LIST.map((r) => (
+          {ringList.map((r) => (
             <g key={r.id} className={`ring-layer ${r.id === ringId ? "current" : ""}`}>
               {r.items.map((item, i) => {
                 const angle = angleOf(r, i);
@@ -639,10 +918,10 @@ export default function App() {
                   .join(" ");
 
                 return (
-                  <g key={item.id} className={cls} style={style}>
+                  <g key={`${item.id}-${i}`} className={cls} style={style}>
                     <g className="segment-inner">
-                      <path className="segment-body" d={SEGMENT_PATHS[r.id][i]} />
-                      <path className="segment-rim" d={SEGMENT_PATHS[r.id][i]} />
+                      <path className="segment-body" d={built.paths[r.id][i]} />
+                      <path className="segment-rim" d={built.paths[r.id][i]} />
                       <text className="segment-label" x={lx} y={item.sub ? ly - 4 : ly}>
                         {item.label}
                       </text>
@@ -659,13 +938,16 @@ export default function App() {
           ))}
         </svg>
 
-        {/* Drag the core to move the window, or click it to reveal the result */}
+        {/* Drag the core to move the window, click it to reveal the result, or right-click for Ring Workshop */}
         <div
           ref={coreRef}
-          className={`core glass ${tone} ${clickable ? "clickable" : ""}`}
+          className={`core glass ${tone} ${clickable ? "clickable" : ""} ${
+            chipDrag?.targetSlice === "core" ? "drop-core" : ""
+          }`}
           onMouseDown={onCoreDown}
           onMouseMove={onCoreMove}
           onMouseUp={onCoreUp}
+          onContextMenu={onCoreContextMenu}
           onMouseLeave={() => (press.current = null)}
         >
           {/* Determinate ring when progress is known, otherwise a spinning arc */}
@@ -683,11 +965,101 @@ export default function App() {
               />
             </svg>
           )}
-          <span className="core-title">{title}</span>
+          <span
+            className={`core-title ${
+              title.length > 10 ? "long" : title.length > 7 ? "medium" : ""
+            }`}
+          >
+            {title}
+          </span>
           <span className="core-hint">{hint}</span>
-          {badge && <span className="core-badge">{badge}</span>}
+          {badge &&
+            (!open ? (
+              <button
+                type="button"
+                className="core-badge core-workshop-btn"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleWorkshop(true);
+                }}
+                title="Open Ring Workshop (Cmd+,)"
+              >
+                {badge}
+              </button>
+            ) : (
+              <span className="core-badge">{badge}</span>
+            ))}
         </div>
       </div>
+
+      {workshopOpen && (
+        <WorkshopPanel
+          state={wsState}
+          activeWorkspace={activeWorkspace}
+          editingRing={editingRing}
+          onSelectWorkspace={(id) => {
+            const targetWs = wsState.workspaces.find((w) => w.id === id);
+            updateWorkspaces((prev) => ({ ...prev, activeId: id }));
+            if (targetWs) {
+              switchRing(targetWs.mode === "direct" ? "custom" : editingRing);
+            }
+          }}
+          onCreateWorkspace={(name) => {
+            const id = `ws-${Date.now()}`;
+            updateWorkspaces((prev) => ({
+              activeId: id,
+              workspaces: [
+                ...prev.workspaces,
+                {
+                  id,
+                  name,
+                  mode: "direct",
+                  customSlots: [...getSlotsForRing(activeWorkspace, "custom")],
+                  roomSlots: {},
+                },
+              ],
+            }));
+            switchRing("custom");
+          }}
+          onDeleteWorkspace={(id) => {
+            updateWorkspaces((prev) => {
+              const filtered = prev.workspaces.filter((w) => w.id !== id);
+              const nextActive = prev.activeId === id ? filtered[0].id : prev.activeId;
+              return { activeId: nextActive, workspaces: filtered };
+            });
+          }}
+          onSetMode={(mode) => {
+            updateWorkspaces((prev) => ({
+              ...prev,
+              workspaces: prev.workspaces.map((ws) => (ws.id === prev.activeId ? { ...ws, mode } : ws)),
+            }));
+            switchRing(mode === "direct" ? "custom" : editingRing);
+          }}
+          onSelectEditingRing={(targetRing) => {
+            setEditingRing(targetRing);
+            switchRing(targetRing);
+          }}
+          onUpdateSlots={updateSlotsForRing}
+          onResetRing={(targetRing) => {
+            updateSlotsForRing(targetRing, [...(DEFAULT_ROOM_SLOTS[targetRing] ?? [])]);
+          }}
+          onStartChipDrag={handleStartChipDrag}
+          onWindowResized={() => sendGlass(GLASS_OPEN).catch(() => {})}
+          onClose={() => toggleWorkshop(false)}
+        />
+      )}
+
+      {chipDrag && (
+        <div
+          className="ws-drag-ghost glass"
+          style={{ left: `${chipDrag.x}px`, top: `${chipDrag.y}px` }}
+        >
+          <span className="ws-drag-ghost-label">{chipDrag.item.label}</span>
+          {chipDrag.item.sub && <span className="ws-drag-ghost-sub">{chipDrag.item.sub}</span>}
+        </div>
+      )}
+
       {DEBUG_DROP && <DebugOverlay info={debugInfo} />}
     </main>
   );

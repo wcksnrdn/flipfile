@@ -64,6 +64,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     drop(history);
 
     let toggle = MenuItem::with_id(app, "toggle", "Show / Hide flipfile", true, Some(SHORTCUT))?;
+    let workshop = MenuItem::with_id(app, "workshop", "Ring Workshop...", true, Some("CmdOrCtrl+,"))?;
 
     let mut recent_items: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
     if recent.is_empty() {
@@ -117,6 +118,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         app,
         &[
             &toggle,
+            &workshop,
             &PredefinedMenuItem::separator(app)?,
             &recent_menu,
             &undo,
@@ -174,6 +176,13 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
     let id = event.id().as_ref();
     match id {
         "toggle" => toggle_window(app),
+        "workshop" => {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+            let _ = app.emit("toggle-workshop", ());
+        }
         "undo" => undo_last(app),
         "clear" => {
             app.state::<Mutex<History>>().lock().unwrap().clear();

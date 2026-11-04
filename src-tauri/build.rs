@@ -9,6 +9,7 @@ fn main() {
             "option_key_down",
             "settings_summary",
             "set_glass",
+            "set_workshop_window",
             "quit_app",
         ]),
     ))

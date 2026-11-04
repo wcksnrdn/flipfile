@@ -5,14 +5,20 @@ import type { PhysicalPosition } from "@tauri-apps/api/dpi";
 
 export type RingId =
   | "category"
+  | "custom"
   | "photo"
   | "photo-formats"
+  | "photo-pro"
   | "photo-tools"
   | "photo-compress"
   | "photo-transform"
   | "office"
+  | "office-docs"
+  | "office-data"
   | "video"
+  | "video-tools"
   | "music"
+  | "music-more"
   | "size";
 
 export type Item = {
@@ -33,20 +39,22 @@ export type Ring = {
 
 const IS_MAC = /Mac/i.test(navigator.userAgent);
 
-const ring = (id: RingId, items: Item[], start: number): Ring => ({
+export const buildRing = (id: RingId, items: Item[], start = -Math.PI / 2): Ring => ({
   id,
   items,
   start,
-  sector: (2 * Math.PI) / items.length,
+  sector: (2 * Math.PI) / Math.max(items.length, 1),
 });
+
+const ring = buildRing;
 
 // Places a sub-ring so its "Back" segment sits at the exact angle of the parent
 // segment that opened it, so the way back is where the cursor came from.
-const alignedSubRing = (id: RingId, items: Item[], parent: Ring, viaNav: RingId, backNav: RingId): Ring => {
+export const alignedSubRing = (id: RingId, items: Item[], parent: Ring, viaNav: RingId, backNav: RingId): Ring => {
   const enterIdx = parent.items.findIndex((i) => i.nav === viaNav);
   const enterAngle = parent.start + (enterIdx >= 0 ? enterIdx : 0) * parent.sector;
   const backIdx = items.findIndex((i) => i.nav === backNav);
-  const sector = (2 * Math.PI) / items.length;
+  const sector = (2 * Math.PI) / Math.max(items.length, 1);
   return ring(id, items, enterAngle - (backIdx >= 0 ? backIdx : 0) * sector);
 };
 
@@ -82,18 +90,36 @@ const PHOTO = ring(
 const PHOTO_FORMATS = alignedSubRing(
   "photo-formats",
   [
-    { id: "jpeg", label: "JPEG" },
     { id: "avif", label: "AVIF" },
     { id: "tiff", label: "TIFF" },
     { id: "gif", label: "GIF" },
     { id: "bmp", label: "BMP" },
     { id: "ico", label: "ICO", sub: "multi" },
     { id: "icns", label: "ICNS", sub: "macOS" },
+    { id: "photo-pro-nav", label: "Pro / 3D", sub: "•••", nav: "photo-pro" },
     { id: "back", label: "Back", sub: "‹", nav: "photo" },
   ],
   PHOTO,
   "photo-formats",
   "photo"
+);
+
+// ─── Photo > Formats > Pro / 3D / Vector ────────────────────────────────
+const PHOTO_PRO = alignedSubRing(
+  "photo-pro",
+  [
+    { id: "jpeg", label: "JPEG" },
+    { id: "tga", label: "TGA", sub: "game" },
+    { id: "exr", label: "EXR", sub: "32f HDR" },
+    { id: "hdr", label: "HDR", sub: "RGBE" },
+    { id: "qoi", label: "QOI", sub: "fast" },
+    { id: "ppm", label: "PPM", sub: "netpbm" },
+    { id: "svg", label: "SVG", sub: "embed" },
+    { id: "back", label: "Back", sub: "‹", nav: "photo-formats" },
+  ],
+  PHOTO_FORMATS,
+  "photo-pro",
+  "photo-formats"
 );
 
 // ─── Photo > Tools ──────────────────────────────────────────────────────
@@ -147,42 +173,119 @@ const PHOTO_TRANSFORM = alignedSubRing(
   "photo-tools"
 );
 
-// ─── Office room ────────────────────────────────────────────────────────
+// ─── Office room (main) ─────────────────────────────────────────────────
 const OFFICE = ring(
   "office",
   [
     { id: "pdf", label: "PDF" },
-    { id: "docx", label: "WORD" },
+    { id: "docx", label: "WORD", sub: "docx" },
     { id: "docx-ocr", label: "WORD", sub: "OCR" },
+    { id: "xlsx", label: "EXCEL", sub: "xlsx" },
+    { id: "csv", label: "CSV" },
+    { id: "office-docs-nav", label: "Docs", sub: "•••", nav: "office-docs" },
+    { id: "office-data-nav", label: "Data", sub: "•••", nav: "office-data" },
     { id: "back", label: "Back", sub: "‹", nav: "category" },
   ],
   -Math.PI / 2
 );
 
-// ─── Video room (placeholder — formats coming soon) ─────────────────────
+// ─── Office > Docs (Markdown, Text, HTML, RTF, EPUB, ODT) ───────────────
+const OFFICE_DOCS = alignedSubRing(
+  "office-docs",
+  [
+    { id: "md", label: "MD", sub: "markdown" },
+    { id: "txt", label: "TXT", sub: "plain" },
+    { id: "html", label: "HTML", sub: "web" },
+    { id: "rtf", label: "RTF", sub: "rich text" },
+    { id: "epub", label: "EPUB", sub: "e-book" },
+    { id: "odt", label: "ODT", sub: "open doc" },
+    { id: "back", label: "Back", sub: "‹", nav: "office" },
+  ],
+  OFFICE,
+  "office-docs",
+  "office"
+);
+
+// ─── Office > Data (JSON, TSV, YAML, XML, SQL, Markdown Table) ──────────
+const OFFICE_DATA = alignedSubRing(
+  "office-data",
+  [
+    { id: "json", label: "JSON" },
+    { id: "tsv", label: "TSV", sub: "tabs" },
+    { id: "yaml", label: "YAML" },
+    { id: "xml", label: "XML" },
+    { id: "sql", label: "SQL", sub: "insert" },
+    { id: "md-table", label: "MD", sub: "table" },
+    { id: "back", label: "Back", sub: "‹", nav: "office" },
+  ],
+  OFFICE,
+  "office-data",
+  "office"
+);
+
+// ─── Video room (main) ──────────────────────────────────────────────────
 const VIDEO = ring(
   "video",
   [
-    { id: "mp4", label: "MP4", disabled: true },
-    { id: "webm", label: "WEBM", disabled: true },
-    { id: "mov", label: "MOV", disabled: true },
-    { id: "avi", label: "AVI", disabled: true },
+    { id: "mp4", label: "MP4" },
+    { id: "mov", label: "MOV" },
+    { id: "webm", label: "WEBM" },
+    { id: "mkv", label: "MKV" },
+    { id: "avi", label: "AVI" },
+    { id: "vid-gif", label: "GIF", sub: "clip" },
+    { id: "video-tools-nav", label: "Tools", sub: "✦", nav: "video-tools" },
     { id: "back", label: "Back", sub: "‹", nav: "category" },
   ],
   -Math.PI / 2
 );
 
-// ─── Music room (placeholder — formats coming soon) ─────────────────────
+// ─── Video > Tools ──────────────────────────────────────────────────────
+const VIDEO_TOOLS = alignedSubRing(
+  "video-tools",
+  [
+    { id: "vid-compress", label: "Compress", sub: "smaller" },
+    { id: "vid-mute", label: "Mute", sub: "no audio" },
+    { id: "vid-mp3", label: "Audio", sub: "extract" },
+    { id: "vid-1080p", label: "1080p", sub: "Full HD" },
+    { id: "vid-720p", label: "720p", sub: "HD" },
+    { id: "flv", label: "FLV" },
+    { id: "back", label: "Back", sub: "‹", nav: "video" },
+  ],
+  VIDEO,
+  "video-tools",
+  "video"
+);
+
+// ─── Music room (main) ──────────────────────────────────────────────────
 const MUSIC = ring(
   "music",
   [
-    { id: "mp3", label: "MP3", disabled: true },
-    { id: "wav", label: "WAV", disabled: true },
-    { id: "flac", label: "FLAC", disabled: true },
-    { id: "ogg", label: "OGG", disabled: true },
+    { id: "mp3", label: "MP3" },
+    { id: "wav", label: "WAV" },
+    { id: "m4a", label: "M4A", sub: "AAC" },
+    { id: "flac", label: "FLAC" },
+    { id: "ogg", label: "OGG" },
+    { id: "music-more-nav", label: "More", sub: "•••", nav: "music-more" },
     { id: "back", label: "Back", sub: "‹", nav: "category" },
   ],
   -Math.PI / 2
+);
+
+// ─── Music > More ───────────────────────────────────────────────────────
+const MUSIC_MORE = alignedSubRing(
+  "music-more",
+  [
+    { id: "aiff", label: "AIFF", sub: "studio" },
+    { id: "opus", label: "OPUS" },
+    { id: "aac", label: "AAC" },
+    { id: "caf", label: "CAF", sub: "Apple" },
+    { id: "alac", label: "ALAC", sub: "lossless" },
+    { id: "wma", label: "WMA" },
+    { id: "back", label: "Back", sub: "‹", nav: "music" },
+  ],
+  MUSIC,
+  "music-more",
+  "music"
 );
 
 // ─── Size / quality presets (Option/Alt ring, unchanged) ────────────────
@@ -202,14 +305,20 @@ const SIZE = ring(
 
 export const RINGS: Record<RingId, Ring> = {
   category: CATEGORY,
+  custom: PHOTO,
   photo: PHOTO,
   "photo-formats": PHOTO_FORMATS,
+  "photo-pro": PHOTO_PRO,
   "photo-tools": PHOTO_TOOLS,
   "photo-compress": PHOTO_COMPRESS,
   "photo-transform": PHOTO_TRANSFORM,
   office: OFFICE,
+  "office-docs": OFFICE_DOCS,
+  "office-data": OFFICE_DATA,
   video: VIDEO,
+  "video-tools": VIDEO_TOOLS,
   music: MUSIC,
+  "music-more": MUSIC_MORE,
   size: SIZE,
 };
 
@@ -233,6 +342,13 @@ const CUSTOM_LABELS: Record<string, string> = {
   "flip-v": "Flip Vertical",
   grayscale: "Grayscale",
   square: "Square 1:1",
+  "md-table": "MD Table",
+  "vid-gif": "Video → GIF",
+  "vid-compress": "Compress Video",
+  "vid-mute": "Mute Video",
+  "vid-mp3": "Extract Audio",
+  "vid-1080p": "1080p Video",
+  "vid-720p": "720p Video",
 };
 
 export function labelOf(id: string): string | undefined {
