@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <radialGradient id="bgGlow" cx="76%" cy="50%" r="58%">
+      <stop offset="0%" stop-color="#2b3346" stop-opacity="0.72"/>
+      <stop offset="55%" stop-color="#141720" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0b0c10" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="cardRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.14"/>
+    </linearGradient>
+    <linearGradient id="glassFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="activeSlice" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="300" y1="180" x2="620" y2="880">
+      <stop offset="0" stop-color="#2E3038"/>
+      <stop offset="1" stop-color="#0B0C0F"/>
+    </linearGradient>
+    <linearGradient id="grey" gradientUnits="userSpaceOnUse" x1="420" y1="260" x2="700" y2="880">
+      <stop offset="0" stop-color="#A6ACB7"/>
+      <stop offset="1" stop-color="#6B7280"/>
+    </linearGradient>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path d="M 468.0 797.9 L 468.0 462.1 A 114 114 0 0 1 582.0 348.1 L 658.0 348.1" stroke="#000" stroke-width="140" stroke-linecap="round" fill="none"/>
+    </mask>
+    <filter id="softShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="#0b0c10"/>
+  <rect width="1280" height="640" fill="url(#bgGlow)"/>
+
+  <!-- Subtle Grid Dots -->
+  <g fill="#ffffff" fill-opacity="0.04">
+    <circle cx="80" cy="80" r="1.5"/><circle cx="160" cy="80" r="1.5"/><circle cx="240" cy="80" r="1.5"/><circle cx="320" cy="80" r="1.5"/>
+    <circle cx="80" cy="160" r="1.5"/><circle cx="160" cy="160" r="1.5"/><circle cx="240" cy="160" r="1.5"/><circle cx="320" cy="160" r="1.5"/>
+    <circle cx="80" cy="480" r="1.5"/><circle cx="160" cy="480" r="1.5"/><circle cx="240" cy="480" r="1.5"/><circle cx="320" cy="480" r="1.5"/>
+    <circle cx="80" cy="560" r="1.5"/><circle cx="160" cy="560" r="1.5"/><circle cx="240" cy="560" r="1.5"/><circle cx="320" cy="560" r="1.5"/>
+  </g>
+
+  <!-- Left Column: Brand & Value Prop -->
+  <g transform="translate(88, 96)">
+    <!-- App Icon squircle -->
+    <g transform="scale(0.086)" filter="url(#softShadow)">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="#F4F5F7"/>
+      <g fill="none" stroke-linecap="round" stroke-width="104">
+        <path d="M 346.0 797.9 L 346.0 462.1 A 236 236 0 0 1 582.0 226.1 L 678.0 226.1" stroke="url(#ink)" mask="url(#cut)"/>
+        <path d="M 468.0 797.9 L 468.0 462.1 A 114 114 0 0 1 582.0 348.1 L 658.0 348.1" stroke="url(#grey)"/>
+      </g>
+    </g>
+
+    <!-- Title -->
+    <text x="104" y="64" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Poppins', 'Segoe UI', sans-serif" font-size="46" font-weight="700" fill="#f5f5f7" letter-spacing="-1">flipfile</text>
+
+    <!-- Headline -->
+    <text x="0" y="168" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Poppins', 'Segoe UI', sans-serif" font-size="54" font-weight="700" fill="#ffffff" letter-spacing="-1.4">Drop a file.</text>
+    <text x="0" y="234" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Poppins', 'Segoe UI', sans-serif" font-size="54" font-weight="700" fill="#ffffff" letter-spacing="-1.4">Point to a format. Done.</text>
+
+    <!-- Subtitle -->
+    <text x="0" y="294" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Poppins', 'Segoe UI', sans-serif" font-size="21" font-weight="400" fill="#9ca3af">
+      Photos, PDFs, Word, Excel, scans, video &amp; audio —
+    </text>
+    <text x="0" y="326" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Poppins', 'Segoe UI', sans-serif" font-size="21" font-weight="400" fill="#9ca3af">
+      converted instantly &amp; 100% offline on your desktop.
+    </text>
+
+    <!-- Pill Badges -->
+    <g transform="translate(0, 378)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Poppins', 'Segoe UI', sans-serif" font-size="16" font-weight="600">
+      <rect x="0" y="0" width="154" height="42" rx="21" fill="url(#glassFill)" stroke="url(#cardRim)" stroke-width="1.2"/>
+      <text x="77" y="26" fill="#f3f4f6" text-anchor="middle">100% Offline</text>
+
+      <rect x="168" y="0" width="236" height="42" rx="21" fill="url(#glassFill)" stroke="url(#cardRim)" stroke-width="1.2"/>
+      <text x="286" y="26" fill="#f3f4f6" text-anchor="middle">macOS · Windows · Linux</text>
+
+      <rect x="418" y="0" width="196" height="42" rx="21" fill="url(#glassFill)" stroke="url(#cardRim)" stroke-width="1.2"/>
+      <text x="516" y="26" fill="#d1d5db" text-anchor="middle">Rust + Tauri v2</text>
+    </g>
+  </g>
+
+  <!-- Right Column: Radial Glass Ring Illustration -->
+  <g transform="translate(975, 320)" filter="url(#softShadow)">
+    <!-- Outer Glass Ring Backdrop -->
+    <circle cx="0" cy="0" r="222" fill="#171a24" fill-opacity="0.78" stroke="url(#cardRim)" stroke-width="2"/>
+    <circle cx="0" cy="0" r="196" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="44"/>
+
+    <!-- Radial Divider Spokes -->
+    <g stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5">
+      <line x1="0" y1="-98" x2="0" y2="-218"/>
+      <line x1="69" y1="-69" x2="154" y2="-154"/>
+      <line x1="98" y1="0" x2="218" y2="0"/>
+      <line x1="69" y1="69" x2="154" y2="154"/>
+      <line x1="0" y1="98" x2="0" y2="218"/>
+      <line x1="-69" y1="69" x2="-154" y2="154"/>
+      <line x1="-98" y1="0" x2="-218" y2="0"/>
+      <line x1="-69" y1="-69" x2="-154" y2="-154"/>
+    </g>
+
+    <!-- Highlighted Top-Right Slice -->
+    <path d="M 10 -99 A 100 100 0 0 1 64 -76 L 142 -168 A 220 220 0 0 0 20 -218 Z" fill="url(#activeSlice)" stroke="#ffffff" stroke-opacity="0.38" stroke-width="1.5"/>
+
+    <!-- Ring Labels -->
+    <g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Poppins', sans-serif" font-size="17" font-weight="700" fill="#e5e7eb" text-anchor="middle">
+      <text x="62" y="-142" fill="#ffffff" font-size="19">WEBP</text>
+      <text x="148" y="-54">PNG</text>
+      <text x="148" y="64">PDF</text>
+      <text x="62" y="156">WORD</text>
+      <text x="-62" y="156">MP4</text>
+      <text x="-148" y="64">MP3</text>
+      <text x="-148" y="-54">AVIF</text>
+      <text x="-62" y="-142">JPG</text>
+    </g>
+
+    <!-- Inner Core Circle -->
+    <circle cx="0" cy="0" r="94" fill="#10131a" stroke="url(#cardRim)" stroke-width="2"/>
+    <text x="0" y="-6" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Poppins', sans-serif" font-size="22" font-weight="700" fill="#ffffff" text-anchor="middle">Drop to</text>
+    <text x="0" y="22" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Poppins', sans-serif" font-size="22" font-weight="700" fill="#ffffff" text-anchor="middle">Convert</text>
+  </g>
+</svg>
