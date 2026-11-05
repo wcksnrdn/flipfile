@@ -6,6 +6,17 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-05
+
+### Fixed
+
+- **PowerPoint → PDF (built-in engine)**:
+  - Fonts embedded in the presentation (PowerPoint's "Embed fonts in the file", Canva and
+    Google Slides exports) are now used, so slides keep their typeface where it is not installed.
+  - Titles the author's app fit on one line no longer break onto a second line that overlaps the
+    text below when they come out slightly wider (e.g. the original app kerned them).
+  - Text boxes set not to wrap keep each line whole and stay centred or right-aligned in their box.
+
 ## [0.5.1] - 2026-11-05
 
 ### Added
@@ -178,7 +189,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/wcksnrdn/flipfile/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/wcksnrdn/flipfile/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/wcksnrdn/flipfile/compare/v0.3.0...v0.5.0
 [0.3.0]: https://github.com/wcksnrdn/flipfile/compare/v0.2.0...v0.3.0
