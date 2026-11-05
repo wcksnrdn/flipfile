@@ -402,34 +402,113 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 
 ## Supported formats
 
-| Format | Read | Write | Notes |
-|---|:-:|:-:|---|
-| JPG / JPEG | ✓ | ✓ | Transparency becomes white. Full colour resolution at High/Best; at the size-first qualities colour is stored at half resolution (4:2:0) with MS-SSIM-tuned quantisation tables. Gray images are written as one-channel JPEG |
-| PNG | ✓ | ✓ | Lossless; *Compress* and *Lossless* optimise with `oxipng` |
-| WEBP | ✓ | ✓ | Lossy (follows the Quality setting); screenshots, documents and logos use libwebp's *picture* tuning (~4% smaller); *Lossless* writes lossless WebP |
-| HEIC / HEIF | ✓ *(OS codec)* | ✓ *(macOS)* | Read via ImageIO (macOS) / WIC (Windows); written natively via ImageIO on macOS |
-| AVIF | ✓ *(OS codec)* | ✓ | Quality follows the Quality setting. Written by macOS's own encoder where available (3-4x faster on photos, 24-58% smaller on screenshots and documents), by rav1e elsewhere |
-| BMP | ✓ | ✓ | Uncompressed by design; written 24-bit when there is no transparency (25% smaller) |
-| TIFF | ✓ | ✓ | 24-bit when opaque; *Compress* uses lossless Deflate |
-| GIF | ✓ (first frame) | ✓ | Single image → GIF, or multiple images → looping animated GIF via **GIF anim** |
-| ICO | ✓ | ✓ | Multi-resolution icon containing `16, 32, 48, 64, 128, 256` px square slices |
-| ICNS | — | ✓ | Apple `.icns` icon bundle (`16` to `1024` px PNG slices) |
-| TGA / QOI / PPM | ✓ | ✓ | Game/VFX Truevision TGA, fast lossless QOI, and Netpbm PPM |
-| OpenEXR (EXR) / Radiance HDR | ✓ | ✓ | 32-bit float HDR (`.exr`) and RGBE (`.hdr`) |
-| SVG | — | ✓ | Vector `.svg` wrapper around lossless PNG |
-| PSD / JPEG 2000 / Camera RAW | ✓ *(OS codec)* | — | `.psd`, `.jp2`, `.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.orf`, `.rw2`, `.raf` via ImageIO / WIC |
-| PDF | ✓ *(PDFium)* | ✓ | Images / Office / docs / data → PDF; PDF → images at 200 DPI, Word (`.docx`) or PowerPoint (`.pptx`) |
-| Word (DOCX) | ✓ | ✓ | Word ↔ PDF / images / PowerPoint / MD, TXT, HTML, RTF, EPUB, ODT. See [How to use](#how-to-use) |
-| Word 97–2003 (DOC) | ✓ *(Word/LibreOffice)* | — | Needs Word or LibreOffice installed |
-| Excel (XLSX, XLSM) | ✓ | ✓ | Excel → PDF / images / Word / PowerPoint; Excel ↔ CSV, TSV, JSON, YAML, XML, SQL, Markdown table |
-| Excel 97–2003 (XLS), ODS | ✓ *(Excel/LibreOffice)* | — | Needs Excel or LibreOffice installed |
-| PowerPoint (PPTX, PPSX, POTX, PPTM) | ✓ | ✓ | PowerPoint → PDF / images / Word handout / MD, TXT, HTML, RTF, EPUB, ODT; PDF / photos / documents / spreadsheets → PowerPoint |
-| PowerPoint 97–2003 (PPT, PPS, POT), ODP | ✓ *(PowerPoint/LibreOffice)* | — | Needs PowerPoint or LibreOffice installed (`.odp` outlines work built-in) |
-| Markdown (MD), TXT, HTML, RTF, EPUB, ODT | ✓ | ✓ | Convert between each other, or to PDF, Word (`.docx`), PowerPoint (`.pptx`) and images |
-| CSV, TSV, JSON, YAML, XML | ✓ | ✓ | Convert between each other, Excel (`.xlsx`), SQL, Markdown table, Word, PowerPoint and PDF |
-| SQL (`CREATE` + `INSERT`), MD Table | — | ✓ | Generated from any spreadsheet or tabular data file |
-| Video (MP4, MOV, WEBM, MKV, AVI, FLV) | ✓ | ✓ | Convert formats, **GIF clip**, **Compress**, **Mute**, **Audio extract**, **1080p** / **720p** via `ffmpeg` (or macOS `avconvert` built-in for MP4/MOV/1080p/720p/Compress) |
-| Audio (MP3, WAV, M4A, FLAC, OGG, AIFF, OPUS, AAC, CAF, ALAC, WMA) | ✓ | ✓ | Convert audio or extract from video via `ffmpeg` (or macOS `afconvert` built-in for WAV/M4A/AAC/ALAC/FLAC/AIFF/CAF) |
+flipfile natively supports over **75 formats, smart tools, and conversions** across Photos, Office, Data, Video, and Music. Everything is processed locally on your machine with zero cloud uploads.
+
+### 📸 Photos & Images
+
+| Format | Extensions | Read | Write | Details & Quality |
+|---|---|:---:|:---:|---|
+| **JPEG / JPG** | `.jpg`, `.jpeg` | ✓ | ✓ | Full color resolution at High/Best; 4:2:0 MS-SSIM tuning for size-first qualities; monochrome grayscale mode |
+| **PNG** | `.png` | ✓ | ✓ | Lossless; automatic `oxipng` multi-core optimization on *Compress* & *Lossless* |
+| **WebP** | `.webp` | ✓ | ✓ | Lossy (follows Quality setting); smart *picture* tuning for screenshots/UI text; lossless mode |
+| **Apple HEIC** | `.heic`, `.heif` | ✓ | ✓ *(macOS)* | Read native Display P3 / sRGB; hardware-accelerated encode on macOS via ImageIO |
+| **AVIF** | `.avif` | ✓ | ✓ | Next-gen AV1 compression; 3–4x faster on macOS; 24–58% smaller on UI screenshots |
+| **TIFF** | `.tiff`, `.tif` | ✓ | ✓ | 24-bit opaque; Deflate lossless compression on *Compress* |
+| **BMP** | `.bmp` | ✓ | ✓ | Uncompressed; written 24-bit when no alpha channel (25% smaller) |
+| **Static GIF** | `.gif` | ✓ | ✓ | Single-frame GIF output from any image |
+| **Windows ICO** | `.ico` | ✓ | ✓ | Multi-resolution icon bundle embedding `16, 32, 48, 64, 128, 256` px square slices |
+| **Apple ICNS** | `.icns` | — | ✓ | macOS application icon bundle (`16` to `1024` px PNG slices) |
+| **SVG Wrapper** | `.svg` | — | ✓ | Clean XML SVG wrapper embedding lossless PNG data |
+| **Truevision TGA** | `.tga` | ✓ | ✓ | Game & VFX standard 24/32-bit raster format |
+| **OpenEXR** | `.exr` | ✓ | ✓ | 32-bit float high dynamic range (HDR) raster |
+| **Radiance HDR** | `.hdr` | ✓ | ✓ | RGBE 32-bit HDR format |
+| **QOI** | `.qoi` | ✓ | ✓ | Quite OK Image format: ultra-fast lossless compression |
+| **Netpbm PPM** | `.ppm` | ✓ | ✓ | Portable Pixmap binary/plain format |
+| **Photoshop PSD** | `.psd` | ✓ *(OS codec)* | — | Flattened preview extraction via OS codec |
+| **JPEG 2000** | `.jp2`, `.j2k` | ✓ *(OS codec)* | — | High-quality archival wavelet raster decode |
+| **Camera RAW** | `.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.orf`, `.rw2`, `.raf` | ✓ *(OS codec)* | — | Full-resolution RAW decoding from Canon, Nikon, Sony, Apple, Fuji, Olympus |
+
+### ✨ Photo Smart Tools & Utilities
+
+| Tool | Action | Description |
+|---|---|---|
+| **AI Remove Background** | `Remove BG` | Automatically separates foreground subjects using macOS Vision AI (lossless `.png` output) |
+| **Clean Metadata & EXIF** | `Clean EXIF` | Losslessly removes EXIF, GPS locations, camera serials, and comments from JPG/PNG without re-encoding |
+| **Square 1:1 Framing** | `Square 1:1` | Pads photo into a perfect 1:1 square aspect ratio with smart blurred backdrop (max 16,384 px) |
+| **Combine → Animated GIF** | `GIF anim` | Combines multiple selected photos into a smooth, looping animated GIF |
+| **Auto Compress** | `Auto smaller` | Automatically calculates the optimal quality target for immediate file size reduction |
+| **Target Size Compress** | `1 MB`, `500 KB`, `200 KB`, `100 KB` | Encodes file iteratively to fit strictly beneath your specified target size limit |
+| **Lossless Optimize** | `Lossless exact` | Runs maximum compression passes (`oxipng` / WebP lossless) without losing a single pixel of quality |
+| **Rotate** | `90° CW`, `90° CCW`, `180°` | Rotates orientation clockwise, counter-clockwise, or upside down |
+| **Flip** | `Flip horiz`, `Flip vert` | Mirrors the image horizontally or vertically |
+| **Grayscale B&W** | `B&W gray` | Converts color channels into an optimized single-channel black-and-white image |
+
+### 📄 Office & Document Formats
+
+| Format | Extensions | Read | Write | Engine & Capabilities |
+|---|---|:---:|:---:|---|
+| **PDF Document** | `.pdf` | ✓ | ✓ | Built-in Typst & PDFium; images/docs/sheets → PDF; PDF → editable Word, slides, or images at 200 DPI |
+| **Microsoft Word** | `.docx` | ✓ | ✓ | Full layout, tables, styles, and images; converts to PDF, PPTX, MD, TXT, HTML, RTF, EPUB, ODT |
+| **Word OCR (Scanned)** | `.docx` | ✓ | ✓ | macOS Vision AI text recognition reads scanned docs, photos, and receipts into editable Word |
+| **Legacy Word** | `.doc`, `.dot` | ✓ | — | Converted via installed Microsoft Word or LibreOffice |
+| **PowerPoint Presentation** | `.pptx`, `.ppsx`, `.pptm`, `.potx` | ✓ | ✓ | Native Typst renderer: slides to PDF/images, Word handouts with speaker notes, outlines; docs/photos to slides |
+| **Legacy PowerPoint** | `.ppt`, `.pps`, `.pot`, `.odp` | ✓ | — | Converted via installed PowerPoint or LibreOffice (`.odp` outlines work built-in) |
+| **Markdown** | `.md`, `.markdown` | ✓ | ✓ | Two-way conversion between HTML, TXT, RTF, EPUB, ODT, Word, PowerPoint, and PDF |
+| **Plain Text** | `.txt`, `.text`, `.log` | ✓ | ✓ | Fast two-way plain text extraction and conversion |
+| **HTML Web Page** | `.html`, `.htm` | ✓ | ✓ | Converts web documents to Word, PDF, slides, or Markdown |
+| **Rich Text Format** | `.rtf` | ✓ | ✓ | Cross-platform formatted text conversions |
+| **EPUB E-Book** | `.epub` | ✓ | ✓ | E-books to clean readable documents, PDF, or presentations |
+| **OpenDocument Text** | `.odt` | ✓ | ✓ | LibreOffice / OpenOffice writer document interchange |
+
+### 📊 Spreadsheets & Structured Data
+
+| Format | Extensions | Read | Write | Capabilities & Details |
+|---|---|:---:|:---:|---|
+| **Microsoft Excel** | `.xlsx`, `.xlsm` | ✓ | ✓ | Native parallel typesetting: prints all sheets to PDF with exact formatting, numbers, dates, Rupiah/accounting |
+| **Legacy Excel & Calc** | `.xls`, `.xlt`, `.ods` | ✓ | — | Supported via installed Excel or LibreOffice |
+| **CSV** | `.csv` | ✓ | ✓ | Comma-separated tabular data interchange with automatic delimiter detection |
+| **TSV** | `.tsv`, `.tab` | ✓ | ✓ | Tab-separated values for data analysis and developer pipelines |
+| **JSON Records** | `.json` | ✓ | ✓ | Formatted JSON arrays/objects to tables, spreadsheets, or SQL |
+| **YAML Data** | `.yaml`, `.yml` | ✓ | ✓ | Structured YAML documents converted to tables, CSV, or Excel |
+| **XML Data / Workbook** | `.xml` | ✓ | ✓ | Structured XML records converted to spreadsheets and databases |
+| **SQL Database Scripts** | `.sql` | — | ✓ | Generates valid `CREATE TABLE` and `INSERT INTO` queries from any spreadsheet or table |
+| **Markdown Tables** | `.md` | ✓ | ✓ | Formats spreadsheet data into GitHub-flavored Markdown tables |
+
+### 🎬 Video Formats & Tools
+
+| Format / Tool | Extensions / ID | Read | Write | Capabilities |
+|---|---|:---:|:---:|---|
+| **MP4 Video** | `.mp4`, `.m4v` | ✓ | ✓ | Universal H.264/AAC video conversion |
+| **QuickTime Video** | `.mov` | ✓ | ✓ | Native Apple QuickTime movie container |
+| **WebM Video** | `.webm` | ✓ | ✓ | Modern web-optimized video container (VP9) |
+| **Matroska Video** | `.mkv` | ✓ | ✓ | Universal multimedia container for high-definition video |
+| **AVI Video** | `.avi` | ✓ | ✓ | Audio Video Interleave container |
+| **Flash Video** | `.flv` | ✓ | ✓ | Flash video format |
+| **Video to GIF Clip** | `GIF clip` | ✓ | ✓ | Converts a segment of video into an animated looping GIF |
+| **Compress Video** | `Compress` | ✓ | ✓ | Reduces video file size while maintaining visual clarity |
+| **Mute Video** | `Mute` | ✓ | ✓ | Strips audio tracks completely, producing silent video files |
+| **Extract Audio** | `Audio extract` | ✓ | ✓ | Extracts soundtrack directly from video into a high-quality `.mp3` file |
+| **1080p Full HD** | `1080p` | ✓ | ✓ | Rescales video dimensions to 1920×1080 |
+| **720p HD** | `720p` | ✓ | ✓ | Rescales video dimensions to 1280×720 |
+
+*Engine: Powered by `ffmpeg` when detected, with automatic fallback to macOS native `avconvert`.*
+
+### 🎵 Music & Audio Formats
+
+| Format | Extensions | Read | Write | Quality & Features |
+|---|---|:---:|:---:|---|
+| **MP3 Audio** | `.mp3` | ✓ | ✓ | Universal MPEG Audio Layer III at high bitrates |
+| **WAV Audio** | `.wav`, `.wave` | ✓ | ✓ | Lossless uncompressed Linear PCM audio |
+| **M4A / AAC Audio** | `.m4a`, `.aac` | ✓ | ✓ | Apple Advanced Audio Coding standard |
+| **FLAC Audio** | `.flac` | ✓ | ✓ | Free Lossless Audio Codec for audiophile preservation |
+| **OGG Vorbis** | `.ogg`, `.oga` | ✓ | ✓ | Open-source compressed audio format |
+| **AIFF Studio Audio** | `.aiff`, `.aif` | ✓ | ✓ | Apple Audio Interchange File Format (uncompressed) |
+| **Opus Audio** | `.opus` | ✓ | ✓ | Highly efficient speech and music codec |
+| **Apple CoreAudio** | `.caf` | ✓ | ✓ | Apple CoreAudio File format |
+| **Apple Lossless** | `.m4a` (ALAC) | ✓ | ✓ | Bit-for-bit lossless audio compression for Apple devices |
+| **Windows Media Audio** | `.wma` | ✓ | ✓ | Microsoft Windows Media Audio |
+
+*Engine: Powered by `ffmpeg` when detected, with automatic fallback to macOS native `afconvert`.*
 
 **Colours**: images with an embedded colour profile (Mac screenshots and iPhone photos are Display P3) are converted to sRGB, so they look the same in every app after conversion. Gray images stay one channel in PNG, TIFF, BMP and TGA.
 

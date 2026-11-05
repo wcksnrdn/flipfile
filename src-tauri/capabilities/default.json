@@ -20,6 +20,8 @@
     "allow-settings-summary",
     "allow-set-glass",
     "allow-set-workshop-window",
-    "allow-quit-app"
+    "allow-quit-app",
+    "updater:default",
+    "process:default"
   ]
 }

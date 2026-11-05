@@ -37,6 +37,7 @@ type Props = {
   onResetRing: (ringId: RingId) => void;
   onStartChipDrag: (item: CatalogEntry, fromSlotIndex: number | null, clientX: number, clientY: number) => void;
   onWindowResized: () => void;
+  onCheckUpdate?: () => void;
   onClose: () => void;
 };
 
@@ -53,6 +54,7 @@ export default function WorkshopPanel({
   onResetRing,
   onStartChipDrag,
   onWindowResized,
+  onCheckUpdate,
   onClose,
 }: Props) {
   const [category, setCategory] = useState<"all" | CatalogCategory>("all");
@@ -224,6 +226,16 @@ export default function WorkshopPanel({
               </button>
             ))}
           </div>
+          {onCheckUpdate && (
+            <button
+              type="button"
+              className="ws-btn ws-btn-ghost"
+              onClick={onCheckUpdate}
+              title="Check for application updates"
+            >
+              Updates
+            </button>
+          )}
           <button type="button" className="ws-btn ws-btn-primary" onClick={onClose}>
             Done
           </button>

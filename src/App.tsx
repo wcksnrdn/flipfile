@@ -5,6 +5,9 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import type { Update } from "@tauri-apps/plugin-updater";
+import { checkForUpdate, type UpdateState } from "./updater";
+import UpdateDialog from "./UpdateDialog";
 import { DEBUG_DROP, DebugOverlay, type DropDebugInfo } from "./DebugOverlay";
 import WorkshopPanel, { MAX_RING_SLOTS } from "./WorkshopPanel";
 import {
@@ -133,6 +136,33 @@ export default function App() {
   const [workshopOpen, setWorkshopOpen] = useState(false);
   const [editingRing, setEditingRing] = useState<RingId>("photo");
   const [chipDrag, setChipDrag] = useState<ChipDrag | null>(null);
+
+  // In-app updater state
+  const [updateInfo, setUpdateInfo] = useState<Update | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: "idle" });
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    window.setTimeout(() => setToastMessage(null), 3200);
+  };
+
+  const triggerUpdateCheck = async () => {
+    setUpdateState({ status: "checking" });
+    try {
+      const up = await checkForUpdate();
+      if (up) {
+        setUpdateInfo(up);
+        setUpdateState({ status: "available", update: up, version: up.version, body: up.body });
+      } else {
+        setUpdateState({ status: "up-to-date" });
+        showToast("You're up to date! flipfile v0.5.0");
+      }
+    } catch (err) {
+      setUpdateState({ status: "error", message: String(err) });
+      showToast("Could not check for updates");
+    }
+  };
 
   const activeWorkspace = useMemo(
     () => wsState.workspaces.find((w) => w.id === wsState.activeId) ?? wsState.workspaces[0],
@@ -608,6 +638,38 @@ export default function App() {
     };
   }, []);
 
+  // "Check for Updates..." from the tray menu + auto-check after launch
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    let cancelled = false;
+
+    listen("check-update", () => {
+      triggerUpdateCheck();
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const up = await checkForUpdate();
+        if (cancelled) return;
+        if (up) {
+          setUpdateInfo(up);
+          setUpdateState({ status: "available", update: up, version: up.version, body: up.body });
+        }
+      } catch {
+        // Quiet on startup background failure
+      }
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   // Tray resize/quality defaults, shown under the core when not the defaults
   useEffect(() => {
     invoke<string | null>("settings_summary").then(setSummary).catch(() => {});
@@ -1054,6 +1116,7 @@ export default function App() {
           }}
           onStartChipDrag={handleStartChipDrag}
           onWindowResized={() => sendGlass(GLASS_OPEN).catch(() => {})}
+          onCheckUpdate={triggerUpdateCheck}
           onClose={() => toggleWorkshop(false)}
         />
       )}
@@ -1067,6 +1130,23 @@ export default function App() {
           {chipDrag.item.sub && <span className="ws-drag-ghost-sub">{chipDrag.item.sub}</span>}
         </div>
       )}
+
+      <UpdateDialog
+        update={updateInfo}
+        state={updateState}
+        toastMessage={toastMessage}
+        onDismiss={() => {
+          setUpdateInfo(null);
+          setUpdateState({ status: "idle" });
+        }}
+        onInstallStart={() => setUpdateState({ status: "downloading", progress: 0 })}
+        onProgress={(progress, total) => setUpdateState({ status: "downloading", progress, total })}
+        onError={(msg) => {
+          setUpdateState({ status: "error", message: msg });
+          showToast(`Update error: ${msg}`);
+          setUpdateInfo(null);
+        }}
+      />
 
       {DEBUG_DROP && <DebugOverlay info={debugInfo} />}
     </main>

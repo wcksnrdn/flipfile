@@ -113,12 +113,14 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     quality_refs.push(&quality_note);
     let quality_menu = Submenu::with_items(app, "Quality", true, &quality_refs)?;
     let quit = MenuItem::with_id(app, "quit", "Quit flipfile", true, Some("CmdOrCtrl+Q"))?;
+    let check_update = MenuItem::with_id(app, "check-update", "Check for Updates…", true, None::<&str>)?;
 
     Menu::with_items(
         app,
         &[
             &toggle,
             &workshop,
+            &check_update,
             &PredefinedMenuItem::separator(app)?,
             &recent_menu,
             &undo,
@@ -182,6 +184,13 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
                 let _ = w.set_focus();
             }
             let _ = app.emit("toggle-workshop", ());
+        }
+        "check-update" => {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+            let _ = app.emit("check-update", ());
         }
         "undo" => undo_last(app),
         "clear" => {
