@@ -25,6 +25,9 @@ pub struct Presentation {
     pub slides: Vec<Slide>,
     /// Pictures the slides use, by their path in the package
     pub media: HashMap<String, Vec<u8>>,
+    /// Fonts saved in the file (PowerPoint's "Embed fonts in the file"): the typeface
+    /// name the slides use, and its TrueType/OpenType data
+    pub fonts: Vec<(String, Vec<u8>)>,
 }
 
 pub struct Slide {
@@ -121,6 +124,9 @@ pub struct TextBody {
     pub insets: [f32; 4],
     pub anchor: Anchor,
     pub wrap: bool,
+    /// The shape resizes to fit its text (spAutoFit): its saved height is that of the
+    /// text as the author's app laid it out
+    pub grows: bool,
     pub paragraphs: Vec<Paragraph>,
 }
 
@@ -915,7 +921,49 @@ pub fn read(bytes: &[u8]) -> Result<Presentation, String> {
         return Err("none of the slides could be read".into());
     }
     let media = reader.media;
-    Ok(Presentation { width, height, slides, media })
+    let fonts = embedded_fonts(&package, root, &rels);
+    Ok(Presentation { width, height, slides, media, fonts })
+}
+
+/// The fonts listed in the presentation's `embeddedFontLst`, each style that could be read
+fn embedded_fonts(package: &Package, root: Node, rels: &HashMap<String, (String, String)>) -> Vec<(String, Vec<u8>)> {
+    let Some(list) = child(root, "embeddedFontLst") else { return vec![] };
+    let mut out = vec![];
+    for font in children(list, "embeddedFont") {
+        let Some(name) = child(font, "font").and_then(|f| f.attribute("typeface")).filter(|n| !n.trim().is_empty()) else { continue };
+        for style in ["regular", "bold", "italic", "boldItalic"] {
+            let Some(id) = child(font, style).and_then(|s| s.attribute(("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id"))) else { continue };
+            let Some((_, target)) = rels.get(id) else { continue };
+            if let Some(data) = package.get(target).and_then(|part| font_data(&part)) {
+                out.push((name.trim().to_string(), data));
+            }
+        }
+    }
+    out
+}
+
+/// The TrueType/OpenType font in an embedded font part: an Embedded OpenType wrapper
+/// (.fntdata), XOR-obscured or not, or a plain font file. Fonts compressed with
+/// MicroType Express are left out, and the slides use look-alikes for them.
+fn font_data(part: &[u8]) -> Option<Vec<u8>> {
+    let is_font = |d: &[u8]| d.len() > 12 && matches!(&d[..4], [0, 1, 0, 0] | b"OTTO" | b"true");
+    if is_font(part) {
+        return Some(part.to_vec());
+    }
+    let u32_at = |i: usize| part.get(i..i + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let (size, data_size, version, flags) = (u32_at(0)? as usize, u32_at(4)? as usize, u32_at(8)?, u32_at(12)?);
+    const COMPRESSED: u32 = 0x4;
+    const XOR: u32 = 0x1000_0000;
+    let magic = part.get(34..36) == Some(&[0x4C, 0x50]);
+    if !magic || !matches!(version, 0x0001_0000 | 0x0002_0001 | 0x0002_0002) || flags & COMPRESSED != 0 || data_size == 0 || data_size > size || size > part.len() {
+        return None;
+    }
+    // The font data is the last field of the header
+    let mut data = part[size - data_size..size].to_vec();
+    if flags & XOR != 0 {
+        data.iter_mut().for_each(|b| *b ^= 0x50);
+    }
+    is_font(&data).then_some(data)
 }
 
 struct Reader<'p> {
@@ -1601,6 +1649,7 @@ fn text_body(body: Node, body_prs: &[String], levels: &Levels, cx: &Context, sli
     let mut insets = [7.2, 3.6, 7.2, 3.6];
     let mut anchor = None;
     let mut wrap_text = None;
+    let mut grows = false;
     let mut font_scale = None;
     let mut spacing_reduction = None;
     for xml in body_prs.iter().rev() {
@@ -1621,6 +1670,11 @@ fn text_body(body: Node, body_prs: &[String], levels: &Levels, cx: &Context, sli
         }
         if let Some(w) = pr.attribute("wrap") {
             wrap_text = Some(w != "none");
+        }
+        if child(pr, "spAutoFit").is_some() {
+            grows = true;
+        } else if child(pr, "normAutofit").is_some() || child(pr, "noAutofit").is_some() {
+            grows = false;
         }
         if let Some(fit) = child(pr, "normAutofit") {
             font_scale = num(fit, "fontScale").map(|v| v / 100_000.0).or(font_scale);
@@ -1710,7 +1764,7 @@ fn text_body(body: Node, body_prs: &[String], levels: &Levels, cx: &Context, sli
     if paragraphs.is_empty() {
         return None;
     }
-    Some(TextBody { insets, anchor: anchor.unwrap_or(Anchor::Top), wrap: wrap_text.unwrap_or(true), paragraphs })
+    Some(TextBody { insets, anchor: anchor.unwrap_or(Anchor::Top), wrap: wrap_text.unwrap_or(true), grows, paragraphs })
 }
 
 fn make_run(text: String, style: &RunStyle, scale: f32, line_break: bool) -> Run {
@@ -1954,7 +2008,7 @@ fn table_element(table: Node, frame: Frame, cx: &Context, sink: &mut Sink) -> Op
             };
             let mut text = child(tc, "txBody")
                 .and_then(|b| text_body(b, &[], &levels, cx, false))
-                .unwrap_or(TextBody { insets: margins, anchor, wrap: true, paragraphs: vec![] });
+                .unwrap_or(TextBody { insets: margins, anchor, wrap: true, grows: false, paragraphs: vec![] });
             text.insets = margins;
             text.anchor = anchor;
             cells.push(TableCell {
@@ -1984,5 +2038,34 @@ mod tests {
         assert_eq!(number_text("romanUcPeriod", 4), "IV.");
         assert_eq!(number_text("alphaLcParenR", 2), "b)");
         assert_eq!(resolve("ppt/slides", "../media/image1.png"), "ppt/media/image1.png");
+    }
+
+    /// An Embedded OpenType wrapper as PowerPoint saves one: a 228-byte header, then the font
+    fn eot(font: &[u8], flags: u32) -> Vec<u8> {
+        let mut out = vec![0u8; 228];
+        let size = (out.len() + font.len()) as u32;
+        out[0..4].copy_from_slice(&size.to_le_bytes());
+        out[4..8].copy_from_slice(&(font.len() as u32).to_le_bytes());
+        out[8..12].copy_from_slice(&0x0002_0002u32.to_le_bytes());
+        out[12..16].copy_from_slice(&flags.to_le_bytes());
+        out[34..36].copy_from_slice(&[0x4C, 0x50]);
+        out.extend_from_slice(font);
+        out
+    }
+
+    #[test]
+    fn embedded_fonts_are_unwrapped() {
+        let font: Vec<u8> = [0, 1, 0, 0].into_iter().chain((0..60).map(|i| i as u8)).collect();
+        // A plain font file, and one in an EOT wrapper, plain or XOR-obscured
+        assert_eq!(font_data(&font).as_deref(), Some(font.as_slice()));
+        assert_eq!(font_data(&eot(&font, 0)).as_deref(), Some(font.as_slice()));
+        let obscured: Vec<u8> = font.iter().map(|b| b ^ 0x50).collect();
+        assert_eq!(font_data(&eot(&obscured, 0x1000_0000)).as_deref(), Some(font.as_slice()));
+        // MicroType Express compression is not unpacked; damaged headers are refused
+        assert_eq!(font_data(&eot(&font, 0x4)), None);
+        let mut bad = eot(&font, 0);
+        bad[4..8].copy_from_slice(&10_000u32.to_le_bytes());
+        assert_eq!(font_data(&bad), None);
+        assert_eq!(font_data(b"not a font at all, not even close"), None);
     }
 }

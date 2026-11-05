@@ -839,7 +839,7 @@ pub fn to_pdf(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Vec<u8>
     let per_run = 4;
     let runs: Vec<String> =
         (0..printed.pages.len()).step_by(per_run).map(|i| printed.chunk(i..(i + per_run).min(printed.pages.len()))).collect();
-    super::typeset::to_pdf_in_runs(runs, printed.files).map_err(|e| format!("the workbook could not be laid out ({e})"))
+    super::typeset::to_pdf_in_runs(runs, printed.files, &[]).map_err(|e| format!("the workbook could not be laid out ({e})"))
 }
 
 #[cfg(test)]

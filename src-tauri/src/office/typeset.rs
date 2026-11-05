@@ -129,18 +129,73 @@ fn file_id(path: &str) -> Result<FileId, String> {
     Ok(RootedPath::new(VirtualRoot::Project, vpath).intern())
 }
 
-struct DocWorld {
+struct DocWorld<'f> {
     main: Source,
     files: HashMap<FileId, Bytes>,
+    fonts: &'f DocFonts,
 }
 
-impl World for DocWorld {
+/// The computer's fonts, plus the ones a document carries itself (a presentation's
+/// embedded fonts), so it looks the same where they are not installed
+#[derive(Default)]
+struct DocFonts {
+    /// `None` when the document brings no fonts: the computer's book as it is
+    book: Option<LazyHash<FontBook>>,
+    /// The computer's font count: the document's fonts come after
+    base: usize,
+    own: Vec<Font>,
+}
+
+impl DocFonts {
+    /// `embedded`: the name the document uses for each font, and its data
+    fn new(embedded: &[(String, Vec<u8>)]) -> Self {
+        if embedded.is_empty() {
+            return Self::default();
+        }
+        let system = fonts().book();
+        let mut book = FontBook::clone(system);
+        let base = (0..).take_while(|&i| system.info(i).is_some()).count();
+        let mut own = vec![];
+        for (name, data) in embedded {
+            for font in Font::iter(Bytes::new(data.clone())) {
+                let info = font.info().clone();
+                // Also under the name the document asks for, when the font calls itself
+                // otherwise (a subset or a renamed copy)
+                if !info.family.eq_ignore_ascii_case(name) {
+                    let mut alias = info.clone();
+                    alias.family = name.clone();
+                    book.push(alias);
+                    own.push(font.clone());
+                }
+                book.push(info);
+                own.push(font);
+            }
+        }
+        if own.is_empty() {
+            return Self::default();
+        }
+        DocFonts { book: Some(LazyHash::new(book)), base, own }
+    }
+
+    fn book(&self) -> &LazyHash<FontBook> {
+        self.book.as_ref().unwrap_or_else(|| fonts().book())
+    }
+
+    fn font(&self, index: usize) -> Option<Font> {
+        match index.checked_sub(self.base) {
+            Some(i) if self.book.is_some() => self.own.get(i).cloned(),
+            _ => fonts().font(index),
+        }
+    }
+}
+
+impl World for DocWorld<'_> {
     fn library(&self) -> &LazyHash<Library> {
         library()
     }
 
     fn book(&self) -> &LazyHash<FontBook> {
-        fonts().book()
+        self.fonts.book()
     }
 
     fn main(&self) -> FileId {
@@ -161,7 +216,7 @@ impl World for DocWorld {
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        fonts().font(index)
+        self.fonts.font(index)
     }
 
     fn today(&self, _offset: Option<Duration>) -> Option<Datetime> {
@@ -173,7 +228,7 @@ impl World for DocWorld {
 /// path (e.g. `/img/1.png`).
 pub fn to_pdf(markup: String, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, String> {
     let files = virtual_files(files)?;
-    let pdf = compile(markup, files).and_then(|document| export(&document));
+    let pdf = compile(markup, files, &DocFonts::default()).and_then(|document| export(&document));
     trim_cache();
     pdf
 }
@@ -182,13 +237,15 @@ pub fn to_pdf(markup: String, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, 
 /// (absolutely positioned, numbered by the caller): runs are laid out side by side, and
 /// their pages make one PDF, with each font and picture in it once. Typst's cache is
 /// emptied after every run, as runs share almost nothing: a 313-page workbook then
-/// peaks at 1.1 GB instead of 2.4 GB, in 3.3 s instead of 6.2 s.
-pub fn to_pdf_in_runs(runs: Vec<String>, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, String> {
+/// peaks at 1.1 GB instead of 2.4 GB, in 3.3 s instead of 6.2 s. `fonts` are the
+/// document's own (name it uses, data), used on top of the computer's.
+pub fn to_pdf_in_runs(runs: Vec<String>, files: Vec<(String, Vec<u8>)>, fonts: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
     let files = virtual_files(files)?;
+    let fonts = DocFonts::new(fonts);
     if runs.len() == 1 {
-        let pdf = compile(runs.into_iter().next().unwrap(), files).and_then(|document| export(&document));
+        let pdf = compile(runs.into_iter().next().unwrap(), files, &fonts).and_then(|document| export(&document));
         trim_cache();
         return pdf;
     }
@@ -200,7 +257,7 @@ pub fn to_pdf_in_runs(runs: Vec<String>, files: Vec<(String, Vec<u8>)>) -> Resul
             s.spawn(|| loop {
                 let i = next.fetch_add(1, Ordering::Relaxed);
                 let Some(markup) = runs.get(i) else { break };
-                let document = compile(markup.clone(), files.clone());
+                let document = compile(markup.clone(), files.clone(), &fonts);
                 typst::comemo::evict(0);
                 laid_out.lock().unwrap()[i] = Some(document);
             });
@@ -227,7 +284,7 @@ fn virtual_files(files: Vec<(String, Vec<u8>)>) -> Result<HashMap<FileId, Bytes>
 /// cache, and beyond four they only slow each other down (measured on 8 cores).
 const MAX_LAYOUTS: usize = 4;
 
-fn compile(markup: String, files: HashMap<FileId, Bytes>) -> Result<PagedDocument, String> {
+fn compile(markup: String, files: HashMap<FileId, Bytes>, fonts: &DocFonts) -> Result<PagedDocument, String> {
     use std::sync::{Condvar, Mutex};
     static RUNNING: (Mutex<usize>, Condvar) = (Mutex::new(0), Condvar::new());
     struct Slot;
@@ -238,10 +295,10 @@ fn compile(markup: String, files: HashMap<FileId, Bytes>) -> Result<PagedDocumen
         }
     }
 
-    if fonts().book().families().next().is_none() {
+    if fonts.book().families().next().is_none() {
         return Err("no fonts were found on this computer".into());
     }
-    let world = DocWorld { main: Source::new(file_id("/main.typ")?, markup), files };
+    let world = DocWorld { main: Source::new(file_id("/main.typ")?, markup), files, fonts };
     let _slot = {
         let mut running = RUNNING.0.lock().unwrap();
         while *running >= MAX_LAYOUTS {
@@ -286,5 +343,20 @@ mod tests {
         .unwrap();
         assert!(pdf.starts_with(b"%PDF-"));
         assert!(pdf.len() > 1000);
+    }
+
+    #[test]
+    fn documents_bring_their_own_fonts() {
+        // Any installed font, carried by the document under a name no computer has
+        let Some(font) = fonts().font(0) else { return };
+        let data = font.data().as_slice().to_vec();
+        let own = DocFonts::new(&[("Flipfile Test Face".into(), data.clone())]);
+        let index = own.book().select_family("flipfile test face").next().expect("found by the document's name");
+        assert_eq!(own.font(index).unwrap().data().as_slice(), data.as_slice());
+        // The computer's fonts are still there, at the same places
+        assert_eq!(own.font(0).unwrap().data().as_slice(), data.as_slice());
+        assert!(DocFonts::new(&[]).book.is_none());
+        let pdf = to_pdf_in_runs(vec!["#text(font: \"Flipfile Test Face\", \"Hello\")".into()], vec![], &[("Flipfile Test Face".into(), data)]).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
     }
 }

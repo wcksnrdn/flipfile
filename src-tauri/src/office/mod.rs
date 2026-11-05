@@ -266,6 +266,29 @@ mod tests {
         println!("pages: {}", doc.pages().len());
     }
 
+    /// Visual check of PowerPoint -> PDF during development:
+    /// `FLIPFILE_PPTX=in.pptx FLIPFILE_OUT=dir cargo test review_pptx -- --ignored`
+    /// writes the PDF and a PNG per slide into `dir` (FLIPFILE_MARKUP=1 prints the markup).
+    #[test]
+    #[ignore]
+    fn review_pptx() {
+        let input = std::env::var("FLIPFILE_PPTX").expect("set FLIPFILE_PPTX");
+        let out = std::path::PathBuf::from(std::env::var("FLIPFILE_OUT").expect("set FLIPFILE_OUT"));
+        let bytes = std::fs::read(&input).unwrap();
+        if std::env::var("FLIPFILE_MARKUP").is_ok() {
+            println!("{}", slides_pdf::markup(&pptx::read(&bytes).unwrap()).0.join("\n"));
+        }
+        let pdf = pptx_to_pdf_builtin(&bytes).unwrap();
+        std::fs::write(out.join("review.pdf"), &pdf).unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
+        let doc = pdfium.load_pdf_from_byte_slice(&pdf, None).unwrap();
+        for (i, page) in doc.pages().iter().enumerate().take(12) {
+            let img = page.render_with_config(&PdfRenderConfig::new().set_target_width(1100)).unwrap().as_image().unwrap();
+            img.save(out.join(format!("slide{}.png", i + 1))).unwrap();
+        }
+        println!("slides: {}", doc.pages().len());
+    }
+
     /// Visual check of Excel -> PDF during development:
     /// `FLIPFILE_XLSX=in.xlsx FLIPFILE_OUT=dir cargo test review_xlsx -- --ignored --nocapture`
     /// writes the PDF and a PNG per page into `dir` (FLIPFILE_MARKUP=1 prints the markup,

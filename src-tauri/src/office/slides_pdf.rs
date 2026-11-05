@@ -13,7 +13,7 @@ const SLIDES_PER_RUN: usize = 4;
 
 pub fn to_pdf(deck: &Presentation) -> Result<Vec<u8>, String> {
     let (runs, files) = markup(deck);
-    super::typeset::to_pdf_in_runs(runs, files).map_err(|e| format!("the slides could not be laid out ({e})"))
+    super::typeset::to_pdf_in_runs(runs, files, &deck.fonts).map_err(|e| format!("the slides could not be laid out ({e})"))
 }
 
 /// The slides PowerPoint would export: hidden ones are left out (unless all are hidden)
@@ -272,20 +272,63 @@ fn anchor_name(anchor: Anchor) -> &'static str {
 fn text_markup(text: &TextBody, w: f32, h: f32) -> String {
     let [l, t, r, b] = text.insets;
     let (iw, ih) = ((w - l - r).max(1.0), (h - t - b).max(0.0));
-    let width = if text.wrap { pt(iw) } else { "auto".into() };
+    // Unwrapped text is aligned in the box too: its lines only stay whole
     format!(
-        "box(inset: (left: {}, top: {}), width: {}, height: {}, align({}, block(width: {width}, {{ {} }})))",
+        "box(inset: (left: {}, top: {}), width: {}, height: {}, align({}, block(width: {}, {{ {} }})))",
         pt(l),
         pt(t),
         pt(w - r),
         pt(t + ih),
         anchor_name(text.anchor),
-        paragraphs_markup(text)
+        pt(iw),
+        paragraphs_markup(text, Some(iw), saved_unwrapped(text, ih))
     )
 }
 
-/// The paragraphs of a text body, one block each
-fn paragraphs_markup(text: &TextBody) -> String {
+/// Whether a body that grows with its text (spAutoFit) was saved as tall as one line
+/// per paragraph: the author's app broke none of them over several lines
+fn saved_unwrapped(text: &TextBody, height: f32) -> bool {
+    if !text.grows || !text.wrap {
+        return false;
+    }
+    let (mut total, mut smallest) = (0.0, f32::MAX);
+    for (i, p) in text.paragraphs.iter().enumerate() {
+        let size = p.runs.iter().filter(|r| !r.line_break && !r.text.is_empty()).map(|r| r.size).fold(0.0, f32::max);
+        let size = if size > 0.0 { size } else { p.size };
+        let line = match p.line_spacing {
+            LineSpacing::Multiple(m) => 1.2 * m * size,
+            LineSpacing::Points(points) => points,
+        };
+        total += line * (1 + p.runs.iter().filter(|r| r.line_break).count()) as f32;
+        if i > 0 {
+            total += p.space_before;
+        }
+        if i + 1 < text.paragraphs.len() {
+            total += p.space_after;
+        }
+        smallest = smallest.min(line);
+    }
+    (height - total).abs() < smallest * 0.5
+}
+
+/// Keeps a paragraph's `content` whole, on one line per line break however wide, when
+/// it is at most `limit` wide (`None`: always). A box of its own width cannot break,
+/// and the paragraph still aligns it: wider than the text area, it spills past the far
+/// side of its alignment (both sides when centred), as in PowerPoint.
+fn whole_line(content: &str, limit: Option<f32>) -> String {
+    // Without a width, a box takes the paragraph's and wraps inside it
+    let kept = "box(width: natural, line)".to_string();
+    let kept = match limit {
+        Some(limit) => format!("if natural <= {} {{ {kept} }} else {{ line }}", pt(limit)),
+        None => kept,
+    };
+    format!("context {{ let line = {{ {content} }}; let natural = measure(line).width; {kept} }}")
+}
+
+/// The paragraphs of a text body `width` wide (`None`: a table cell, whose text always
+/// wraps), one block each. `unwrapped`: the author's app set every paragraph on one
+/// line (see `saved_unwrapped`).
+fn paragraphs_markup(text: &TextBody, width: Option<f32>, unwrapped: bool) -> String {
     let mut paragraphs = vec![];
     for (i, p) in text.paragraphs.iter().enumerate() {
         let first_size = p.runs.iter().find(|r| !r.line_break && !r.text.is_empty()).map(|r| r.size).unwrap_or(p.size);
@@ -365,12 +408,20 @@ fn paragraphs_markup(text: &TextBody) -> String {
             // An empty paragraph keeps the height of its line
             pieces.push(format!("hide(text(size: {}, \"X\"))", pt(p.size)));
         }
-        let joined = pieces.join(" + ");
-        let line = if text.wrap { joined } else { format!("box({joined})") };
+        let line = pieces.join(" + ");
         if content.is_empty() {
             content = line;
         } else {
             content = format!("{content} + {line}");
+        }
+        if width.is_some() && !text.wrap {
+            content = whole_line(&content, None);
+        } else if let Some(room) = width.map(|w| w - start).filter(|_| unwrapped) {
+            // A line the author's app fit is kept whole when it comes out a little wider
+            // here (it kerned, or measured otherwise): breaking it would push its last
+            // word over whatever lies below the box, which was placed for one line. Much
+            // wider means the saved height is out of date, and the text wraps as usual.
+            content = whole_line(&content, Some(room * 1.05));
         }
         // PowerPoint spaces paragraphs apart, not the text from its box
         let before = if i == 0 { 0.0 } else { p.space_before };
@@ -445,6 +496,115 @@ fn cell_markup(cell: &TableCell, x: usize, y: usize, col_span: usize, row_span: 
         pt(ir),
         pt(ib),
         anchor_name(cell.text.anchor),
-        paragraphs_markup(&cell.text)
+        paragraphs_markup(&cell.text, None, false)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write as _;
+
+    /// A one-slide deck holding `boxes` (spTree children)
+    fn deck(boxes: &str) -> Vec<u8> {
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        let rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        let parts = [
+            ("_rels/.rels", format!("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"{rel}/officeDocument\" Target=\"ppt/presentation.xml\"/></Relationships>")),
+            ("ppt/presentation.xml", format!("<p:presentation xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" xmlns:r=\"{rel}\"><p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst><p:sldSz cx=\"18288000\" cy=\"10287000\"/></p:presentation>")),
+            ("ppt/_rels/presentation.xml.rels", format!("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"{rel}/slide\" Target=\"slides/slide1.xml\"/></Relationships>")),
+            ("ppt/slides/slide1.xml", format!("<p:sld xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><p:cSld><p:spTree>{boxes}</p:spTree></p:cSld></p:sld>")),
+        ];
+        for (name, xml) in parts {
+            zip.start_file(name, options).unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap().into_inner()
+    }
+
+    /// A text box `width` points wide and `height` tall, one paragraph of 40 pt text
+    /// with lines 56 pt apart
+    fn text_box(font: &str, text: &str, width: f32, height: f32, fit: &str) -> String {
+        text_box_at(font, text, 0.0, width, height, "", fit, "ctr")
+    }
+
+    /// `text_box`, `x` points from the left, with more `bodyPr` attributes and an alignment
+    #[allow(clippy::too_many_arguments)]
+    fn text_box_at(font: &str, text: &str, x: f32, width: f32, height: f32, body: &str, fit: &str, align: &str) -> String {
+        format!(
+            "<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"t\"/><p:cNvSpPr txBox=\"1\"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"{}\" y=\"0\"/><a:ext cx=\"{}\" cy=\"{}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr lIns=\"0\" tIns=\"0\" rIns=\"0\" bIns=\"0\" {body}>{fit}</a:bodyPr><a:p><a:pPr algn=\"{align}\"><a:lnSpc><a:spcPts val=\"5600\"/></a:lnSpc></a:pPr><a:r><a:rPr sz=\"4000\"><a:latin typeface=\"{font}\"/></a:rPr><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>",
+            (x * 12_700.0) as i64,
+            (width * 12_700.0) as i64,
+            (height * 12_700.0) as i64
+        )
+    }
+
+    /// Lines of text on the PDF's first page
+    fn lines(pdf: &[u8]) -> usize {
+        text_extent(pdf).0
+    }
+
+    /// Lines of text on the PDF's first page, and where the text starts and ends across
+    /// it (points from the left edge)
+    fn text_extent(pdf: &[u8]) -> (usize, f32, f32) {
+        let pdfium = crate::pdf::render::pdfium().unwrap();
+        let doc = pdfium.load_pdf_from_byte_slice(pdf, None).unwrap();
+        let page = doc.pages().first().unwrap();
+        let text = page.text().unwrap();
+        let count = text.all().lines().filter(|l| !l.trim().is_empty()).count();
+        let (mut left, mut right) = (f32::MAX, f32::MIN);
+        for segment in text.segments().iter() {
+            let bounds = segment.bounds();
+            left = left.min(bounds.left().value);
+            right = right.max(bounds.right().value);
+        }
+        (count, left, right)
+    }
+
+    /// The width of `text` at 40 pt in a font every computer has one of
+    fn common_font(text: &str) -> Option<(&'static str, f32)> {
+        ["Arial", "Helvetica", "Liberation Sans", "DejaVu Sans"].into_iter().find_map(|f| super::super::typeset::text_width(f, 40.0, false, false, text).map(|w| (f, w)))
+    }
+
+    #[test]
+    fn titles_the_author_fit_on_one_line_stay_on_one() {
+        let text = "Catatan Perubahan Belum Terlaksana";
+        let Some((font, natural)) = common_font(text) else { return };
+        // 2% narrower than the text here, as when the author's app kerned it: the box
+        // was saved one line tall, so the line stays whole
+        let snug = text_box(font, text, natural * 0.98, 53.5, "<a:spAutoFit/>");
+        assert_eq!(lines(&super::super::pptx_to_pdf_builtin(&deck(&snug)).unwrap()), 1);
+        // Without that evidence, or far too narrow (an out-of-date height), it wraps
+        let fixed = text_box(font, text, natural * 0.98, 53.5, "");
+        assert_eq!(lines(&super::super::pptx_to_pdf_builtin(&deck(&fixed)).unwrap()), 2);
+        let stale = text_box(font, text, natural * 0.7, 53.5, "<a:spAutoFit/>");
+        assert_eq!(lines(&super::super::pptx_to_pdf_builtin(&deck(&stale)).unwrap()), 2);
+        // Saved two lines tall: the author's app wrapped it too
+        let wrapped = text_box(font, text, natural * 0.98, 109.5, "<a:spAutoFit/>");
+        assert_eq!(lines(&super::super::pptx_to_pdf_builtin(&deck(&wrapped)).unwrap()), 2);
+    }
+
+    #[test]
+    fn unwrapped_text_overflows_its_box_on_one_line() {
+        let text = "Catatan Perubahan Belum Terlaksana";
+        let Some((font, natural)) = common_font(text) else { return };
+        // A box half as wide as its text, centred on x = 600 pt: PowerPoint keeps the
+        // line whole, spilling out of both sides of the box alike, or past its far side
+        // when the text is aligned to one
+        let (x, width) = (600.0 - natural / 4.0, natural / 2.0);
+        for (align, start, end) in [("ctr", 600.0 - natural / 2.0, 600.0 + natural / 2.0), ("l", x, x + natural), ("r", x + width - natural, x + width)] {
+            let shape = text_box_at(font, text, x, width, 60.0, "wrap=\"none\"", "", align);
+            let (count, left, right) = text_extent(&super::super::pptx_to_pdf_builtin(&deck(&shape)).unwrap());
+            assert_eq!(count, 1, "{align}");
+            assert!((left - start).abs() < 6.0 && (right - end).abs() < 6.0, "{align}: {left}..{right}, expected {start}..{end}");
+        }
+        // Twice as wide as its text: aligned in the box, as wrapped text would be
+        let (x, width) = (600.0 - natural, natural * 2.0);
+        for (align, start) in [("ctr", 600.0 - natural / 2.0), ("l", x), ("r", x + width - natural)] {
+            let shape = text_box_at(font, text, x, width, 60.0, "wrap=\"none\"", "", align);
+            let (count, left, right) = text_extent(&super::super::pptx_to_pdf_builtin(&deck(&shape)).unwrap());
+            assert_eq!(count, 1, "{align}");
+            assert!((left - start).abs() < 6.0 && (right - start - natural).abs() < 6.0, "{align}: {left}..{right}, expected {start}..");
+        }
+    }
 }
