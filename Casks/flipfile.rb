@@ -1,7 +1,7 @@
 cask "flipfile" do
   arch arm: "aarch64", intel: "x64"
 
-  version "0.3.0"
+  version "0.5.0"
   sha256 :no_check
 
   url "https://github.com/wcksnrdn/flipfile/releases/download/v#{version}/flipfile_#{version}_#{arch}.dmg"
