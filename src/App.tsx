@@ -156,7 +156,7 @@ export default function App() {
         setUpdateState({ status: "available", update: up, version: up.version, body: up.body });
       } else {
         setUpdateState({ status: "up-to-date" });
-        showToast("You're up to date! flipfile v0.5.0");
+        showToast("You're up to date! flipfile v0.5.1");
       }
     } catch (err) {
       setUpdateState({ status: "error", message: String(err) });

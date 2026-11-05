@@ -6,6 +6,17 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-05
+
+### Added
+
+- **In-App Auto-Updater (`tauri-plugin-updater`)**:
+  - Automatically checks GitHub Releases for new updates with cryptographically signed releases (Minisign).
+  - Background update check on startup and manual "Check for Updates…" via menu bar/tray and Ring Workshop.
+  - One-click background download and automatic application relaunch.
+- **Full Catalog Expansion in README**:
+  - Detailed format tables covering all 75+ formats, tools, and conversion engines across Photos, Office, Data, Video, and Audio.
+
 ## [0.5.0] - 2026-11-05
 
 ### Added
@@ -167,7 +178,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/wcksnrdn/flipfile/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/wcksnrdn/flipfile/compare/v0.3.0...v0.5.0
 [0.3.0]: https://github.com/wcksnrdn/flipfile/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/wcksnrdn/flipfile/compare/v0.1.2...v0.2.0
