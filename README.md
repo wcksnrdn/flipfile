@@ -12,6 +12,7 @@ No uploads. No accounts. No waiting.
 
 [![Download](https://img.shields.io/github/v/release/wcksnrdn/flipfile?label=download&color=1d1d1f&style=for-the-badge)](https://github.com/wcksnrdn/flipfile/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/wcksnrdn/flipfile/ci.yml?branch=main&label=build&style=for-the-badge)](https://github.com/wcksnrdn/flipfile/actions/workflows/ci.yml)
+[![Homebrew](https://img.shields.io/badge/Homebrew-wcksnrdn%2Ftap-f5f5f7?logo=homebrew&logoColor=1d1d1f&style=for-the-badge)](https://github.com/wcksnrdn/homebrew-tap)
 [![License: MIT](https://img.shields.io/badge/license-MIT-6e6e73?style=for-the-badge)](LICENSE)
 
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%26%20Intel-f5f5f7?logo=apple&logoColor=1d1d1f)
@@ -115,12 +116,19 @@ Excel or LibreOffice are used when installed; otherwise flipfile's own engine do
 
 Get the latest version from **[Releases](https://github.com/wcksnrdn/flipfile/releases/latest)**:
 
-| Your computer | File |
+| Your computer | Installation / File |
 |---|---|
+| macOS (Apple Silicon & Intel) | `brew install wcksnrdn/tap/flipfile` |
 | Mac with Apple Silicon (M1 to M4) | `flipfile_x.y.z_aarch64.dmg` |
 | Mac with Intel | `flipfile_x.y.z_x64.dmg` |
 | Windows 10 / 11 | `flipfile_x.y.z_x64-setup.exe` |
 | Linux | Debian/Ubuntu `.deb` &nbsp;·&nbsp; Fedora `.rpm` &nbsp;·&nbsp; any distro `.AppImage` |
+
+### Install via Homebrew (macOS)
+
+```bash
+brew install wcksnrdn/tap/flipfile
+```
 
 Or install with a single command:
 
