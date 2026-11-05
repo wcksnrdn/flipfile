@@ -64,6 +64,21 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **PowerPoint conversions (`SLIDES` / `.pptx`)**:
+  - **PowerPoint → PDF / images**: built-in `.pptx` reader and Typst slide renderer (4 slides per
+    run) with slide → layout → master → theme inheritance, linear-RGB theme colour modifiers,
+    ~70 DrawingML preset geometries and custom paths, picture fills clipped to shapes, arrowheads,
+    rotated/flipped groups, SmartArt drawings, auto-fitted text, bullets/numbering and styled
+    tables. Uses Microsoft PowerPoint or LibreOffice when installed, built-in engine otherwise
+    (`.ppt` and `.odp` use PowerPoint or LibreOffice).
+  - **PowerPoint → Word handout (`.docx`)**: printable A4 handout with each slide's image, title
+    and speaker notes (2 slides per page for 16:9 decks).
+  - **PowerPoint → outlines (`MD`, `TXT`, `HTML`, `RTF`, `EPUB`, `ODT`)**: slide titles, nested
+    lists, tables and speaker notes in reading order.
+  - **PDF, photos, documents & spreadsheets → PowerPoint (`.pptx`)**: PDF pages become slides;
+    single photos become 16:9 slides and multiple photos combine into one deck (`_merged.pptx`);
+    Word/Markdown/TXT/HTML/RTF/EPUB/ODT headings become slides; Excel/CSV/TSV/JSON/YAML/XML tables
+    split across slides with repeating headers.
 - Stress tests (hostile, broken and extreme inputs against every format; ~3,000
   conversions, none may crash, hang or leave junk behind) and a benchmark suite
   (`npm run stress`, `npm run bench`).

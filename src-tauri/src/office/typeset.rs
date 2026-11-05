@@ -21,7 +21,8 @@ fn fonts() -> &'static FontStore {
     static FONTS: OnceLock<FontStore> = OnceLock::new();
     FONTS.get_or_init(|| {
         let mut store = FontStore::new();
-        store.extend(typst_kit::fonts::system().map(|(path, info)| (MappedFont(path), info)));
+        // LastResort only draws a "missing glyph" box for every character
+        store.extend(typst_kit::fonts::system().filter(|(_, info)| info.family != "LastResort").map(|(path, info)| (MappedFont(path), info)));
         // Microsoft Office on macOS keeps Calibri, Cambria, Aptos, … inside its app
         // bundles instead of the system font folder. Using them (only when Office is
         // installed) makes text exactly as wide as in Word.
@@ -89,6 +90,12 @@ pub fn line_metrics(families: &[String]) -> (f32, f32) {
 /// Whether a font family is installed (or bundled with Office) on this computer
 pub fn has_font(family: &str) -> bool {
     fonts().book().select_family(&family.to_lowercase()).next().is_some()
+}
+
+/// Whether any installed font has a glyph for `c`
+pub fn covers(c: char) -> bool {
+    let book = fonts().book();
+    (0..).map_while(|i| book.info(i)).any(|info| info.coverage.contains(c as u32))
 }
 
 /// Natural width of `text` set in `family` (or `None` when that font is not installed),

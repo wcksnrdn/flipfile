@@ -1,5 +1,5 @@
-// Word / Excel -> PDF through an office app the user *already has*, for a result
-// identical to what that app prints: Microsoft Word or Excel (Windows) first, then
+// Word / Excel / PowerPoint -> PDF through an office app the user *already has*, for
+// a result identical to what that app prints: Microsoft Office (Windows) first, then
 // LibreOffice. When neither is installed, or either fails, flipfile's built-in engine
 // is used instead, so the user is never asked to install anything.
 //
@@ -20,6 +20,7 @@ const APP_TIMEOUT: Duration = Duration::from_secs(120);
 pub enum Engine {
     Word,
     Excel,
+    PowerPoint,
     LibreOffice,
     BuiltIn,
 }
@@ -153,6 +154,48 @@ fn excel(_input: &Path, _output: &Path) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Microsoft PowerPoint
+
+// macOS: not used, for the same reason as Word (PowerPoint for Mac is sandboxed).
+#[cfg(target_os = "macos")]
+fn powerpoint(_input: &Path, _output: &Path) -> Result<(), String> {
+    Err("not used on macOS (PowerPoint is sandboxed)".into())
+}
+
+#[cfg(windows)]
+fn powerpoint(input: &Path, output: &Path) -> Result<(), String> {
+    // PowerPoint cannot run hidden; opening without a window keeps it out of sight.
+    // Paths come in through environment variables, so no quoting can break the script.
+    const SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$app = New-Object -ComObject PowerPoint.Application
+try {
+    $app.DisplayAlerts = 1
+    $deck = $app.Presentations.Open($env:FLIPFILE_IN, -1, 0, 0)
+    $deck.SaveAs($env:FLIPFILE_OUT, 32)
+    $deck.Close()
+} finally {
+    if ($app.Presentations.Count -eq 0) { $app.Quit() }
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app)
+}
+"#;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut cmd = Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", SCRIPT])
+        .env("FLIPFILE_IN", input)
+        .env("FLIPFILE_OUT", output)
+        .creation_flags(CREATE_NO_WINDOW);
+    run_with_timeout(cmd, APP_TIMEOUT)?;
+    if valid_pdf(output) { Ok(()) } else { Err("PowerPoint produced no PDF".into()) }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn powerpoint(_input: &Path, _output: &Path) -> Result<(), String> {
+    Err("not available on Linux".into())
+}
+
+// ---------------------------------------------------------------------------
 // LibreOffice
 
 fn soffice() -> Option<PathBuf> {
@@ -181,6 +224,11 @@ fn file_url(path: &Path) -> String {
 }
 
 fn libreoffice(input: &Path, output: &Path) -> Result<(), String> {
+    libreoffice_to(input, output, "pdf")
+}
+
+/// Any document LibreOffice opens -> `ext` (pdf, pptx, …)
+fn libreoffice_to(input: &Path, output: &Path, ext: &str) -> Result<(), String> {
     let soffice = soffice().ok_or("not installed")?;
     let work = unique_temp_dir("lo")?;
     // A private profile: works even while the user has LibreOffice open
@@ -193,22 +241,31 @@ fn libreoffice(input: &Path, output: &Path) -> Result<(), String> {
         .arg("--nodefault")
         .arg(format!("-env:UserInstallation={profile_url}"))
         .arg("--convert-to")
-        .arg("pdf")
+        .arg(ext)
         .arg("--outdir")
         .arg(&work)
         .arg(input);
     let result = run_with_timeout(cmd, APP_TIMEOUT).and_then(|_| {
         let stem = input.file_stem().ok_or("bad file name")?;
         // Not `with_extension`: "report.v2.docx" must become "report.v2.pdf"
-        let produced = work.join(format!("{}.pdf", stem.to_string_lossy()));
-        if valid_pdf(&produced) {
+        let produced = work.join(format!("{}.{ext}", stem.to_string_lossy()));
+        let ok = if ext == "pdf" { valid_pdf(&produced) } else { fs::metadata(&produced).map(|m| m.len() > 100).unwrap_or(false) };
+        if ok {
             fs::copy(&produced, output).map(|_| ()).map_err(|e| e.to_string())
         } else {
-            Err("LibreOffice produced no PDF".into())
+            Err(format!("LibreOffice produced no {}", ext.to_uppercase()))
         }
     });
     let _ = fs::remove_dir_all(&work);
     result
+}
+
+/// An old presentation (.ppt, .odp) -> .pptx, through LibreOffice when it is installed
+pub fn presentation_to_pptx(input: &Path, output: &Path) -> Result<(), String> {
+    if cfg!(test) {
+        return Err("not in tests".into());
+    }
+    libreoffice_to(input, output, "pptx").map_err(|_| "old .ppt and .odp files can only be converted on a computer with PowerPoint or LibreOffice; open it and save it as .pptx first".to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +328,29 @@ pub fn sheet_to_pdf(input: &Path, output: &Path, kind: SheetKind) -> Result<Engi
     let bytes = fs::read(input).map_err(|e| format!("could not be read: {e}"))?;
     let name = input.file_name().and_then(|n| n.to_str()).unwrap_or("workbook");
     let pdf = super::sheet_to_pdf_builtin(&bytes, name, kind == SheetKind::Csv)?;
+    fs::write(output, pdf).map_err(|e| format!("Could not save: {e}"))?;
+    Ok(Engine::BuiltIn)
+}
+
+/// Presentation -> PDF file, with the best engine available on this computer.
+/// `legacy` (.ppt, .pps, .odp) needs PowerPoint or LibreOffice; .pptx always succeeds
+/// through the built-in engine when the apps are missing.
+pub fn presentation_to_pdf(input: &Path, output: &Path, legacy: bool) -> Result<Engine, String> {
+    if !cfg!(test) {
+        match powerpoint(input, output) {
+            Ok(()) => return Ok(Engine::PowerPoint),
+            Err(e) => eprintln!("[flipfile] PowerPoint -> PDF with Microsoft PowerPoint skipped: {e}"),
+        }
+        match libreoffice(input, output) {
+            Ok(()) => return Ok(Engine::LibreOffice),
+            Err(e) => eprintln!("[flipfile] PowerPoint -> PDF with LibreOffice skipped: {e}"),
+        }
+    }
+    if legacy {
+        return Err("old .ppt and .odp files can only be converted on a computer with PowerPoint or LibreOffice; open it and save it as .pptx first".into());
+    }
+    let bytes = fs::read(input).map_err(|e| format!("could not be read: {e}"))?;
+    let pdf = super::pptx_to_pdf_builtin(&bytes)?;
     fs::write(output, pdf).map_err(|e| format!("Could not save: {e}"))?;
     Ok(Engine::BuiltIn)
 }

@@ -18,7 +18,7 @@ const TARGETS: &[&str] = &[
     "jpg", "png", "webp", "avif", "tiff", "gif", "bmp", "ico", "icns", "tga", "exr", "hdr", "qoi", "ppm", "svg", "pdf",
     "heic", "clean", "rot-r", "rot-180", "flip-h", "grayscale", "square", "cmp-auto", "cmp-lossless", "cmp-100k",
     "docx", "xlsx", "csv", "tsv", "json", "yaml", "xml", "sql", "md-table", "md", "txt", "html", "rtf", "epub", "odt",
-    SAME_FORMAT,
+    "pptx", SAME_FORMAT,
 ];
 
 /// System engines, slow to start
@@ -96,6 +96,7 @@ fn hostile_inputs() -> Vec<(String, Vec<u8>)> {
     let ext_all = [
         "jpg", "png", "webp", "gif", "tiff", "bmp", "ico", "tga", "qoi", "exr", "hdr", "ppm", "avif", "heic", "pdf", "docx",
         "doc", "xlsx", "xls", "csv", "tsv", "json", "yaml", "xml", "md", "txt", "html", "rtf", "odt", "epub", "pptx",
+        "ppt", "odp",
     ];
     for (i, ext) in ext_all.iter().enumerate() {
         v.push((format!("empty.{ext}"), vec![]));
@@ -124,6 +125,7 @@ fn hostile_inputs() -> Vec<(String, Vec<u8>)> {
     v.push(("hollow.epub".into(), zip_bytes(&[("mimetype", b"application/epub+zip")])));
     v.push(("hollow.odt".into(), zip_bytes(&[("content.xml", b"<office:document-content/>")])));
     v.push(("hollow.pptx".into(), zip_bytes(&[("ppt/presentation.xml", b"<p:presentation/>")])));
+    v.extend(hostile_presentations());
     // Valid but odd data
     for (name, text) in [
         ("header-only.csv", "a,b,c\n"),
@@ -160,6 +162,87 @@ fn hostile_inputs() -> Vec<(String, Vec<u8>)> {
         v.push((name.into(), png_bytes(&img)));
     }
     v
+}
+
+/// A valid presentation with one part replaced
+fn deck_with(part: &str, body: &[u8]) -> Vec<u8> {
+    use crate::office::pptx_writer::{write, Deck, Item, NewSlide, Para, WIDE};
+    let text = Item::Text { x: 0, y: 0, w: 5_000_000, h: 1_000_000, paragraphs: vec![Para::new("Hello", 20.0)], anchor: "t", shrink: false };
+    let base = write(&Deck { width: WIDE.0, height: WIDE.1, title: "t".into(), slides: vec![NewSlide { background: None, items: vec![text] }] }).unwrap();
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(base)).unwrap();
+    let mut parts: Vec<(String, Vec<u8>)> = vec![];
+    for i in 0..zip.len() {
+        let mut file = zip.by_index(i).unwrap();
+        let mut data = vec![];
+        std::io::Read::read_to_end(&mut file, &mut data).unwrap();
+        let name = file.name().unwrap().to_string();
+        parts.push((name.clone(), if name == part { body.to_vec() } else { data }));
+    }
+    if !parts.iter().any(|(n, _)| n == part) {
+        parts.push((part.to_string(), body.to_vec()));
+    }
+    let entries: Vec<(&str, &[u8])> = parts.iter().map(|(n, d)| (n.as_str(), d.as_slice())).collect();
+    zip_bytes(&entries)
+}
+
+/// Presentations built to break a reader: deep nesting, impossible numbers, missing
+/// and looping parts, a part that unpacks to gigabytes
+fn hostile_presentations() -> Vec<(String, Vec<u8>)> {
+    const NS: &str = r#"xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main""#;
+    let slide = |shapes: &str| format!("<p:sld {NS}><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld></p:sld>").into_bytes();
+    let group = |inner: &str| format!("<p:grpSp><p:grpSpPr><a:xfrm rot=\"5400000\" flipH=\"1\"><a:off x=\"10\" y=\"10\"/><a:ext cx=\"100\" cy=\"100\"/><a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"0\" cy=\"0\"/></a:xfrm></p:grpSpPr>{inner}</p:grpSp>");
+    let mut deep = String::from("<p:sp><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"9\" cy=\"9\"/></a:xfrm></p:spPr><p:txBody><a:p><a:r><a:t>deep</a:t></a:r></a:p></p:txBody></p:sp>");
+    for _ in 0..3000 {
+        deep = group(&deep);
+    }
+    let alternate = format!("{}{}", "<mc:AlternateContent xmlns:mc=\"m\"><mc:Fallback>".repeat(3000), "</mc:Fallback></mc:AlternateContent>".repeat(3000));
+    let numbers = r#"<p:sp><p:spPr><a:xfrm rot="NaN" flipH="2"><a:off x="1e40" y="-inf"/><a:ext cx="99999999999999999999" cy="-5"/></a:xfrm>
+        <a:custGeom><a:gdLst><a:gd name="g" fmla="*/ w 0 0"/><a:gd name="h2" fmla="sqrt -1"/></a:gdLst><a:pathLst><a:path w="0" h="-1"><a:moveTo><a:pt x="g" y="h2"/></a:moveTo>
+        <a:arcTo wR="1e30" hR="0" stAng="NaN" swAng="1e30"/><a:cubicBezTo><a:pt x="1" y="1"/></a:cubicBezTo><a:close/></a:path></a:pathLst></a:custGeom>
+        <a:solidFill><a:srgbClr val="ZZZZZZ"><a:alpha val="-5"/><a:lumMod val="1e30"/></a:srgbClr></a:solidFill><a:ln w="-1e9"><a:headEnd type="triangle" w="huge"/></a:ln></p:spPr>
+        <p:txBody><a:bodyPr lIns="-99999999" anchor="?"><a:normAutofit fontScale="-100000" lnSpcReduction="900000"/></a:bodyPr>
+        <a:p><a:pPr lvl="99" marL="-1e12" indent="1e12"><a:lnSpc><a:spcPct val="0"/></a:lnSpc><a:buAutoNum type="romanUcPeriod" startAt="-7"/><a:buSzPts val="-3"/></a:pPr>
+        <a:r><a:rPr sz="0" spc="1e9" baseline="9999999" kern="-1"/><a:t>"]) #panic("injected") \</a:t></a:r><a:br/><a:fld type="slidenum"/></a:p></p:txBody></p:sp>
+        <p:graphicFrame><p:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></p:xfrm><a:graphic><a:graphicData><a:tbl><a:tblGrid><a:gridCol w="-5"/></a:tblGrid>
+        <a:tr h="1e40"><a:tc gridSpan="99999" rowSpan="-1"><a:txBody><a:p><a:r><a:t>cell</a:t></a:r></a:p></a:txBody></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#;
+    let missing_picture = r#"<p:pic><p:blipFill><a:blip r:embed="rId99"/></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm></p:spPr></p:pic>"#;
+    // Slide size as large as the format allows, and a size of zero
+    let presentation = |cx: &str| {
+        format!(r#"<p:presentation {NS}><p:sldIdLst><p:sldId id="256" r:id="rId6"/><p:sldId id="257" r:id="rId404"/></p:sldIdLst><p:sldSz cx="{cx}" cy="{cx}"/></p:presentation>"#).into_bytes()
+    };
+    let mut bomb = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    {
+        use std::io::Write;
+        let base = deck_with("ppt/slides/slide1.xml", &slide(""));
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(base)).unwrap();
+        for i in 0..zip.len() {
+            let mut file = zip.by_index(i).unwrap();
+            let name = file.name().unwrap().to_string();
+            bomb.start_file(&name, zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated)).unwrap();
+            if name == "ppt/slides/slide1.xml" {
+                // 1.5 GB of spaces in a few megabytes
+                let chunk = vec![b' '; 1 << 20];
+                bomb.write_all(b"<p:sld>").unwrap();
+                for _ in 0..1536 {
+                    bomb.write_all(&chunk).unwrap();
+                }
+            } else {
+                std::io::copy(&mut file, &mut bomb).unwrap();
+            }
+        }
+    }
+    vec![
+        ("deep-groups.pptx".into(), deck_with("ppt/slides/slide1.xml", &slide(&deep))),
+        ("deep-alternates.pptx".into(), deck_with("ppt/slides/slide1.xml", &slide(&alternate))),
+        ("impossible-numbers.pptx".into(), deck_with("ppt/slides/slide1.xml", &slide(numbers))),
+        ("missing-parts.pptx".into(), deck_with("ppt/slides/slide1.xml", &slide(missing_picture))),
+        ("no-layout.pptx".into(), deck_with("ppt/slides/_rels/slide1.xml.rels", b"<Relationships/>")),
+        ("garbage-theme.pptx".into(), deck_with("ppt/theme/theme1.xml", b"<a:theme><a:clrScheme><a:dk1><a:srgbClr val=\"")),
+        ("huge-slide.pptx".into(), deck_with("ppt/presentation.xml", &presentation("2147483647"))),
+        ("zero-slide.pptx".into(), deck_with("ppt/presentation.xml", &presentation("0"))),
+        ("bomb.pptx".into(), bomb.finish().unwrap().into_inner()),
+        ("fake-sig.ppt".into(), [&[0xD0, 0xCF, 0x11, 0xE0][..], &noise(800, 14)[..]].concat()),
+    ]
 }
 
 fn small_docx() -> Vec<u8> {
@@ -244,9 +327,9 @@ fn hostile_inputs_fail_cleanly() {
     // cover it; everything else is tried against every target
     let document = |p: &PathBuf| {
         let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
-        matches!(ext, "csv" | "tsv" | "json" | "yaml" | "xml" | "md" | "txt" | "html" | "rtf" | "odt" | "epub" | "pptx" | "docx" | "doc" | "xlsx" | "xls")
+        matches!(ext, "csv" | "tsv" | "json" | "yaml" | "xml" | "md" | "txt" | "html" | "rtf" | "odt" | "epub" | "pptx" | "ppt" | "odp" | "docx" | "doc" | "xlsx" | "xls")
     };
-    let image_target = |f: &str| !matches!(f, "docx" | "xlsx" | "csv" | "tsv" | "json" | "yaml" | "xml" | "sql" | "md-table" | "md" | "txt" | "html" | "rtf" | "epub" | "odt");
+    let image_target = |f: &str| !matches!(f, "docx" | "xlsx" | "csv" | "tsv" | "json" | "yaml" | "xml" | "sql" | "md-table" | "md" | "txt" | "html" | "rtf" | "epub" | "odt" | "pptx");
     let jobs: Vec<(PathBuf, &'static str)> = inputs
         .iter()
         .flat_map(|input| TARGETS.iter().map(move |&f| (input.clone(), f)))

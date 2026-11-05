@@ -3,9 +3,14 @@
 pub mod apps;
 pub mod docx;
 pub mod from_pdf;
+pub mod handout;
 pub mod numfmt;
+pub mod pptx;
+pub mod pptx_writer;
 pub mod ocr;
+pub mod shapes;
 pub mod sheet_pdf;
+pub mod slides_pdf;
 mod pdf_docx_writer;
 pub mod to_typst;
 pub mod typeset;
@@ -22,6 +27,71 @@ pub fn docx_to_pdf_builtin(docx_bytes: &[u8]) -> Result<Vec<u8>, String> {
     let document = docx::read(docx_bytes)?;
     let generated = to_typst::generate(&document);
     typeset::to_pdf(generated.markup, generated.files).map_err(|e| format!("the document could not be laid out ({e})"))
+}
+
+/// PowerPoint -> PDF with flipfile's built-in engine (PPTX reader + Typst layout).
+pub fn pptx_to_pdf_builtin(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let deck = pptx::read(bytes)?;
+    slides_pdf::to_pdf(&deck)
+}
+
+/// Deeper than any real document nests its elements (Office parts stay under ~30)
+const MAX_XML_DEPTH: usize = 256;
+
+/// Whether `xml` nests elements deeper than [`MAX_XML_DEPTH`]. roxmltree's tokenizer
+/// recurses once per open element, so a part nested thousands deep overflows the stack,
+/// an abort no `catch_unwind` can stop, before any limit of our own is reached. A quick
+/// scan of the bytes refuses such a part before it is parsed.
+pub(crate) fn xml_too_deep(xml: &str) -> bool {
+    let bytes = xml.as_bytes();
+    let find = |from: usize, needle: &[u8]| {
+        bytes.get(from..).and_then(|rest| rest.windows(needle.len()).position(|w| w == needle)).map(|p| from + p + needle.len())
+    };
+    let mut depth = 0usize;
+    let mut i = 0;
+    while let Some(p) = bytes.get(i..).and_then(|rest| rest.iter().position(|&b| b == b'<')) {
+        i += p + 1;
+        // Comments, CDATA and declarations may hold '<' that opens nothing
+        let skip_to = match bytes.get(i) {
+            Some(b'?') => find(i, b"?>"),
+            Some(b'!') if bytes[i..].starts_with(b"!--") => find(i, b"-->"),
+            Some(b'!') if bytes[i..].starts_with(b"![CDATA[") => find(i, b"]]>"),
+            Some(b'!') => find(i, b">"),
+            Some(b'/') => {
+                depth = depth.saturating_sub(1);
+                find(i, b">")
+            }
+            _ => {
+                // An opening tag: to its '>', past quoted values (which may hold '>' or "/>")
+                let mut quote = None;
+                let mut end = None;
+                for (k, &b) in bytes[i..].iter().enumerate() {
+                    match (quote, b) {
+                        (Some(q), _) if b == q => quote = None,
+                        (Some(_), _) => {}
+                        (None, b'"' | b'\'') => quote = Some(b),
+                        (None, b'>') => {
+                            end = Some(i + k);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                if end.is_some_and(|e| bytes[e - 1] != b'/') {
+                    depth += 1;
+                    if depth > MAX_XML_DEPTH {
+                        return true;
+                    }
+                }
+                end.map(|e| e + 1)
+            }
+        };
+        match skip_to {
+            Some(next) => i = next,
+            None => break,
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -369,5 +439,16 @@ mod tests {
             img.save(out.join(format!("{prefix}{}.png", i + 1))).unwrap();
         }
         println!("pages: {}", doc.pages().len());
+    }
+
+    #[test]
+    fn deeply_nested_xml_is_refused_before_parsing() {
+        let nest = |n: usize, open: &str, close: &str| format!("<?xml version=\"1.0\"?><r>{}{}</r>", open.repeat(n), close.repeat(n));
+        assert!(!xml_too_deep(&nest(200, "<a x=\"1\">", "</a>")));
+        assert!(xml_too_deep(&nest(3000, "<p:grpSp>", "</p:grpSp>")));
+        // Empty elements, comments and CDATA open nothing
+        assert!(!xml_too_deep(&nest(3000, "<a/><!-- <b> --><![CDATA[<c>]]>", "")));
+        // A quoted "/>" or ">" does not end the tag early
+        assert!(xml_too_deep(&nest(3000, "<a v=\"/>\" w='>'>", "</a>")));
     }
 }

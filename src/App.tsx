@@ -61,7 +61,7 @@ type BatchResult = {
 
 // Office documents, data tables, and audio/video files convert one by one; only images merge into one PDF
 const OFFICE_FILE =
-  /\.(docx|docm|dotx|dotm|doc|dot|xlsx|xlsm|xltx|xltm|xls|xlt|ods|csv|tsv|tab|json|yaml|yml|xml|odt|rtf|md|markdown|txt|text|log|html|htm|epub|pptx|ppt|odp|mp3|wav|wave|m4a|flac|ogg|oga|aif|aiff|opus|aac|caf|wma|mp4|m4v|mov|webm|mkv|avi|flv|wmv|mpg|mpeg|ts|mts|3gp)$/i;
+  /\.(docx|docm|dotx|dotm|doc|dot|xlsx|xlsm|xltx|xltm|xls|xlt|ods|csv|tsv|tab|json|yaml|yml|xml|odt|rtf|md|markdown|txt|text|log|html|htm|epub|pptx|pptm|ppsx|ppsm|potx|potm|ppt|pps|pot|odp|mp3|wav|wave|m4a|flac|ogg|oga|aif|aiff|opus|aac|caf|wma|mp4|m4v|mov|webm|mkv|avi|flv|wmv|mpg|mpeg|ts|mts|3gp)$/i;
 
 // Dropping on a size preset keeps each file's own format (see SAME_FORMAT in convert.rs)
 const SAME_FORMAT = "same";
@@ -492,6 +492,8 @@ export default function App() {
     const { outputs, errors, pages, bytes_before, bytes_after, note } = result;
     const merged = format === "pdf" && many && outputs.length === 1;
     const mergedGif = format === "gif-anim" && outputs.length === 1;
+    const mergedSlides =
+      format === "pptx" && many && outputs.length === 1 && paths.every((p) => !OFFICE_FILE.test(p) && !/\.pdf$/i.test(p));
     // Resizing/compressing in place: the size change is what the user wants to see
     const sizes =
       (same || preset === "compress" || format.startsWith("cmp-") || format === "vid-compress") &&
@@ -502,6 +504,8 @@ export default function App() {
       ? `${plural(paths.length - errors.length, "image")} → 1 PDF${presetLabel}`
       : mergedGif
       ? `${plural(paths.length - errors.length, "image")} → GIF${presetLabel}`
+      : mergedSlides
+      ? `${plural(paths.length - errors.length, "image")} → 1 presentation`
       : pages > 0 // PDF pages rendered to images (multi-page PDFs give a folder each)
         ? `${plural(pages, "page")} → ${label}`
         : `${plural(outputs.length, "file")} → ${label}`;
@@ -813,6 +817,10 @@ export default function App() {
             ? `${verb} to pad to 1:1 square`
           : hovered === "gif-anim"
             ? `${verb} to combine into animated GIF`
+          : hovered === "pptx" && fileCount > 1 && mergeable
+            ? `${verb} to combine into 1 presentation`
+          : hovered === "pptx"
+            ? `${verb} to make PowerPoint slides`
           : hovered === "ico"
             ? `${verb} for multi-size .ico`
           : hovered === "icns"

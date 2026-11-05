@@ -818,7 +818,9 @@ impl Package {
     }
 
     fn text(&self, name: &str) -> Option<String> {
-        self.files.get(name).map(|b| String::from_utf8_lossy(b).into_owned())
+        let text = self.files.get(name).map(|b| String::from_utf8_lossy(b).into_owned())?;
+        // Nested too deep to parse safely: as good as missing
+        (!super::xml_too_deep(&text)).then_some(text)
     }
 }
 
@@ -1606,10 +1608,13 @@ fn field_name(instr: &str) -> String {
 }
 
 /// Bullets are often stored as private-use characters of the Symbol/Wingdings fonts.
-fn bullet_char(text: &str, font: Option<&str>) -> String {
+pub(crate) fn bullet_char(text: &str, font: Option<&str>) -> String {
     let font = font.unwrap_or("").to_lowercase();
     let ch = text.chars().next().unwrap_or('•');
     let mapped = match (ch as u32, font.as_str()) {
+        (0xF075 | 0x75, "wingdings 3") => '►',
+        (0xF07D | 0x7D, "wingdings 3") => '▸',
+        (0xF0D8 | 0xD8, "wingdings 3") => '➢',
         (0xF0B7, _) | (0xB7, "symbol") => '•',
         (0xF0A7, _) | (0xA7, "wingdings") => '▪',
         (0xF0D8, _) | (0xD8, "wingdings") => '➢',
@@ -1617,6 +1622,9 @@ fn bullet_char(text: &str, font: Option<&str>) -> String {
         (0xF076, _) | (0x76, "wingdings") => '❖',
         (0xF06E, _) | (0x6E, "wingdings") => '■',
         (0xF0A8, _) => '◆',
+        (0xF06C, _) | (0x6C, "wingdings") => '●',
+        (0xF071, _) | (0x71, "wingdings") => '❑',
+        (0xF0E0, _) | (0xE0, "wingdings") => '➔',
         (_, "courier new") if ch == 'o' => '◦',
         (c, _) if (0xF000..=0xF0FF).contains(&c) => '•',
         _ => ch,

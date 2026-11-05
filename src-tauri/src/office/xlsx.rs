@@ -215,7 +215,9 @@ impl Package {
         Some(out)
     }
     fn text(&mut self, path: &str) -> Option<String> {
-        String::from_utf8(self.read(path)?).ok()
+        let text = String::from_utf8(self.read(path)?).ok()?;
+        // Nested too deep to parse safely: as good as missing
+        (!super::xml_too_deep(&text)).then_some(text)
     }
     /// Relationships of a part: (id, type, resolved target path), internal ones only
     fn rels_list(&mut self, part: &str) -> Vec<(String, String, String)> {

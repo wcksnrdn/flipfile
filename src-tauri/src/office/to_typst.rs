@@ -51,7 +51,7 @@ pub struct Output {
 }
 
 /// Escaped Typst string literal.
-fn q(s: &str) -> String {
+pub(crate) fn q(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for c in s.chars() {
@@ -67,7 +67,7 @@ fn q(s: &str) -> String {
     out
 }
 
-fn pt(v: f32) -> String {
+pub(crate) fn pt(v: f32) -> String {
     let v = if v.is_finite() { v } else { 0.0 };
     format!("{:.2}pt", v)
 }

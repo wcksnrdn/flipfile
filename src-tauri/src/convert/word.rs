@@ -29,7 +29,7 @@ pub(super) fn from_word(
             let engine = office::apps::word_to_pdf(input, &output, legacy).map_err(|e| format!("\"{name}\": {e}"))?;
             // Shown in the status, so it is clear which engine produced the PDF
             let note = match engine {
-                office::apps::Engine::Word | office::apps::Engine::Excel => "via Word",
+                office::apps::Engine::Word | office::apps::Engine::Excel | office::apps::Engine::PowerPoint => "via Word",
                 office::apps::Engine::LibreOffice => "via LibreOffice",
                 office::apps::Engine::BuiltIn => "built-in engine",
             };

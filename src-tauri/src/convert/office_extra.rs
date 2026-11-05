@@ -72,11 +72,11 @@ pub(super) fn is_extra_office_input(path: &Path) -> bool {
     )
 }
 
-fn ext_lower(path: &Path) -> String {
+pub(super) fn ext_lower(path: &Path) -> String {
     path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default()
 }
 
-fn is_tabular_ext(ext: &str) -> bool {
+pub(super) fn is_tabular_ext(ext: &str) -> bool {
     matches!(
         ext,
         "xlsx" | "xlsm" | "xltx" | "xltm" | "xls" | "ods" | "csv" | "tsv" | "tab" | "json" | "yaml" | "yml" | "xml"
@@ -218,7 +218,7 @@ fn render_pdf_bytes_to_images(
 // ---------------------------------------------------------------------------
 // Reading Tables (XLSX, CSV, TSV, JSON, YAML, XML, DOCX tables, PDF tables)
 
-fn read_any_tables(input: &Path) -> Result<Vec<TableSheet>, String> {
+pub(super) fn read_any_tables(input: &Path) -> Result<Vec<TableSheet>, String> {
     let name = file_name(input);
     let ext = ext_lower(input);
     let bytes = fs::read(input).map_err(|e| format!("\"{name}\" could not be read: {e}"))?;
@@ -444,6 +444,9 @@ fn parse_yaml_tables(bytes: &[u8], default_name: &str) -> Result<Vec<TableSheet>
 
 fn parse_xml_tables(bytes: &[u8], default_name: &str) -> Result<Vec<TableSheet>, String> {
     let text = String::from_utf8_lossy(bytes);
+    if crate::office::xml_too_deep(&text) {
+        return Err("Invalid XML: nested too deeply".into());
+    }
     let doc = roxmltree::Document::parse(&text).map_err(|e| format!("Invalid XML: {e}"))?;
     let root = doc.root_element();
 
@@ -1011,7 +1014,7 @@ fn sheets_to_workbook(sheets: &[TableSheet]) -> Workbook {
 // ---------------------------------------------------------------------------
 // Reading Documents (PDF, DOCX, MD, TXT, HTML, RTF, ODT, EPUB, PPTX/ODP, Tables)
 
-fn read_any_blocks(input: &Path) -> Result<Vec<DocBlock>, String> {
+pub(super) fn read_any_blocks(input: &Path) -> Result<Vec<DocBlock>, String> {
     let name = file_name(input);
     let ext = ext_lower(input);
     let bytes = fs::read(input).map_err(|e| format!("\"{name}\" could not be read: {e}"))?;
@@ -1235,7 +1238,10 @@ fn parse_markdown_blocks(md: &str) -> Vec<DocBlock> {
 
         if let Some(item) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")).or_else(|| trimmed.strip_prefix("+ ")) {
             flush_para(&mut para_buf, &mut blocks);
-            blocks.push(DocBlock::ListItem(clean_md_inline(item.trim())));
+            // Nested items keep their depth: two leading spaces a level
+            let indent = line.len() - line.trim_start().len();
+            let depth = line[..indent].chars().map(|c| if c == '\t' { 4 } else { 1 }).sum::<usize>() / 2;
+            blocks.push(DocBlock::ListItem(format!("{}{}", "  ".repeat(depth.min(4)), clean_md_inline(item.trim()))));
             continue;
         }
 
@@ -1281,7 +1287,9 @@ fn parse_text_blocks(txt: &str) -> Vec<DocBlock> {
 fn parse_html_blocks(html: &str) -> Vec<DocBlock> {
     // Lightweight tag-aware parser that works on both strict XHTML and loose HTML5
     let mut blocks = Vec::new();
-    if let Ok(doc) = roxmltree::Document::parse(html) {
+    // Markup nested too deep for the XML parser goes straight to the flat fallback below
+    let parsed = if crate::office::xml_too_deep(html) { None } else { roxmltree::Document::parse(html).ok() };
+    if let Some(doc) = parsed {
         collect_xml_html_nodes(doc.root(), &mut blocks);
         if !blocks.is_empty() {
             return blocks;
@@ -1455,6 +1463,9 @@ fn read_odt_blocks(bytes: &[u8]) -> Result<Vec<DocBlock>, String> {
         .map_err(|_| "Missing content.xml in .odt")?
         .read_to_string(&mut xml)
         .map_err(|e| e.to_string())?;
+    if crate::office::xml_too_deep(&xml) {
+        return Err("the document is nested too deeply to read".into());
+    }
     let doc = roxmltree::Document::parse(&xml).map_err(|e| e.to_string())?;
     let mut blocks = Vec::new();
     for node in doc.descendants().filter(|n| n.is_element()) {
@@ -1526,46 +1537,13 @@ fn read_presentation_blocks(bytes: &[u8], ext: &str) -> Result<Vec<DocBlock>, St
     if ext == "odp" {
         return read_odt_blocks(bytes);
     }
-    let mut zip = ZipArchive::new(Cursor::new(bytes)).map_err(|_| "Could not open .pptx archive")?;
-    let mut slides: Vec<(usize, String)> = zip
-        .file_names()
-        .filter_map(|r| r.ok().map(String::from))
-        .filter_map(|name| {
-            let num = name.strip_prefix("ppt/slides/slide")?.strip_suffix(".xml")?.parse::<usize>().ok()?;
-            Some((num, name))
-        })
-        .collect();
-    slides.sort_by_key(|(n, _)| *n);
-
+    let deck = crate::office::pptx::read(bytes)?;
     let mut blocks = Vec::new();
-    for (num, path) in slides {
-        if num > 1 {
+    for (i, slide) in crate::office::slides_pdf::shown(&deck).into_iter().enumerate() {
+        if i > 0 {
             blocks.push(DocBlock::PageBreak);
         }
-        let mut xml = String::new();
-        if let Ok(mut f) = zip.by_name(&path) {
-            let _ = f.read_to_string(&mut xml);
-        }
-        if let Ok(doc) = roxmltree::Document::parse(&xml) {
-            let mut first = true;
-            for p in doc.descendants().filter(|n| n.tag_name().name() == "p") {
-                let text: String = p
-                    .descendants()
-                    .filter(|n| n.tag_name().name() == "t")
-                    .filter_map(|n| n.text())
-                    .collect::<Vec<_>>()
-                    .join("");
-                let trimmed = text.trim();
-                if !trimmed.is_empty() {
-                    if first {
-                        blocks.push(DocBlock::Heading(2, trimmed.to_string()));
-                        first = false;
-                    } else {
-                        blocks.push(DocBlock::ListItem(trimmed.to_string()));
-                    }
-                }
-            }
-        }
+        blocks.extend(slide_blocks(slide, i + 1));
     }
     if blocks.is_empty() {
         return Err("No slide text found in presentation".into());
@@ -1573,8 +1551,81 @@ fn read_presentation_blocks(bytes: &[u8], ext: &str) -> Result<Vec<DocBlock>, St
     Ok(blocks)
 }
 
+/// A slide as an outline: its title, then its text in reading order (top to bottom,
+/// left to right) with bullet levels, its tables, and the speaker's notes
+pub(super) fn slide_blocks(slide: &crate::office::pptx::Slide, number: usize) -> Vec<DocBlock> {
+    use crate::office::pptx::Element;
+    let title = slide.title.replace('\n', " ");
+    let mut blocks = vec![DocBlock::Heading(2, if title.trim().is_empty() { format!("Slide {number}") } else { title.clone() })];
+    let mut elements: Vec<&Element> = slide.elements.iter().collect();
+    let top_left = |e: &Element| match e {
+        Element::Shape { frame, .. } | Element::Picture { frame, .. } | Element::Table { frame, .. } => (frame.y, frame.x),
+    };
+    elements.sort_by(|a, b| {
+        let (ay, ax) = top_left(a);
+        let (by, bx) = top_left(b);
+        // Side by side when their tops are within a few points
+        if (ay - by).abs() < 6.0 { ax.total_cmp(&bx) } else { ay.total_cmp(&by) }
+    });
+    let mut title_skipped = false;
+    for element in elements {
+        match element {
+            Element::Shape { text: Some(text), placeholder, .. } => {
+                if matches!(placeholder.as_deref(), Some("dt" | "ftr" | "sldNum" | "hdr")) {
+                    continue;
+                }
+                let is_title = matches!(placeholder.as_deref(), Some("title" | "ctrTitle"));
+                if is_title && !title_skipped {
+                    title_skipped = true;
+                    continue;
+                }
+                for p in &text.paragraphs {
+                    let line: String = p.runs.iter().map(|r| if r.line_break { "\n" } else { r.text.as_str() }).collect();
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
+                    }
+                    if p.bullet.is_some() {
+                        // Nested bullets keep their depth as indentation
+                        let depth = ((p.margin_left / 28.0).round() as usize).saturating_sub(1).min(4);
+                        blocks.push(DocBlock::ListItem(format!("{}{line}", "  ".repeat(depth))));
+                    } else {
+                        blocks.push(DocBlock::Paragraph(line.to_string()));
+                    }
+                }
+            }
+            Element::Table { rows, .. } => {
+                let table: Vec<Vec<String>> = rows
+                    .iter()
+                    .map(|r| {
+                        r.cells
+                            .iter()
+                            .filter(|c| !c.merged)
+                            .map(|c| c.text.paragraphs.iter().map(|p| p.runs.iter().map(|r| r.text.as_str()).collect::<String>()).collect::<Vec<_>>().join(" ").trim().to_string())
+                            .collect()
+                    })
+                    .collect();
+                if table.iter().any(|r| r.iter().any(|c| !c.is_empty())) {
+                    blocks.push(DocBlock::Table(table));
+                }
+            }
+            _ => {}
+        }
+    }
+    let notes = slide.notes.trim();
+    if !notes.is_empty() {
+        blocks.push(DocBlock::Paragraph(format!("Notes: {}", notes.replace('\n', " "))));
+    }
+    blocks
+}
+
 // ---------------------------------------------------------------------------
 // Writing Documents (MD, TXT, HTML, RTF, EPUB, ODT, DOCX, PDF)
+
+/// How deeply a list item is nested: two leading spaces a level
+fn list_depth(item: &str) -> usize {
+    (item.len() - item.trim_start().len()) / 2
+}
 
 fn blocks_to_markdown(blocks: &[DocBlock]) -> String {
     let mut out = String::new();
@@ -1585,7 +1636,8 @@ fn blocks_to_markdown(blocks: &[DocBlock]) -> String {
                 out.push_str(&format!("{hashes} {t}\n\n"));
             }
             DocBlock::Paragraph(t) => out.push_str(&format!("{t}\n\n")),
-            DocBlock::ListItem(t) => out.push_str(&format!("- {t}\n")),
+            // Leading spaces: a nested item (two per level)
+            DocBlock::ListItem(t) => out.push_str(&format!("{}- {}\n", &t[..t.len() - t.trim_start().len()], t.trim_start())),
             DocBlock::CodeBlock(c) => out.push_str(&format!("```\n{c}\n```\n\n")),
             DocBlock::Table(rows) => {
                 out.push_str(&rows_to_md_table(rows));
@@ -1603,7 +1655,7 @@ fn blocks_to_text(blocks: &[DocBlock]) -> String {
         match b {
             DocBlock::Heading(_, t) => out.push_str(&format!("{}\n{}\n\n", t, "=".repeat(t.chars().count().min(60)))),
             DocBlock::Paragraph(t) => out.push_str(&format!("{t}\n\n")),
-            DocBlock::ListItem(t) => out.push_str(&format!("  * {t}\n")),
+            DocBlock::ListItem(t) => out.push_str(&format!("{}  * {}\n", &t[..t.len() - t.trim_start().len()], t.trim_start())),
             DocBlock::CodeBlock(c) => out.push_str(&format!("{c}\n\n")),
             DocBlock::Table(rows) => {
                 for r in rows {
@@ -1627,7 +1679,7 @@ fn blocks_to_html(blocks: &[DocBlock], title: &str) -> String {
                 body.push_str(&format!("  <h{l}>{}</h{l}>\n", xml_escape(t)));
             }
             DocBlock::Paragraph(t) => body.push_str(&format!("  <p>{}</p>\n", xml_escape(t))),
-            DocBlock::ListItem(t) => body.push_str(&format!("  <ul><li>{}</li></ul>\n", xml_escape(t))),
+            DocBlock::ListItem(t) => body.push_str(&format!("  <ul style=\"margin-left:{}em\"><li>{}</li></ul>\n", list_depth(t) * 2, xml_escape(t.trim_start()))),
             DocBlock::CodeBlock(c) => body.push_str(&format!("  <pre><code>{}</code></pre>\n", xml_escape(c))),
             DocBlock::Table(rows) => {
                 body.push_str("  <table>\n");
@@ -1681,7 +1733,7 @@ fn blocks_to_rtf(blocks: &[DocBlock]) -> String {
                 out.push_str(&format!("\\pard\\sa160\\b\\fs{sz} {}\\b0\\fs22\\par\n", rtf_escape(t)));
             }
             DocBlock::Paragraph(t) => out.push_str(&format!("\\pard\\sa140 {}\\par\n", rtf_escape(t))),
-            DocBlock::ListItem(t) => out.push_str(&format!("\\pard\\li360\\sa80 \\u8226? {}\\par\n", rtf_escape(t))),
+            DocBlock::ListItem(t) => out.push_str(&format!("\\pard\\li{}\\sa80 \\u8226? {}\\par\n", 360 * (list_depth(t) + 1), rtf_escape(t.trim_start()))),
             DocBlock::CodeBlock(c) => out.push_str(&format!("\\pard\\sa140 {}\\par\n", rtf_escape(c))),
             DocBlock::Table(rows) => {
                 for r in rows {
@@ -1782,7 +1834,7 @@ fn blocks_to_epub(blocks: &[DocBlock], title: &str) -> Result<Vec<u8>, String> {
                 chapter.push_str(&format!("  <h{l}>{}</h{l}>\n", xml_escape(t)));
             }
             DocBlock::Paragraph(t) => chapter.push_str(&format!("  <p>{}</p>\n", xml_escape(t))),
-            DocBlock::ListItem(t) => chapter.push_str(&format!("  <ul><li>{}</li></ul>\n", xml_escape(t))),
+            DocBlock::ListItem(t) => chapter.push_str(&format!("  <ul style=\"margin-left:{}em\"><li>{}</li></ul>\n", list_depth(t) * 2, xml_escape(t.trim_start()))),
             DocBlock::CodeBlock(c) => chapter.push_str(&format!("  <pre>{}</pre>\n", xml_escape(c))),
             DocBlock::Table(rows) => {
                 chapter.push_str("  <table>\n");
@@ -1845,7 +1897,7 @@ fn blocks_to_odt(blocks: &[DocBlock], _title: &str) -> Result<Vec<u8>, String> {
                 content.push_str(&format!("      <text:p>{}</text:p>\n", xml_escape(t)));
             }
             DocBlock::ListItem(t) => {
-                content.push_str(&format!("      <text:p>• {}</text:p>\n", xml_escape(t)));
+                content.push_str(&format!("      <text:p>{}• {}</text:p>\n", "<text:tab/>".repeat(list_depth(t)), xml_escape(t.trim_start())));
             }
             DocBlock::Table(rows) => {
                 content.push_str("      <table:table>\n");
@@ -1924,8 +1976,9 @@ fn blocks_to_docx(blocks: &[DocBlock]) -> Result<Vec<u8>, String> {
             }
             DocBlock::ListItem(t) => {
                 doc_xml.push_str(&format!(
-                    "    <w:p><w:r><w:t xml:space=\"preserve\">• {}</w:t></w:r></w:p>\n",
-                    xml_escape(t)
+                    "    <w:p><w:pPr><w:ind w:left=\"{}\" w:hanging=\"360\"/></w:pPr><w:r><w:t xml:space=\"preserve\">•\t{}</w:t></w:r></w:p>\n",
+                    360 * (list_depth(t) + 1),
+                    xml_escape(t.trim_start())
                 ));
             }
             DocBlock::Table(rows) => {
@@ -1973,7 +2026,7 @@ fn blocks_to_pdf(blocks: &[DocBlock]) -> Result<Vec<u8>, String> {
                 markup.push_str(&format!("#{:?}\n\n", t));
             }
             DocBlock::ListItem(t) => {
-                markup.push_str(&format!("- #{:?}\n", t));
+                markup.push_str(&format!("{}- #{:?}\n", "  ".repeat(list_depth(t)), t.trim_start()));
             }
             DocBlock::CodeBlock(c) => {
                 markup.push_str(&format!("#raw(block: true, {:?})\n\n", c));

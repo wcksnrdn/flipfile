@@ -5,6 +5,7 @@
 // - encode: resizing and writing every image format
 // - pdf:    PDF -> images, images -> one merged PDF
 // - word:   Word and Excel -> PDF/images, OCR -> Word
+// - slides: PowerPoint -> PDF/images/Word/outline, anything -> PowerPoint
 // - clean:  lossless metadata removal (with strip)
 // - tools:  background removal, transforms, square pad, target-size compress, animated GIF
 // - output: unique output paths
@@ -20,6 +21,7 @@ mod memory;
 mod office_extra;
 mod output;
 mod pdf;
+mod slides;
 #[cfg(test)]
 mod stress;
 mod strip;
@@ -143,7 +145,7 @@ pub fn warm_up(paths: &[std::path::PathBuf]) {
     let paths = paths.to_vec();
     let _ = std::thread::Builder::new().name("warm-up".into()).spawn(move || {
         let documents = paths.iter().any(|p| {
-            word_kind(p).is_some() || sheet_kind(p).is_some() || is_extra_office_input(p) || pdf_render::is_pdf(&header(p))
+            word_kind(p).is_some() || sheet_kind(p).is_some() || slides::slides_kind(p).is_some() || is_extra_office_input(p) || pdf_render::is_pdf(&header(p))
         });
         if documents {
             office::typeset::has_font("");
@@ -180,6 +182,9 @@ fn run_batch(
     }
     if format == "gif-anim" && all_images {
         return merge_to_gif(paths, on_progress, out_dir, options);
+    }
+    if format == "pptx" && paths.len() > 1 && all_images && !paths.iter().any(|p| pdf_render::is_pdf(&header(Path::new(p)))) {
+        return slides::merge_to_pptx(paths, on_progress, out_dir, options);
     }
     // A single PDF can take a while: report its pages instead of the one file.
     let single = paths.len() == 1;
@@ -277,6 +282,12 @@ fn convert(
     let name = file_name(input);
     if is_media_target(format) {
         return convert_media(input, format, out_dir);
+    }
+    if let Some(legacy) = slides::slides_kind(input) {
+        return slides::from_slides(input, legacy, format, out_dir, options, on_page);
+    }
+    if format == "pptx" {
+        return slides::to_pptx(input, out_dir, options, on_page);
     }
     if is_office_target(format) {
         return convert_office(input, format, out_dir, options, on_page);

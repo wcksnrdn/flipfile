@@ -7,7 +7,7 @@
 **Drop a file. Point to a format. Done.**
 
 A tiny file converter that lives on your desktop.<br>
-Photos, PDFs, Word, Excel and scans, converted right on your computer.<br>
+Photos, PDFs, Word, Excel, PowerPoint and scans, converted right on your computer.<br>
 No uploads. No accounts. No waiting.
 
 [![Download](https://img.shields.io/github/v/release/wcksnrdn/flipfile?label=download&color=1d1d1f&style=for-the-badge)](https://github.com/wcksnrdn/flipfile/releases/latest)
@@ -34,7 +34,7 @@ No uploads. No accounts. No waiting.
 
 | **Private by design** | **Instant** | **Does the boring stuff** |
 |---|---|---|
-| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone HEIC ⇄ JPG/PNG/WEBP, remove background, compress to exact KB/MB, PDF ⇄ Word, Excel → PDF, scans → editable text, multi-size ICO/ICNS, animated GIF. |
+| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone HEIC ⇄ JPG/PNG/WEBP, remove background, compress to exact KB/MB, PDF ⇄ Word, Excel → PDF, PowerPoint ⇄ PDF/Word/images, scans → editable text, multi-size ICO/ICNS, animated GIF. |
 
 <br>
 
@@ -146,10 +146,12 @@ flipfile isn't notarized by Apple or code-signed for Windows yet, so the first l
 | **Category Lobby** | **Photo** · **Office** · **Video** *(soon)* · **Music** *(soon)* |
 | **Photo** | JPG · PNG · WEBP · HEIC *(macOS)* · PDF · **Formats •••** · **Tools ✦** · **Back ‹** |
 | **Photo → Formats** | JPEG · AVIF · TIFF · GIF · BMP · ICO *(multi-size)* · ICNS *(macOS)* · **Back ‹** |
-| **Photo → Tools** | **Compress** · **Remove BG** *(macOS)* · **Transform** · **Square 1:1** · **GIF anim** · **Clean EXIF** · **Back ‹** |
+| **Photo → Tools** | **Compress** · **Remove BG** *(macOS)* · **Transform** · **Square 1:1** · **GIF anim** · **Slides** · **Clean EXIF** · **Back ‹** |
 | **Photo → Compress** | Auto · **1 MB** max · **500 KB** max · **200 KB** max · **100 KB** max · **Lossless** · **Back ‹** |
 | **Photo → Transform** | Rotate 90° › · Rotate ‹ 90° · Rotate 180° · Flip horiz · Flip vert · B&W gray · **Back ‹** |
-| **Office** | PDF · WORD · **WORD OCR** · **Back ‹** |
+| **Office** | PDF · WORD · **WORD OCR** · EXCEL · **SLIDES** · CSV · **Docs •••** · **Data •••** · **Back ‹** |
+| **Office → Docs** | MD · TXT · HTML · RTF · EPUB · ODT · **Back ‹** |
+| **Office → Data** | JSON · TSV · YAML · XML · SQL · MD *(table)* · **Back ‹** |
 
 Also handy: **⌘V / Ctrl+V** pastes an image or copied files, **⌘⇧K / Ctrl+Shift+K** shows or hides flipfile from anywhere, and the menu bar / tray icon keeps your recent conversions with **Undo**.
 
@@ -210,6 +212,25 @@ The built-in engine prints what Excel would print:
 - **CSV** files print as a table with gridlines and a bold header row; `,` `;` tab and `|` separators are detected, and codes with leading zeros stay as written.
 
 Charts, shapes and conditional formatting are not drawn by the built-in engine yet.
+
+</details>
+
+<details>
+<summary><b>PowerPoint ↔ PDF, Word, images, documents and tables</b></summary>
+
+- **PowerPoint → PDF / images**: drop a `.pptx` (or `.ppsx`, `.potx`, `.pptm`) on **PDF** or on any image format (one image per slide). Microsoft PowerPoint or LibreOffice are used when installed; otherwise flipfile's built-in engine renders the deck itself, so nothing has to be installed:
+  - **Slide → layout → master → theme** inheritance, theme colours with linear-RGB tint/shade modifiers, background fills and style references (`fmtScheme`).
+  - **Shapes and diagrams**: ~70 DrawingML preset geometries and custom geometry paths with fills, gradients, picture fills clipped to any shape, strokes, dashes and arrowheads, nested groups with rotation and flips, and cached SmartArt drawings (`diagramDrawing`).
+  - **Text and tables**: master `txStyles` and presentation `defaultTextStyle`, bullets and numbered lists, `normAutofit` font scaling, kerning and character spacing, and styled tables. Hidden slides are skipped.
+- **PowerPoint → Word handout**: drop a presentation on **WORD** for a printable A4 `.docx` handout with each slide's picture, title and speaker notes (two slides per page for widescreen decks).
+- **PowerPoint → outline**: drop a presentation on **MD**, **TXT**, **HTML**, **RTF**, **EPUB** or **ODT** (in **Office → Docs**) to extract slide titles, nested bullet lists, tables and speaker notes in reading order.
+- **Anything → PowerPoint (`SLIDES` / `Slides`)**:
+  - **PDF → PowerPoint**: one slide per page, sized to the PDF's aspect ratio.
+  - **Photos → PowerPoint**: one photo becomes a 16:9 slide; dropping several photos on **Slides** (in **Office** or **Photo → Tools**) combines them into one presentation (`first_merged.pptx`). Upright, unresized JPG and PNG photos keep their original bytes without re-encoding.
+  - **Documents → PowerPoint**: Word (`.docx`), Markdown, TXT, HTML, RTF, EPUB and ODT turn headings into slides with bullet points and tables.
+  - **Spreadsheets & data → PowerPoint**: Excel (`.xlsx`), CSV, TSV, JSON, YAML and XML split tables across slides with repeating headers.
+
+Old binary `.ppt` / `.pps` / `.pot` and `.odp` files need PowerPoint or LibreOffice installed (`.odp` outlines work built-in). Embedded `.fntdata` (EOT) fonts and charts are not rendered by the built-in engine yet.
 
 </details>
 
@@ -341,6 +362,8 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | Word 97–2003 (DOC) | ✓ *(Word/LibreOffice)* | — | Needs Word or LibreOffice installed |
 | Excel (XLSX, XLSM), CSV | ✓ | — | Excel → PDF / images. See [Excel → PDF](#excel--pdf-that-looks-like-excel-printed-it) |
 | Excel 97–2003 (XLS), ODS | ✓ *(Excel/LibreOffice)* | — | Needs Excel or LibreOffice installed |
+| PowerPoint (PPTX, PPSX, POTX, PPTM) | ✓ | ✓ | PowerPoint → PDF / images / Word handout / MD, TXT, HTML, RTF, EPUB, ODT; PDF / photos / documents / spreadsheets → PowerPoint |
+| PowerPoint 97–2003 (PPT, PPS, POT), ODP | ✓ *(PowerPoint/LibreOffice)* | — | Needs PowerPoint or LibreOffice installed (`.odp` outlines work built-in) |
 
 **Colours**: images with an embedded colour profile (Mac screenshots and iPhone photos are Display P3) are converted to sRGB, so they look the same in every app after conversion. Gray images stay one channel in PNG, TIFF, BMP and TGA.
 
@@ -357,6 +380,9 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Several images → PDF | `firstimage_merged.pdf` |
 | Word → PDF | `report_converted.pdf` |
 | Excel → PDF | `budget_converted.pdf` (all visible sheets in one PDF) |
+| PowerPoint → PDF / Word handout | `deck_converted.pdf` / `deck_converted.docx` |
+| PDF / document / sheet → PowerPoint | `report_converted.pptx` |
+| Several images → PowerPoint | `firstimage_merged.pptx` |
 | PDF → Word | `report_converted.docx` |
 | Multi-page Word → PNG | folder `report_pages/` with `page-01.png`, … |
 | One-page PDF → PNG | `document_converted.png` |
@@ -570,13 +596,14 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         │   ├── tools.rs     #   photo tools: remove BG, target-size compress, transform, square, animated GIF
         │   ├── pdf.rs       #   PDF → images, images → merged PDF
         │   ├── word.rs      #   Word → PDF/images, OCR → Word
+        │   ├── slides.rs    #   PowerPoint ↔ PDF/images/Word handout/outlines, anything → .pptx
         │   ├── clean.rs     #   metadata removal (strip.rs: lossless JPEG/PNG)
         │   ├── output.rs    #   unique output names, never overwrites
         │   └── tests.rs
         ├── pdf/
         │   ├── writer.rs    # minimal PDF writer (images → PDF)
         │   └── render.rs    # PDF → images via PDFium
-        ├── office/          # Word ↔ PDF, Excel → PDF
+        ├── office/          # Word ↔ PDF, Excel → PDF, PowerPoint ↔ PDF/Word
         │   ├── docx.rs      #   .docx reader (styles, lists, tables, images, header/footer)
         │   ├── to_typst.rs  #   document → Typst layout code (text always escaped)
         │   ├── typeset.rs   #   in-process Typst → PDF, system fonts
@@ -586,7 +613,12 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         │   ├── xlsx.rs      #   .xlsx / .csv reader (cells, styles, page setup, pictures)
         │   ├── numfmt.rs    #   Excel number formats, in the region's separators
         │   ├── sheet_pdf.rs #   prints sheets into pages, like Excel
-        │   └── apps.rs      #   uses Word / Excel / LibreOffice when installed, else built-in
+        │   ├── pptx.rs      #   .pptx reader (slides, layouts, masters, themes, shapes, tables, notes)
+        │   ├── shapes.rs    #   DrawingML preset & custom geometries and arrowheads
+        │   ├── slides_pdf.rs #  renders slides to PDF via Typst, 4 slides per run
+        │   ├── pptx_writer.rs # .pptx writer (text, pictures, tables, backgrounds)
+        │   ├── handout.rs   #   printable .docx handout (slide picture, title and notes)
+        │   └── apps.rs      #   uses Word / Excel / PowerPoint / LibreOffice when installed, else built-in
         ├── platform/        # OS integration
         │   ├── system_codec.rs # HEIC/AVIF via ImageIO (macOS read/write) / WIC (Windows read)
         │   ├── background.rs #  subject background removal via macOS Vision
