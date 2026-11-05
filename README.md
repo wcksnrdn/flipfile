@@ -860,27 +860,6 @@ Dividing the macOS value by `devicePixelRatio`, as the first version did, halved
 
 <br>
 
-## Roadmap
-
-- [x] Custom app icon, light and dark
-- [x] Builds for every OS on each release (`.dmg`, `.exe`/`.msi`, `.deb`/`.rpm`/`.AppImage`)
-- [x] Text recognition (OCR) for scans and photos → Word
-- [x] Real tables in PDF → Word
-- [x] Excel → PDF
-- [x] PowerPoint ⇄ PDF, Word handout, images, documents and tables
-- [x] Category rooms (**Photo · Office · Video · Music**) and **Ring Workshop** (`⌘,` / `Ctrl+,`)
-- [x] Office & developer data formats (`MD`, `TXT`, `HTML`, `RTF`, `EPUB`, `ODT`, `CSV`, `TSV`, `JSON`, `YAML`, `XML`, `SQL`)
-- [x] Pro / 3D photo formats (`TGA`, `EXR`, `HDR`, `QOI`, `PPM`, `SVG`, plus `PSD`/`RAW` input)
-- [ ] Cross-platform offline background removal (Windows & Linux)
-- [ ] macOS notarization and Windows code signing
-- [ ] Remember the window position between sessions
-- [ ] Let clicks pass through the transparent area around the circle
-- [ ] Auto-update
-- [ ] Launch at login
-- [ ] Charts in Excel / PowerPoint → PDF (built-in engine)
-
-<br>
-
 <div align="center">
 
 <img src="src-tauri/icons/128x128.png" width="64" alt="">
