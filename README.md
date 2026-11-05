@@ -7,7 +7,7 @@
 **Drop a file. Point to a format. Done.**
 
 A tiny file converter that lives on your desktop.<br>
-Photos, PDFs, Word, Excel, PowerPoint and scans, converted right on your computer.<br>
+Photos, PDFs, Word, Excel, PowerPoint, data, video, audio and scans — converted right on your computer.<br>
 No uploads. No accounts. No waiting.
 
 [![Download](https://img.shields.io/github/v/release/wcksnrdn/flipfile?label=download&color=1d1d1f&style=for-the-badge)](https://github.com/wcksnrdn/flipfile/releases/latest)
@@ -34,7 +34,7 @@ No uploads. No accounts. No waiting.
 
 | **Private by design** | **Instant** | **Does the boring stuff** |
 |---|---|---|
-| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone HEIC ⇄ JPG/PNG/WEBP, remove background, compress to exact KB/MB, PDF ⇄ Word, Excel → PDF, PowerPoint ⇄ PDF/Word/images, scans → editable text, multi-size ICO/ICNS, animated GIF. |
+| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone HEIC ⇄ JPG/PNG/WEBP/AVIF, remove background, compress to exact KB/MB, PDF ⇄ Word, Excel → PDF, PowerPoint ⇄ PDF/Word/images/docs, CSV/JSON/YAML/SQL/Excel, video & audio, scans → editable text, multi-size ICO/ICNS, animated GIF. |
 
 <br>
 
@@ -122,6 +122,18 @@ Get the latest version from **[Releases](https://github.com/wcksnrdn/flipfile/re
 | Windows 10 / 11 | `flipfile_x.y.z_x64-setup.exe` |
 | Linux | Debian/Ubuntu `.deb` &nbsp;·&nbsp; Fedora `.rpm` &nbsp;·&nbsp; any distro `.AppImage` |
 
+Or install with a single command:
+
+```bash
+# macOS & Linux
+curl -fsSL https://raw.githubusercontent.com/wcksnrdn/flipfile/main/scripts/install.sh | sh
+```
+
+```powershell
+# Windows 10 / 11 (PowerShell)
+irm https://raw.githubusercontent.com/wcksnrdn/flipfile/main/scripts/install.ps1 | iex
+```
+
 <details>
 <summary><b>First launch: "can't be verified" or "Windows protected your PC"</b></summary>
 
@@ -143,20 +155,38 @@ flipfile isn't notarized by Apple or code-signed for Windows yet, so the first l
 
 | Ring | Items |
 |---|---|
-| **Category Lobby** | **Photo** · **Office** · **Video** *(soon)* · **Music** *(soon)* |
+| **Category Lobby** | **Photo** · **Office** · **Video** · **Music** |
 | **Photo** | JPG · PNG · WEBP · HEIC *(macOS)* · PDF · **Formats •••** · **Tools ✦** · **Back ‹** |
-| **Photo → Formats** | JPEG · AVIF · TIFF · GIF · BMP · ICO *(multi-size)* · ICNS *(macOS)* · **Back ‹** |
-| **Photo → Tools** | **Compress** · **Remove BG** *(macOS)* · **Transform** · **Square 1:1** · **GIF anim** · **Slides** · **Clean EXIF** · **Back ‹** |
+| **Photo → Formats** | AVIF · TIFF · GIF · BMP · ICO *(multi)* · ICNS *(macOS)* · **Pro / 3D •••** · **Back ‹** |
+| **Photo → Formats → Pro / 3D** | JPEG · TGA *(game)* · EXR *(32f HDR)* · HDR *(RGBE)* · QOI *(fast)* · PPM *(netpbm)* · SVG *(embed)* · **Back ‹** |
+| **Photo → Tools** | **Compress** · **Remove BG** *(macOS)* · **Transform** · **Square 1:1** · **GIF anim** · **Slides** *(pptx)* · **Clean EXIF** · **Back ‹** |
 | **Photo → Compress** | Auto · **1 MB** max · **500 KB** max · **200 KB** max · **100 KB** max · **Lossless** · **Back ‹** |
 | **Photo → Transform** | Rotate 90° › · Rotate ‹ 90° · Rotate 180° · Flip horiz · Flip vert · B&W gray · **Back ‹** |
-| **Office** | PDF · WORD · **WORD OCR** · EXCEL · **SLIDES** · CSV · **Docs •••** · **Data •••** · **Back ‹** |
-| **Office → Docs** | MD · TXT · HTML · RTF · EPUB · ODT · **Back ‹** |
-| **Office → Data** | JSON · TSV · YAML · XML · SQL · MD *(table)* · **Back ‹** |
+| **Office** | PDF · WORD *(docx)* · **WORD OCR** · EXCEL *(xlsx)* · **SLIDES** *(pptx)* · CSV · **Docs •••** · **Data •••** · **Back ‹** |
+| **Office → Docs** | MD *(markdown)* · TXT *(plain)* · HTML *(web)* · RTF *(rich text)* · EPUB *(e-book)* · ODT *(open doc)* · **Back ‹** |
+| **Office → Data** | JSON · TSV *(tabs)* · YAML · XML · SQL *(insert)* · MD *(table)* · **Back ‹** |
+| **Video** | MP4 · MOV · WEBM · MKV · AVI · **GIF** *(clip)* · **Tools ✦** · **Back ‹** |
+| **Video → Tools** | **Compress** *(smaller)* · **Mute** *(no audio)* · **Audio** *(extract)* · **1080p** *(Full HD)* · **720p** *(HD)* · FLV · **Back ‹** |
+| **Music** | MP3 · WAV · M4A *(AAC)* · FLAC · OGG · **More •••** · **Back ‹** |
+| **Music → More** | AIFF *(studio)* · OPUS · AAC · CAF *(Apple)* · ALAC *(lossless)* · WMA · **Back ‹** |
 
-Also handy: **⌘V / Ctrl+V** pastes an image or copied files, **⌘⇧K / Ctrl+Shift+K** shows or hides flipfile from anywhere, and the menu bar / tray icon keeps your recent conversions with **Undo**.
+Also handy: **⌘, / Ctrl+,** opens the **Ring Workshop** to customise your rings and workspace profiles, **⌘V / Ctrl+V** pastes an image or copied files, **⌘⇧K / Ctrl+Shift+K** shows or hides flipfile from anywhere, and the menu bar / tray icon keeps your recent conversions with **Undo**.
 
 <details>
-<summary><b>Photo tools (Remove BG, target-size compress, transform, square, animated GIF)</b></summary>
+<summary><b>Ring Workshop (⌘, / Ctrl+, — customise rings & workspace profiles)</b></summary>
+
+Press **⌘,** (macOS) or **Ctrl+,** (Windows/Linux), or pick **Ring Workshop…** from the tray menu, to arrange the rings around the way you work:
+
+- **Two drag modes**:
+  - **4 Rooms (Default)**: dragging opens the **Photo · Office · Video · Music** lobby first, and every room's ring can be reordered or edited.
+  - **Direct Ring (3–10 slots)**: dragging opens your own single ring right away—mix any photo format, smart tool, Office/data format, video/audio action or room shortcut on one wheel.
+- **Built-in profiles**: *4 Rooms (Default)*, *My Custom Ring*, *Designer & Web*, *Developer & Data*, *Office & Docs* and *Creator & Media*, plus as many custom workspaces as you like.
+- **Full 70+ item catalog**: filter by category (*Photo*, *Photo Tools*, *Office & Docs*, *Data & Sheets*, *Video*, *Music*, *Sub-Rings*) and click or drag items into any slot with a live interactive preview.
+
+</details>
+
+<details>
+<summary><b>Photo tools & Pro / 3D formats (Remove BG, target-size compress, transform, square, animated GIF, EXR/HDR/TGA/QOI/SVG)</b></summary>
 
 - **Remove BG** *(macOS 14+)*: uses macOS Vision's built-in subject-lifting model (`VNGenerateForegroundInstanceMaskRequest`) completely offline to cut out the foreground subject and save a transparent PNG (`photo_nobg.png`).
 - **Compress to target size** (**1 MB · 500 KB · 200 KB · 100 KB**): binary-searches encoder quality (and progressively scales resolution down if needed) so the output strictly fits under your byte budget—ideal for web forms and upload portals.
@@ -164,7 +194,9 @@ Also handy: **⌘V / Ctrl+V** pastes an image or copied files, **⌘⇧K / Ctrl+
 - **Transform**: rotate 90° clockwise, 90° counter-clockwise, 180°, flip horizontally or vertically, or convert to grayscale (B&W) in the file's own format.
 - **Square 1:1**: pads non-square photos to a 1:1 square without cropping (transparent backdrop for PNG/WEBP/AVIF/TIFF, white backdrop for JPG/BMP).
 - **GIF anim**: drop several photos onto **GIF anim** to combine them into a looping animated GIF (`first_animated.gif`).
+- **Slides (`pptx`)**: drop one photo to put it on a 16:9 PowerPoint slide, or drop several photos together to combine them into a single presentation (`first_merged.pptx`).
 - **Multi-size ICO & macOS ICNS**: **ICO** packs `16, 32, 48, 64, 128, 256` px slices into one Windows icon; **ICNS** packs `16` through `1024` px retina slices (`icp4`–`ic10`) for macOS app bundles.
+- **Pro / 3D & Vector formats**: write **TGA** (game/VFX textures), **OpenEXR** (`.exr`, 32-bit float HDR), **Radiance HDR** (`.hdr`, RGBE), **QOI** (fast lossless), **PPM** (Netpbm) and **SVG** (embedded vector wrapper); read **PSD** (Photoshop), **JP2 / JPEG 2000** and **camera RAW** (`.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.orf`, `.rw2`, `.raf`) via the operating system's codecs.
 
 </details>
 
@@ -231,6 +263,29 @@ Charts, shapes and conditional formatting are not drawn by the built-in engine y
   - **Spreadsheets & data → PowerPoint**: Excel (`.xlsx`), CSV, TSV, JSON, YAML and XML split tables across slides with repeating headers.
 
 Old binary `.ppt` / `.pps` / `.pot` and `.odp` files need PowerPoint or LibreOffice installed (`.odp` outlines work built-in). Embedded `.fntdata` (EOT) fonts and charts are not rendered by the built-in engine yet.
+
+</details>
+
+<details>
+<summary><b>Office Docs & Developer Data (MD, TXT, HTML, RTF, EPUB, ODT, XLSX, CSV, TSV, JSON, YAML, XML, SQL, MD table)</b></summary>
+
+- **Documents (`Office → Docs`)**: convert freely between **Word (`.docx`)**, **Markdown (`.md`)**, **Plain Text (`.txt`)**, **HTML (`.html`)**, **Rich Text (`.rtf`)**, **EPUB e-books (`.epub`)** and **OpenDocument Text (`.odt`)**, or render any of them to **PDF**, **images** or **PowerPoint slides (`.pptx`)** with headings, paragraphs, nested lists, code blocks and tables preserved.
+- **Spreadsheets & Developer Data (`Office` / `Office → Data`)**: convert tabular data in any direction between **Excel (`.xlsx`)**, **CSV (`.csv`)**, **TSV (`.tsv`)**, **JSON records (`.json`)**, **YAML (`.yaml`)**, **XML (`.xml`)**, **SQL (`CREATE TABLE` + `INSERT INTO` statements, `.sql`)** and **Markdown tables (`.md`)**.
+- **Tables ↔ Documents & Slides**: drop a spreadsheet or data file on **WORD** to get a formatted `.docx` document with tables, or on **SLIDES** to split the table across widescreen PowerPoint slides with repeating headers; drop a document with tables on **EXCEL**, **CSV** or **JSON** to extract its tables into structured rows.
+
+</details>
+
+<details>
+<summary><b>Video & Music rooms</b></summary>
+
+- **Video formats (`Video`)**: convert between **MP4** (H.264 + AAC), **MOV**, **WEBM** (VP9 + Opus), **MKV**, **AVI** and **FLV**, or drop a video on **GIF clip** to create a 12 fps Lanczos-scaled animated GIF (`clip_animated.gif`).
+- **Video tools (`Video → Tools`)**:
+  - **Compress**: re-encodes with higher CRF + faststart (`clip_compressed.mp4`).
+  - **Mute**: strips the audio track without re-encoding the video stream (`clip_muted.mp4`).
+  - **Audio extract**: extracts the audio track to `.mp3` (with `ffmpeg`) or `.m4a` (built-in on macOS).
+  - **1080p / 720p**: downscales video to Full HD or HD while preserving aspect ratio.
+- **Music / Audio (`Music` & `Music → More`)**: convert between **MP3**, **WAV**, **M4A (AAC)**, **FLAC**, **OGG Vorbis**, **AIFF**, **OPUS**, **AAC**, **CAF** (Apple CoreAudio), **ALAC** (Apple Lossless `.m4a`) and **WMA**—or drop a video file onto any audio format to extract its soundtrack.
+- **Engines**: uses `ffmpeg` when installed on your computer (supports every format and tool); on macOS, `/usr/bin/afconvert` and `/usr/bin/avconvert` are used automatically when `ffmpeg` is not installed, so **WAV, M4A, AAC, ALAC, FLAC, AIFF, CAF, MP4, MOV, 1080p, 720p and Compress** work out of the box with zero installs.
 
 </details>
 
@@ -318,11 +373,12 @@ Click the circle, press **⌘V** (macOS) or **Ctrl+V** (Windows/Linux), then poi
 
 | Item | What it does |
 |---|---|
-| Show / Hide flipfile | Bring the window to the front, or hide it |
+| Show / Hide flipfile | Bring the window to the front, or hide it (`⌘⇧K` / `Ctrl+Shift+K`) |
+| Ring Workshop… | Open the interactive ring & workspace customiser (`⌘,` / `Ctrl+,`) |
 | Recent Conversions | The last 10 results; click one to show it in Finder / File Explorer. *Clear History* empties the list. |
 | Undo Last Conversion | Moves the results of the last conversion to the **Trash / Recycle Bin**, so they can still be restored |
 | Resize, Quality | Defaults for every conversion (see above) |
-| Quit flipfile | Quit the app |
+| Quit flipfile | Quit the app (`⌘Q` / `Ctrl+Q`) |
 
 On macOS the icon adapts to light and dark menu bars and clicking it opens the menu; the Dock icon brings back a hidden window. On Windows, left-click shows/hides the window and right-click opens the menu. On Linux the menu is the only entry point (tray implementations there don't report clicks).
 
@@ -334,9 +390,10 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | Shortcut | Action |
 |---|---|
 | **⌘⇧K** / **Ctrl+Shift+K** | Show / hide flipfile from anywhere (global) |
+| **⌘,** / **Ctrl+,** | Open / close the Ring Workshop |
 | **⌘V** / **Ctrl+V** | Paste an image or copied files |
 | **⌥ Option** / **Alt** *(hold while dragging)* | Resize & compress presets |
-| **Esc** | Cancel a paste |
+| **Esc** | Cancel a paste or close the Ring Workshop |
 | **⌘Q** / **Ctrl+Q** | Quit |
 
 </details>
@@ -357,13 +414,22 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | GIF | ✓ (first frame) | ✓ | Single image → GIF, or multiple images → looping animated GIF via **GIF anim** |
 | ICO | ✓ | ✓ | Multi-resolution icon containing `16, 32, 48, 64, 128, 256` px square slices |
 | ICNS | — | ✓ | Apple `.icns` icon bundle (`16` to `1024` px PNG slices) |
-| PDF | ✓ *(PDFium)* | ✓ | Images → PDF (one page per image); PDF → images at 200 DPI |
-| Word (DOCX) | ✓ | ✓ | Word → PDF / images; PDF → Word. See [How to use](#how-to-use) |
+| TGA / QOI / PPM | ✓ | ✓ | Game/VFX Truevision TGA, fast lossless QOI, and Netpbm PPM |
+| OpenEXR (EXR) / Radiance HDR | ✓ | ✓ | 32-bit float HDR (`.exr`) and RGBE (`.hdr`) |
+| SVG | — | ✓ | Vector `.svg` wrapper around lossless PNG |
+| PSD / JPEG 2000 / Camera RAW | ✓ *(OS codec)* | — | `.psd`, `.jp2`, `.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.orf`, `.rw2`, `.raf` via ImageIO / WIC |
+| PDF | ✓ *(PDFium)* | ✓ | Images / Office / docs / data → PDF; PDF → images at 200 DPI, Word (`.docx`) or PowerPoint (`.pptx`) |
+| Word (DOCX) | ✓ | ✓ | Word ↔ PDF / images / PowerPoint / MD, TXT, HTML, RTF, EPUB, ODT. See [How to use](#how-to-use) |
 | Word 97–2003 (DOC) | ✓ *(Word/LibreOffice)* | — | Needs Word or LibreOffice installed |
-| Excel (XLSX, XLSM), CSV | ✓ | — | Excel → PDF / images. See [Excel → PDF](#excel--pdf-that-looks-like-excel-printed-it) |
+| Excel (XLSX, XLSM) | ✓ | ✓ | Excel → PDF / images / Word / PowerPoint; Excel ↔ CSV, TSV, JSON, YAML, XML, SQL, Markdown table |
 | Excel 97–2003 (XLS), ODS | ✓ *(Excel/LibreOffice)* | — | Needs Excel or LibreOffice installed |
 | PowerPoint (PPTX, PPSX, POTX, PPTM) | ✓ | ✓ | PowerPoint → PDF / images / Word handout / MD, TXT, HTML, RTF, EPUB, ODT; PDF / photos / documents / spreadsheets → PowerPoint |
 | PowerPoint 97–2003 (PPT, PPS, POT), ODP | ✓ *(PowerPoint/LibreOffice)* | — | Needs PowerPoint or LibreOffice installed (`.odp` outlines work built-in) |
+| Markdown (MD), TXT, HTML, RTF, EPUB, ODT | ✓ | ✓ | Convert between each other, or to PDF, Word (`.docx`), PowerPoint (`.pptx`) and images |
+| CSV, TSV, JSON, YAML, XML | ✓ | ✓ | Convert between each other, Excel (`.xlsx`), SQL, Markdown table, Word, PowerPoint and PDF |
+| SQL (`CREATE` + `INSERT`), MD Table | — | ✓ | Generated from any spreadsheet or tabular data file |
+| Video (MP4, MOV, WEBM, MKV, AVI, FLV) | ✓ | ✓ | Convert formats, **GIF clip**, **Compress**, **Mute**, **Audio extract**, **1080p** / **720p** via `ffmpeg` (or macOS `avconvert` built-in for MP4/MOV/1080p/720p/Compress) |
+| Audio (MP3, WAV, M4A, FLAC, OGG, AIFF, OPUS, AAC, CAF, ALAC, WMA) | ✓ | ✓ | Convert audio or extract from video via `ffmpeg` (or macOS `afconvert` built-in for WAV/M4A/AAC/ALAC/FLAC/AIFF/CAF) |
 
 **Colours**: images with an embedded colour profile (Mac screenshots and iPhone photos are Display P3) are converted to sRGB, so they look the same in every app after conversion. Gray images stay one channel in PNG, TIFF, BMP and TGA.
 
@@ -393,6 +459,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Rotate / flip / grayscale | `photo_rotated.jpg` / `photo_flipped.jpg` / `photo_grayscale.jpg` |
 | Square 1:1 pad | `photo_square.jpg` |
 | Several images → Animated GIF | `firstimage_animated.gif` |
+| Video → GIF clip / Compress / Mute / 1080p | `clip_animated.gif` / `clip_compressed.mp4` / `clip_muted.mp4` / `clip_1080p.mp4` |
 | Preset dropped in the same format | `photo_compressed.jpg` / `photo_resized.jpg` |
 | Pasted clipboard image | `~/Downloads/Clipboard 2026-10-20 at 14.03.12.png` |
 
@@ -572,15 +639,21 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
 ├── .github/workflows/
 │   ├── ci.yml               # typecheck, build and Rust tests on every push / PR
 │   └── release.yml          # builds installers for every OS when a v* tag is pushed
+├── Casks/
+│   └── flipfile.rb          # Homebrew cask definition
 ├── index.html
 ├── package.json
 ├── scripts/
-│   └── fetch-pdfium.mjs     # downloads the PDFium library for the current platform
+│   ├── fetch-pdfium.mjs     # downloads & SHA-256-verifies PDFium for the current platform
+│   ├── install.sh           # one-line installer for macOS & Linux
+│   └── install.ps1          # one-line installer for Windows PowerShell
 ├── src/                     # UI (React + TypeScript)
 │   ├── main.tsx             # entry, loads the Poppins font (bundled, offline)
 │   ├── App.tsx              # drag & drop, paste, rings, presets, status, progress
 │   ├── App.css              # glass look, ring and segment animations
 │   ├── dropTarget.ts        # ring layout + sector hit-testing (single source of truth)
+│   ├── workshop.ts          # Ring Workshop catalog, workspace profiles & slot persistence
+│   ├── WorkshopPanel.tsx    # interactive Ring Workshop editor UI
 │   └── DebugOverlay.tsx     # optional drop-position diagnostics
 └── src-tauri/               # native side (Rust)
     ├── tauri.conf.json      # window, bundle, identifier (com.satria.flipfile), resources
@@ -591,28 +664,34 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         ├── lib.rs           # app setup: plugins, tray, shortcut, state, commands
         ├── convert/         # conversion pipeline behind `convert_batch`
         │   ├── mod.rs       #   batching, progress, dispatch per file
-        │   ├── input.rs     #   file detection, decoding with EXIF orientation
-        │   ├── encode.rs    #   resize + every image encoder (incl. lossy WEBP, oxipng, ICO/ICNS)
+        │   ├── input.rs     #   file detection, decoding with EXIF orientation & ICC → sRGB
+        │   ├── encode.rs    #   SIMD resize + content-aware image encoders (JPG/PNG/WEBP/AVIF/ICO/ICNS/EXR/HDR/TGA/QOI/PPM/SVG)
         │   ├── tools.rs     #   photo tools: remove BG, target-size compress, transform, square, animated GIF
-        │   ├── pdf.rs       #   PDF → images, images → merged PDF
+        │   ├── pdf.rs       #   PDF → images, images → merged PDF (streaming page-by-page)
         │   ├── word.rs      #   Word → PDF/images, OCR → Word
         │   ├── slides.rs    #   PowerPoint ↔ PDF/images/Word handout/outlines, anything → .pptx
-        │   ├── clean.rs     #   metadata removal (strip.rs: lossless JPEG/PNG)
-        │   ├── output.rs    #   unique output names, never overwrites
+        │   ├── office_extra.rs # MD/TXT/HTML/RTF/EPUB/ODT & XLSX/CSV/TSV/JSON/YAML/XML/SQL/MD-table conversions
+        │   ├── media.rs     #   Video & Music conversions and tools (ffmpeg + macOS afconvert/avconvert)
+        │   ├── memory.rs    #   RAM budget scheduler for parallel batches
+        │   ├── clean.rs     #   metadata removal
+        │   ├── strip.rs     #   lossless JPEG/PNG metadata stripping
+        │   ├── output.rs    #   unique output names, atomic reservations, never overwrites
+        │   ├── bench.rs     #   speed, peak memory & output size benchmark runner (`npm run bench`)
+        │   ├── stress.rs    #   hostile & malformed input stress suite (`npm run stress`)
         │   └── tests.rs
         ├── pdf/
-        │   ├── writer.rs    # minimal PDF writer (images → PDF)
+        │   ├── writer.rs    # streaming PDF writer (images → PDF)
         │   └── render.rs    # PDF → images via PDFium
         ├── office/          # Word ↔ PDF, Excel → PDF, PowerPoint ↔ PDF/Word
         │   ├── docx.rs      #   .docx reader (styles, lists, tables, images, header/footer)
         │   ├── to_typst.rs  #   document → Typst layout code (text always escaped)
-        │   ├── typeset.rs   #   in-process Typst → PDF, system fonts
+        │   ├── typeset.rs   #   in-process Typst → PDF (parallel runs, memory-mapped fonts)
         │   ├── from_pdf.rs  #   PDF → page layout (tables, text, header/footer, pictures, decoration)
         │   ├── pdf_docx_writer.rs # page layout → .docx package
         │   ├── ocr.rs       #   text recognition via macOS Vision / Windows OCR
         │   ├── xlsx.rs      #   .xlsx / .csv reader (cells, styles, page setup, pictures)
         │   ├── numfmt.rs    #   Excel number formats, in the region's separators
-        │   ├── sheet_pdf.rs #   prints sheets into pages, like Excel
+        │   ├── sheet_pdf.rs #   prints sheets into pages, like Excel (4 pages per run)
         │   ├── pptx.rs      #   .pptx reader (slides, layouts, masters, themes, shapes, tables, notes)
         │   ├── shapes.rs    #   DrawingML preset & custom geometries and arrowheads
         │   ├── slides_pdf.rs #  renders slides to PDF via Typst, 4 slides per run
@@ -620,9 +699,10 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         │   ├── handout.rs   #   printable .docx handout (slide picture, title and notes)
         │   └── apps.rs      #   uses Word / Excel / PowerPoint / LibreOffice when installed, else built-in
         ├── platform/        # OS integration
-        │   ├── system_codec.rs # HEIC/AVIF via ImageIO (macOS read/write) / WIC (Windows read)
+        │   ├── system_codec.rs # HEIC/AVIF/PSD/RAW via ImageIO (macOS read/write) / WIC (Windows read)
         │   ├── background.rs #  subject background removal via macOS Vision
-        │   ├── tray.rs      #   menu bar / tray menu, show/hide
+        │   ├── appearance.rs #  follows light/dark system appearance for app & tray icons
+        │   ├── tray.rs      #   menu bar / tray menu, show/hide, Ring Workshop trigger
         │   ├── clipboard.rs #   ⌘V / Ctrl+V: images and copied files
         │   ├── keys.rs      #   Option/Alt state during a drag
         │   └── glass.rs     #   native glass view behind the webview (macOS)
@@ -682,12 +762,17 @@ Dividing the macOS value by `devicePixelRatio`, as the first version did, halved
 - [x] Text recognition (OCR) for scans and photos → Word
 - [x] Real tables in PDF → Word
 - [x] Excel → PDF
+- [x] PowerPoint ⇄ PDF, Word handout, images, documents and tables
+- [x] Category rooms (**Photo · Office · Video · Music**) and **Ring Workshop** (`⌘,` / `Ctrl+,`)
+- [x] Office & developer data formats (`MD`, `TXT`, `HTML`, `RTF`, `EPUB`, `ODT`, `CSV`, `TSV`, `JSON`, `YAML`, `XML`, `SQL`)
+- [x] Pro / 3D photo formats (`TGA`, `EXR`, `HDR`, `QOI`, `PPM`, `SVG`, plus `PSD`/`RAW` input)
+- [ ] Cross-platform offline background removal (Windows & Linux)
 - [ ] macOS notarization and Windows code signing
 - [ ] Remember the window position between sessions
 - [ ] Let clicks pass through the transparent area around the circle
 - [ ] Auto-update
 - [ ] Launch at login
-- [ ] Charts in Excel → PDF (built-in engine)
+- [ ] Charts in Excel / PowerPoint → PDF (built-in engine)
 
 <br>
 
