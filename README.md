@@ -159,7 +159,7 @@ flipfile isn't notarized by Apple or code-signed for Windows yet, so the first l
 | **Photo** | JPG · PNG · WEBP · HEIC *(macOS)* · PDF · **Formats •••** · **Tools ✦** · **Back ‹** |
 | **Photo → Formats** | AVIF · TIFF · GIF · BMP · ICO *(multi)* · ICNS *(macOS)* · **Pro / 3D •••** · **Back ‹** |
 | **Photo → Formats → Pro / 3D** | JPEG · TGA *(game)* · EXR *(32f HDR)* · HDR *(RGBE)* · QOI *(fast)* · PPM *(netpbm)* · SVG *(embed)* · **Back ‹** |
-| **Photo → Tools** | **Compress** · **Remove BG** *(macOS)* · **Transform** · **Square 1:1** · **GIF anim** · **Slides** *(pptx)* · **Clean EXIF** · **Back ‹** |
+| **Photo → Tools** | **Compress** · **Remove BG** *(macOS)* · **Transform** · **Square 1:1** · **GIF anim** · **Clean EXIF** · **Back ‹** |
 | **Photo → Compress** | Auto · **1 MB** max · **500 KB** max · **200 KB** max · **100 KB** max · **Lossless** · **Back ‹** |
 | **Photo → Transform** | Rotate 90° › · Rotate ‹ 90° · Rotate 180° · Flip horiz · Flip vert · B&W gray · **Back ‹** |
 | **Office** | PDF · WORD *(docx)* · **WORD OCR** · EXCEL *(xlsx)* · **SLIDES** *(pptx)* · CSV · **Docs •••** · **Data •••** · **Back ‹** |
@@ -182,6 +182,17 @@ Press **⌘,** (macOS) or **Ctrl+,** (Windows/Linux), or pick **Ring Workshop…
   - **Direct Ring (3–10 slots)**: dragging opens your own single ring right away—mix any photo format, smart tool, Office/data format, video/audio action or room shortcut on one wheel.
 - **Built-in profiles**: *4 Rooms (Default)*, *My Custom Ring*, *Designer & Web*, *Developer & Data*, *Office & Docs* and *Creator & Media*, plus as many custom workspaces as you like.
 - **Full 70+ item catalog**: filter by category (*Photo*, *Photo Tools*, *Office & Docs*, *Data & Sheets*, *Video*, *Music*, *Sub-Rings*) and click or drag items into any slot with a live interactive preview.
+
+</details>
+
+<details>
+<summary><b>In-App Auto-Updater (Check & install updates with 1 click)</b></summary>
+
+flipfile includes a native, cryptographically signed auto-updater powered by Tauri 2:
+- **Background Startup Check**: A few seconds after launching, flipfile quietly checks GitHub Releases for new updates in the background without slowing down your startup.
+- **Manual Check Anytime**: Click **Check for Updates…** from the menu bar / system tray menu, or click the **Updates** button in the Ring Workshop header.
+- **One-Click Update**: If a new version is available, a glass update dialog appears with release notes. Clicking **Update Now** downloads the installer and relaunches the app automatically into the latest version.
+- **Minisign Cryptographic Verification**: Every release binary is signed and verified with cryptographic keypairs to ensure tamper-proof security and authenticity.
 
 </details>
 
