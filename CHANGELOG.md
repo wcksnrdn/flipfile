@@ -8,7 +8,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **AI Summary (macOS, Apple Intelligence)**: drop a document on **Summary ✦** in the lobby and a
+- **AI Summary (macOS, Apple Intelligence)**: drop a document on **AI ✦** in the lobby and a
   glass panel beside the circle explains it, written live by Apple's on-device model: document
   type, headline, the one thing to know, key points, key figures, to-dos and topics.
   - Reads PDF, Word, PowerPoint, Excel, Markdown, web pages, e-books, and scans or photos of text
@@ -23,6 +23,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
     tray; questions and answers included), or drop another file on the panel.
   - Runs in its own helper process (`flipfile-ai`), so the app keeps launching on every macOS
     version; the slice only appears where Apple Intelligence can run.
+
+### Changed
+
+- **Update check**: checking, "up to date" and errors show as a small pill under the circle, and an
+  available update as a glass card; nothing dims the window or its transparent corners any more.
 
 ## [0.5.2] - 2026-11-05
 

@@ -102,7 +102,7 @@ export const CATALOG: CatalogEntry[] = [
   { id: "rtf", label: "RTF", sub: "rich text", title: "Rich Text Format (.rtf)", category: "office" },
   { id: "epub", label: "EPUB", sub: "e-book", title: "EPUB E-Book (.epub)", category: "office" },
   { id: "odt", label: "ODT", sub: "open doc", title: "OpenDocument Text (.odt)", category: "office" },
-  { id: AI_SUMMARY, label: "Summary", sub: "AI ✦", title: "AI Summary (Apple Intelligence, on this Mac)", category: "office", disabled: !IS_MAC },
+  { id: AI_SUMMARY, label: "AI ✦", sub: "summary", title: "AI Summary (Apple Intelligence, on this Mac)", category: "office", disabled: !IS_MAC },
 
   // ─── Spreadsheets & Developer Data ────────────────────────────────────────
   { id: "xlsx", label: "EXCEL", sub: "xlsx", title: "Excel Workbook (.xlsx)", category: "data" },

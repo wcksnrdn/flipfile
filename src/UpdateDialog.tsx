@@ -12,6 +12,18 @@ interface UpdateDialogProps {
   onError: (msg: string) => void;
 }
 
+const UpArrow = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 18V6.5M6.5 12 12 6.5l5.5 5.5" />
+  </svg>
+);
+
+const Check = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m6 12.5 4 4 8-9" />
+  </svg>
+);
+
 export default function UpdateDialog({
   update,
   state,
@@ -46,18 +58,29 @@ export default function UpdateDialog({
     }
   };
 
-  // Toast message when up-to-date or offline
-  if (toastMessage && !update) {
+  // Checking, and its outcome when there is nothing to install, are a small pill under
+  // the circle: nothing covers the window or darkens its transparent corners
+  if (!update && state.status === "checking") {
     return (
-      <div className="update-toast glass" role="status">
-        <span className="update-toast-icon">✨</span>
+      <div className="update-toast" role="status">
+        <span className="update-spinner" aria-hidden="true" />
+        <span className="update-toast-text">Checking for updates…</span>
+      </div>
+    );
+  }
+  if (toastMessage && !update) {
+    const ok = /up to date/i.test(toastMessage);
+    return (
+      <div className="update-toast" role="status">
+        <span className={`update-toast-icon ${ok ? "ok" : "err"}`} aria-hidden="true">
+          {ok ? <Check /> : "!"}
+        </span>
         <span className="update-toast-text">{toastMessage}</span>
       </div>
     );
   }
 
-  // If no update available, render nothing
-  if (!update && state.status !== "checking") {
+  if (!update) {
     return null;
   }
 
@@ -67,72 +90,50 @@ export default function UpdateDialog({
       : null;
 
   return (
-    <div className="update-overlay" onClick={onDismiss}>
+    // A clear layer: clicking beside the card dismisses it, without dimming anything
+    <div className="update-layer" onClick={installing ? undefined : onDismiss}>
       <div
-        className="update-dialog glass"
+        className="update-card"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="update-title"
       >
-        <div className="update-dialog-header">
-          <div className="update-icon-badge">🚀</div>
-          <div>
-            <h3 id="update-title" className="update-dialog-title">
-              {installing ? "Updating flipfile…" : "New Update Available!"}
-            </h3>
-            <span className="update-dialog-version">
-              {update ? `Version ${update.version}` : "Checking for updates…"}
-            </span>
+        <div className="update-card-head">
+          <div className={`update-badge ${installing ? "busy" : ""}`}>
+            <UpArrow />
+          </div>
+          <div className="update-card-titles">
+            <h3 id="update-title">{installing ? "Updating flipfile" : "Update available"}</h3>
+            <span>Version {update.version}</span>
           </div>
         </div>
 
-        {update?.body && !installing && (
-          <div className="update-dialog-notes">
-            <p className="update-notes-label">What's new:</p>
-            <div className="update-notes-body">{update.body}</div>
-          </div>
-        )}
+        {update.body && !installing && <div className="update-notes">{update.body}</div>}
 
         {installing && (
-          <div className="update-dialog-progress-group">
+          <div className="update-progress">
             <div className="update-progress-track">
               <div
-                className="update-progress-fill"
-                style={{ width: percent !== null ? `${percent}%` : "100%" }}
+                className={`update-progress-fill ${percent === null ? "indeterminate" : ""}`}
+                style={percent !== null ? { width: `${percent}%` } : undefined}
               />
             </div>
-            <span className="update-progress-label">
-              {percent !== null ? `Downloading… ${percent}%` : "Installing & relaunching…"}
-            </span>
+            <span>{percent !== null ? `Downloading… ${percent}%` : "Installing and restarting…"}</span>
           </div>
         )}
 
-        <div className="update-dialog-actions">
-          {!installing && (
-            <>
-              <button
-                type="button"
-                className="ws-btn ws-btn-primary"
-                onClick={handleInstall}
-              >
-                Update Now
-              </button>
-              <button
-                type="button"
-                className="ws-btn ws-btn-ghost"
-                onClick={onDismiss}
-              >
-                Later
-              </button>
-            </>
-          )}
-          {installing && (
-            <span className="update-installing-hint">Please wait, restarting soon…</span>
-          )}
-        </div>
+        {!installing && (
+          <div className="update-actions">
+            <button type="button" className="update-button primary" onClick={handleInstall}>
+              Update now
+            </button>
+            <button type="button" className="update-button" onClick={onDismiss}>
+              Later
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

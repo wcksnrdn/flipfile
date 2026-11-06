@@ -113,7 +113,7 @@ Excel or LibreOffice are used when installed; otherwise flipfile's own engine do
 
 ### AI Summary: drop a document, get the gist
 
-No time to read a 40-page report? Drop it on **Summary ✦** in the lobby. A glass panel opens beside the circle and **Apple Intelligence** explains the document while you watch: what kind of document it is, a headline, the one thing to know, the key points, the key figures (amounts, dates and deadlines stand out), the to-dos with who and when, and its topics.
+No time to read a 40-page report? Drop it on **AI ✦** in the lobby. A glass panel opens beside the circle and **Apple Intelligence** explains the document while you watch: what kind of document it is, a headline, the one thing to know, the key points, the key figures (amounts, dates and deadlines stand out), the to-dos with who and when, and its topics.
 
 - **Any document**: PDF, Word, PowerPoint, Excel, Markdown, web pages, e-books, and scans or photos of text (read with text recognition first).
 - **Long ones too**: a long document is read part by part, and you see the notes it takes as it goes; a book is condensed to its most telling passages first, so even that takes about a minute.
@@ -177,13 +177,13 @@ flipfile isn't notarized by Apple or code-signed for Windows yet, so the first l
 
 ## How to use
 
-1. **Drag** files onto the glass circle. The **category lobby** opens around it (**Photo · Office · Video · Music**, and **Summary ✦** on Macs with Apple Intelligence).
+1. **Drag** files onto the glass circle. The **category lobby** opens around it (**Photo · Office · Video · Music**, and **AI ✦ summary** on Macs with Apple Intelligence).
 2. **Point** toward a room to enter it, then point toward a format or tool. Each **Back ‹** slice sits right where you entered from, so moving back is effortless.
 3. **Let go.** The converted file appears next to the original. Click the circle to show it.
 
 | Ring | Items |
 |---|---|
-| **Category Lobby** | **Photo** · **Office** · **Video** · **Music** · **Summary** *(AI, macOS)* |
+| **Category Lobby** | **Photo** · **Office** · **Video** · **Music** · **AI ✦** *(summary, macOS)* |
 | **Photo** | JPG · PNG · WEBP · HEIC *(macOS)* · PDF · **Formats •••** · **Tools ✦** · **Back ‹** |
 | **Photo → Formats** | AVIF · TIFF · GIF · BMP · ICO *(multi)* · ICNS *(macOS)* · **Pro / 3D •••** · **Back ‹** |
 | **Photo → Formats → Pro / 3D** | JPEG · TGA *(game)* · EXR *(32f HDR)* · HDR *(RGBE)* · QOI *(fast)* · PPM *(netpbm)* · SVG *(embed)* · **Back ‹** |
