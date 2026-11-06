@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-06
+
 ### Added
 
 - **AI Summary (macOS, Apple Intelligence)**: drop a document on **AI ✦** in the lobby and a
@@ -215,7 +217,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/wcksnrdn/flipfile/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/wcksnrdn/flipfile/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/wcksnrdn/flipfile/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/wcksnrdn/flipfile/compare/v0.3.0...v0.5.0

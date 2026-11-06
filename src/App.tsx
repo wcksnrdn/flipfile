@@ -169,7 +169,7 @@ export default function App() {
         setUpdateState({ status: "available", update: up, version: up.version, body: up.body });
       } else {
         setUpdateState({ status: "up-to-date" });
-        showToast("You're up to date · v0.5.2");
+        showToast("You're up to date · v0.6.0");
       }
     } catch (err) {
       setUpdateState({ status: "error", message: String(err) });
