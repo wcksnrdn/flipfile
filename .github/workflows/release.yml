@@ -59,7 +59,7 @@ jobs:
 
       # beforeBuildCommand runs fetch-pdfium; pin the platform so the Intel macOS
       # build (made on an Apple Silicon runner) bundles the x64 library.
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
