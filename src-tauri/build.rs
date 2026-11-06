@@ -36,13 +36,15 @@ fn main() {
 
 /// Compiles flipfile-ai with the Swift compiler of the Xcode (Command Line) Tools. It
 /// needs the macOS 26 SDK (FoundationModels); with an older one, a stand-in that reports
-/// summaries as unavailable is bundled instead, so the app still builds and runs.
+/// summaries as unavailable is bundled instead, so the app still builds and runs. Release
+/// builds set FLIPFILE_REQUIRE_AI, so they fail instead of quietly shipping without it.
 fn build_intelligence_helper() {
     use std::path::Path;
     use std::process::Command;
 
     let source = Path::new("intelligence/main.swift");
     println!("cargo:rerun-if-changed={}", source.display());
+    println!("cargo:rerun-if-env-changed=FLIPFILE_REQUIRE_AI");
     let target = std::env::var("TARGET").expect("TARGET is set by cargo");
     let arch = if target.starts_with("aarch64") { "arm64" } else { "x86_64" };
     let output = Path::new("binaries").join(format!("flipfile-ai-{target}"));
@@ -63,9 +65,18 @@ fn build_intelligence_helper() {
         .arg("-o")
         .arg(&output)
         .arg(source)
-        .status();
-    if !matches!(compiled, Ok(status) if status.success()) {
+        .output();
+    if !matches!(&compiled, Ok(out) if out.status.success()) {
+        // The compiler's first error says why (cargo hides a build script's own output)
+        let reason = match &compiled {
+            Ok(out) => String::from_utf8_lossy(&out.stderr).lines().find(|l| l.contains("error")).unwrap_or("").trim().to_string(),
+            Err(e) => e.to_string(),
+        };
+        if std::env::var_os("FLIPFILE_REQUIRE_AI").is_some() {
+            panic!("flipfile-ai could not be compiled, and FLIPFILE_REQUIRE_AI is set: {reason}");
+        }
         println!("cargo:warning=flipfile-ai could not be compiled (Xcode with the macOS 26 SDK is needed); AI summaries will be unavailable in this build");
+        println!("cargo:warning=flipfile-ai: {reason}");
         std::fs::write(&output, "#!/bin/sh\necho '{\"event\":\"status\",\"available\":false,\"reason\":\"unsupported\"}'\n")
             .expect("failed to write the flipfile-ai stand-in");
         #[cfg(unix)]

@@ -68,35 +68,22 @@ enum Failure: String, Error {
     case context, guardrail, refusal, language, assets, busy, empty, request, other
 }
 
-/// Sorts the framework's errors (one enum up to macOS 26, another from 27) into what
-/// the summary can do about them.
+/// Sorts the framework's errors into what the summary can do about them. macOS 26 throws
+/// `LanguageModelSession.GenerationError`, macOS 27 `LanguageModelError` (whatever SDK
+/// the helper was built with), and the latter only exists in the macOS 27 SDK; matching
+/// their cases by name lets one build, from either SDK, understand both.
 func classify(_ error: Error) -> Failure {
     if let failure = error as? Failure { return failure }
-    if #available(macOS 27.0, *) {
-        if let e = error as? LanguageModelError {
-            switch e {
-            case .contextSizeExceeded: return .context
-            case .guardrailViolation: return .guardrail
-            case .refusal: return .refusal
-            case .unsupportedLanguageOrLocale: return .language
-            case .rateLimited: return .busy
-            default: return .other
-            }
-        }
-        if let e = error as? SystemLanguageModel.Error, case .assetsUnavailable = e { return .assets }
+    let name = Mirror(reflecting: error).children.first?.label ?? String(describing: error)
+    switch name.prefix(while: { $0 != "(" }) {
+    case "contextSizeExceeded", "exceededContextWindowSize": return .context
+    case "guardrailViolation": return .guardrail
+    case "refusal": return .refusal
+    case "unsupportedLanguageOrLocale": return .language
+    case "assetsUnavailable": return .assets
+    case "rateLimited", "concurrentRequests": return .busy
+    default: return .other
     }
-    if let e = error as? LanguageModelSession.GenerationError {
-        switch e {
-        case .exceededContextWindowSize: return .context
-        case .guardrailViolation: return .guardrail
-        case .refusal: return .refusal
-        case .unsupportedLanguageOrLocale: return .language
-        case .assetsUnavailable: return .assets
-        case .rateLimited, .concurrentRequests: return .busy
-        default: return .other
-        }
-    }
-    return .other
 }
 
 // MARK: - Text
@@ -499,7 +486,7 @@ final class Summarizer {
         do {
             let stream = session.streamResponse(
                 to: prompt,
-                options: GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 260)
+                options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 260)
             )
             for try await snapshot in stream {
                 written = snapshot.content
@@ -704,7 +691,7 @@ final class Summarizer {
             + "\n\nQuestion again: \(question)\nAnswer in \(languageName(language))."
         var throttle = Throttle(interval: .milliseconds(60))
         var written = ""
-        let stream = session.streamResponse(to: prompt, options: GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 300))
+        let stream = session.streamResponse(to: prompt, options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 300))
         for try await snapshot in stream {
             written = snapshot.content
             if throttle.ready() { emit("answer", ["text": written]) }
@@ -749,7 +736,7 @@ final class Summarizer {
         let stream = session.streamResponse(
             to: prompt,
             schema: try schema(),
-            options: GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 900)
+            options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 900)
         )
         var throttle = Throttle(interval: .milliseconds(60))
         var latest: [String: Any] = [:]
@@ -778,7 +765,7 @@ final class Summarizer {
         KEYWORDS: keyword, keyword, keyword
         """
         let session = LanguageModelSession(model: model, instructions: instructions)
-        let stream = session.streamResponse(to: prompt, options: GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 900))
+        let stream = session.streamResponse(to: prompt, options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 900))
         var throttle = Throttle(interval: .milliseconds(60))
         var written = ""
         for try await snapshot in stream {

@@ -39,4 +39,7 @@ jobs:
 
       - name: Rust tests
         working-directory: src-tauri
+        env:
+          # The Apple Intelligence helper must compile with the runner's Xcode
+          FLIPFILE_REQUIRE_AI: "1"
         run: cargo test
