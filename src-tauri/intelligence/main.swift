@@ -5,6 +5,7 @@
 // Everything stays on this Mac: FoundationModels runs Apple's on-device model.
 //
 //   flipfile-ai status      one JSON line: {"available":true} or {"available":false,"reason":"..."}
+//   flipfile-ai warm        loads the model ahead of a summary, so it starts writing sooner
 //   flipfile-ai summarize   reads one JSON request on stdin, writes events as JSON lines on stdout
 //                           (a summary, a translation of one, or an answer to a question)
 //
@@ -178,21 +179,20 @@ func passages(_ text: String, limit: Int) -> [String] {
     return out
 }
 
-/// Keeps the most telling sentences of a very long text, about `target` characters, in
-/// their original order. The text is cut into `windows` stretches that each keep their
-/// share, so the end of a book is represented as well as its start.
+struct Sentence {
+    let text: String
+    let paragraph: Int
+    let opening: Bool
+    let heading: Bool
+    let words: [String]
+}
+
+/// The sentences of a text with how much each tells about it.
 ///
 /// A sentence tells more when it has words that are frequent in the document but not
 /// everywhere (names, topics, figures rather than "the" or "dan"); headings, numbers and
 /// paragraph openings get a small bonus.
-func condense(_ text: String, target: Int, windows: Int) -> String {
-    struct Sentence {
-        let text: String
-        let paragraph: Int
-        let opening: Bool
-        let heading: Bool
-        let words: [String]
-    }
+func scored(_ text: String) -> (list: [Sentence], scores: [Double]) {
     var list: [Sentence] = []
     for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: true).enumerated() {
         let paragraph = String(line)
@@ -207,7 +207,7 @@ func condense(_ text: String, target: Int, windows: Int) -> String {
             list.append(Sentence(text: sentence, paragraph: index, opening: position == 0, heading: false, words: words(sentence)))
         }
     }
-    guard !list.isEmpty else { return "" }
+    guard !list.isEmpty else { return ([], []) }
 
     var frequency: [String: Int] = [:]
     var spread: [String: Int] = [:]
@@ -226,6 +226,15 @@ func condense(_ text: String, target: Int, windows: Int) -> String {
         if sentence.text.contains(where: \.isNumber) { score *= 1.15 }
         return score
     }
+    return (list, scores)
+}
+
+/// Keeps the most telling sentences of a very long text, about `target` characters, in
+/// their original order. The text is cut into `windows` stretches that each keep their
+/// share, so the end of a book is represented as well as its start.
+func condense(_ text: String, target: Int, windows: Int) -> String {
+    let (list, scores) = scored(text)
+    guard !list.isEmpty else { return "" }
 
     let lengths = list.map { $0.text.count + 1 }
     let all = lengths.reduce(0, +)
@@ -256,6 +265,56 @@ func condense(_ text: String, target: Int, windows: Int) -> String {
         paragraph = sentence.paragraph
     }
     return out
+}
+
+/// A first look at a document while the model is still reading it: `count` of its most
+/// telling sentences, picked in a moment without the model and shown in their original
+/// order. A document mostly says what it is about early on (an abstract, an
+/// introduction, the first lines of a letter), so earlier sentences weigh more. Only
+/// full statements of a readable length make a good preview: no headings, questions,
+/// table rows or lines cut off by a page break.
+func peek(_ text: String, count: Int) -> [String] {
+    // A book takes a while to tokenize, and its opening tells the most anyway
+    let (list, scores) = scored(String(text.prefix(60_000)))
+    let readable = list.indices.filter { index in
+        let sentence = list[index]
+        let words = sentence.text.split(separator: " ")
+        let shouting = words.filter { $0.count > 1 && $0.allSatisfy { !$0.isLowercase } && $0.contains(where: \.isLetter) }
+        return !sentence.heading
+            && (40...280).contains(sentence.text.count)
+            && sentence.words.count >= 6
+            // A full statement: it starts as a sentence and ends as one
+            && plain(sentence.text).first.map { !$0.isLowercase && !$0.isPunctuation } == true
+            && sentence.text.last.map { ".!…。！\"”".contains($0) } == true
+            // Not a table row, a letterhead or a list of codes and names
+            && shouting.count * 4 < words.count
+            && !sentence.text.contains("_") && !sentence.text.contains("|")
+            && sentence.text.filter({ !$0.isLetter && !$0.isWhitespace }).count * 5 < sentence.text.count
+            // Not run together with a heading ("BAB II LANDASAN TEORI 2.1 Rekayasa ...")
+            && sentence.text.range(of: #"(^|\s)\d+(\.\d+)+\s+\p{Lu}|^\p{Lu}{2,}\s+\p{Lu}{2,}\s|\p{Lu}{2,}\s+\p{Lu}{2,}\s+\p{Lu}{2,}"#, options: .regularExpression) == nil
+            // Not cut off from what it belongs to: brackets that close what they open
+            && sentence.text.filter({ $0 == "(" }).count == sentence.text.filter({ $0 == ")" }).count
+            && sentence.text.range(of: #"\s\p{L}\.$"#, options: .regularExpression) == nil
+    }
+    guard readable.count > count else { return readable.map { plain(list[$0].text) } }
+
+    let weight = { (index: Int) in scores[index] * (1.6 - Double(index) / Double(list.count)) }
+    var picked: [Int] = []
+    // Best first, but never two neighbours: three different things to see
+    for index in readable.sorted(by: { weight($0) > weight($1) }) where picked.count < count {
+        if picked.allSatisfy({ abs($0 - index) > 2 }) { picked.append(index) }
+    }
+    return picked.sorted().map { plain(list[$0].text) }
+}
+
+/// A sentence without its Markdown: list marks, emphasis, code ticks and link targets
+func plain(_ sentence: String) -> String {
+    var text = sentence
+    text = text.replacingOccurrences(of: #"^\s*(?:[-*+•>]|\d+[.)])\s+"#, with: "", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"!?\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"\*\*|__|`"#, with: "", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"(?<![\w*])\*([^*\s][^*]*)\*"#, with: "$1", options: .regularExpression)
+    return text.trimmingCharacters(in: .whitespaces)
 }
 
 /// The document's main language ("id", "en", ...), judged from its first 20 000 characters
@@ -343,7 +402,13 @@ final class Summarizer {
         var source = text
         var fromNotes = !notes.isEmpty
         if !fromNotes {
-            let perToken = await charactersPerToken(text)
+            // Something to read at once, while the model is still getting to it
+            let preview = peek(text, count: 3)
+            if !preview.isEmpty { emit("peek", ["sentences": preview]) }
+
+            // A short text fits even at the densest (one character a token): no need to
+            // ask the model, which may still be waking up
+            let perToken = text.count <= Int(Double(Budget.single) * 1.2) ? 1.2 : await charactersPerToken(text)
             let tokens = Int(Double(text.count) / perToken)
             if tokens > Budget.single {
                 notes = try await readInParts(text, tokens: tokens, perToken: perToken)
@@ -778,10 +843,28 @@ struct FlipfileAI {
             }
         case "summarize":
             await summarize()
+        case "warm":
+            await warm()
         default:
-            FileHandle.standardError.write(Data("usage: flipfile-ai status | summarize < request.json\n".utf8))
+            FileHandle.standardError.write(Data("usage: flipfile-ai status | warm | summarize < request.json\n".utf8))
             exit(2)
         }
+    }
+
+    /// Wakes the model up before it is needed: after a while unused it takes seconds to
+    /// load again, which the app overlaps with the drag and with reading the file. The
+    /// model runs in a system service, so it stays loaded after this process ends.
+    static func warm() async {
+        guard unavailableReason() == nil else { return }
+        let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
+        if #available(macOS 26.4, *) {
+            // Returns once the model has answered, so loaded
+            _ = try? await model.tokenCount(for: "flipfile")
+        } else {
+            LanguageModelSession(model: model).prewarm()
+            try? await Task.sleep(for: .seconds(4))
+        }
+        emit("warm")
     }
 
     static func summarize() async {

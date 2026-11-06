@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 /// Whether summaries can be written on this computer, and if not, why
 #[derive(Clone, Serialize)]
@@ -53,6 +54,28 @@ pub fn availability() -> Availability {
     // A Mac that can never run it (Intel, or no Apple Intelligence hardware) hides Summary
     let supported = !matches!(reason.as_str(), "deviceNotEligible" | "unsupported");
     Availability { supported, available: false, reason: Some(reason) }
+}
+
+/// When the model was last woken up: once a minute is plenty, it stays loaded a while
+static WARMED: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// Wakes the model up in the background ahead of a summary (a file dragged over the
+/// circle, a file being read): when unused for a while it takes seconds to load, and
+/// that now passes while the user is still dragging or the text is being read.
+pub fn warm() {
+    {
+        let mut last = WARMED.lock().unwrap();
+        if last.is_some_and(|at| at.elapsed() < Duration::from_secs(60)) {
+            return;
+        }
+        *last = Some(Instant::now());
+    }
+    let Some(helper) = helper() else { return };
+    let spawned = Command::new(helper).arg("warm").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    if let Ok(mut child) = spawned {
+        // Reaped when done, so it leaves no zombie behind
+        std::thread::spawn(move || child.wait());
+    }
 }
 
 /// What one summary needs

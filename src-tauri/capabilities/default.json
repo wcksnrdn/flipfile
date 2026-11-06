@@ -22,6 +22,7 @@
     "allow-set-workshop-window",
     "allow-quit-app",
     "allow-summary-status",
+    "allow-summary-warm",
     "allow-summarize",
     "allow-summary-show",
     "updater:default",

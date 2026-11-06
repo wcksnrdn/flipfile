@@ -1455,7 +1455,7 @@ main.workshop-open .stage {
 }
 
 /* ===== AI Summary (Apple Intelligence) ===== */
-/* Its slice carries Apple Intelligence's colours, so it reads as the AI one */
+/* Its slice is lit in pearl rather than the accent colour, so it reads as the AI one */
 .segment.ai .segment-label {
   fill: url(#seg-ai);
 }
@@ -1465,8 +1465,8 @@ main.workshop-open .stage {
 }
 
 .segment.ai.active .segment-body {
-  fill: url(#seg-ai);
-  filter: drop-shadow(0 0 12px rgba(191, 90, 242, 0.65));
+  fill: rgba(255, 255, 255, 0.24);
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.35));
 }
 
 .segment.ai.active .segment-label,
@@ -1474,7 +1474,7 @@ main.workshop-open .stage {
   fill: #ffffff;
 }
 
-/* The circle while Apple Intelligence works: a turning ring of its colours with a soft glow */
+/* The circle while Apple Intelligence works: light running around its glass rim */
 @property --ai-spin {
   syntax: "<angle>";
   inherits: false;
@@ -1494,18 +1494,16 @@ main.workshop-open .stage {
   pointer-events: none;
   background: conic-gradient(
     from var(--ai-spin),
-    #0a84ff,
-    #5e5ce6,
-    #bf5af2,
-    #ff375f,
-    #ff9f0a,
-    #ffd60a,
-    #64d2ff,
-    #0a84ff
+    rgba(255, 255, 255, 0.08) 0deg,
+    rgba(255, 255, 255, 0.5) 55deg,
+    rgba(255, 255, 255, 0.08) 120deg,
+    rgba(255, 255, 255, 0.08) 175deg,
+    rgba(255, 255, 255, 0.95) 245deg,
+    rgba(255, 255, 255, 0.08) 320deg
   );
   opacity: 0;
   animation:
-    ai-spin 2.4s linear infinite,
+    ai-spin 3.2s linear infinite,
     progress-in 0.3s ease forwards;
 }
 
@@ -1517,12 +1515,12 @@ main.workshop-open .stage {
 
 .ai-halo-glow {
   inset: -16px;
-  filter: blur(9px);
+  filter: blur(9px) opacity(0.45);
   -webkit-mask: radial-gradient(farthest-side, transparent 62%, #000 76%, #000 84%, transparent 100%);
   mask: radial-gradient(farthest-side, transparent 62%, #000 76%, #000 84%, transparent 100%);
 }
 
 .core.ai {
   --ring: transparent;
-  --ring-glow: rgba(191, 90, 242, 0.35);
+  --ring-glow: rgba(255, 255, 255, 0.22);
 }

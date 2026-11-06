@@ -1,7 +1,9 @@
 /*
- * Summary panel: a dark glass card like the circle, with Apple Intelligence's colours
- * for everything the model does. Native glass (src-tauri/src/platform/glass.rs) sits
- * behind the card on macOS; `.sp.native` then only adds a tint for legible text.
+ * Summary panel: a dark glass card like the circle. What the model does is shown in
+ * light rather than colour, the way Siri does it: a sheen running along the glass edge,
+ * a clear glass orb, white and silver accents. Native glass
+ * (src-tauri/src/platform/glass.rs) sits behind the card on macOS; `.sp.native` then
+ * only adds a tint for legible text.
  */
 
 @property --sp-spin {
@@ -16,9 +18,13 @@
   --sp-faint: rgba(235, 235, 245, 0.38);
   --sp-line: rgba(255, 255, 255, 0.08);
   --sp-card: rgba(255, 255, 255, 0.055);
-  --sp-ai: linear-gradient(100deg, #5ac8fa, #bf5af2 38%, #ff375f 70%, #ff9f0a);
-  /* Turned by animating --sp-spin on the element that draws it, only while visible */
-  --sp-ai-colors: #0a84ff, #5e5ce6, #bf5af2, #ff375f, #ff9f0a, #ffd60a, #64d2ff, #0a84ff;
+  /* The model's accent: pearl, white to a cool silver */
+  --sp-ai: linear-gradient(100deg, #ffffff, #d6dfeb 55%, #ffffff);
+  /* Two lights travelling around a glass edge; turned by animating --sp-spin on the
+     element that draws it, only while visible */
+  --sp-sheen:
+    rgba(255, 255, 255, 0.07) 0deg, rgba(255, 255, 255, 0.5) 55deg, rgba(255, 255, 255, 0.07) 120deg,
+    rgba(255, 255, 255, 0.07) 175deg, rgba(255, 255, 255, 0.95) 245deg, rgba(255, 255, 255, 0.07) 320deg;
   --sp-read: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
 
   position: relative;
@@ -63,13 +69,13 @@
   height: 0;
 }
 
-/* ===== Apple Intelligence glow: the card's edge lights up while the model works ===== */
+/* ===== While the model works, light runs along the card's glass edge ===== */
 .sp-glow {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: conic-gradient(from var(--sp-spin), var(--sp-ai-colors));
+  background: conic-gradient(from var(--sp-spin), var(--sp-sheen));
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -85,21 +91,21 @@
 }
 
 .sp-glow.haze {
-  padding: 9px;
-  filter: blur(14px);
+  padding: 8px;
+  filter: blur(12px);
 }
 
 .sp.busy .sp-glow,
 .sp.dropping .sp-glow {
-  animation: sp-spin 4s linear infinite;
+  animation: sp-spin 5.5s linear infinite;
 }
 
 .sp.busy .sp-glow.edge {
-  opacity: 0.95;
+  opacity: 0.85;
 }
 
 .sp.busy .sp-glow.haze {
-  opacity: 0.55;
+  opacity: 0.28;
 }
 
 /* ===== Header ===== */
@@ -137,7 +143,7 @@
 @keyframes sp-twinkle {
   50% {
     transform: scale(0.86) rotate(12deg);
-    filter: drop-shadow(0 0 6px rgba(191, 90, 242, 0.8));
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
   }
 }
 
@@ -398,46 +404,66 @@
   padding: 10px 6px 24px;
 }
 
+/* A clear glass sphere: a crisp highlight on top, light gathering at its base, a rim
+   catching the light, and one glint running round inside while the model works */
 .sp-orb {
   position: relative;
-  width: 76px;
-  height: 76px;
+  width: 72px;
+  height: 72px;
   margin-bottom: 18px;
   border-radius: 50%;
-  background: conic-gradient(from var(--sp-spin), var(--sp-ai-colors));
+  overflow: hidden;
+  background:
+    radial-gradient(46% 22% at 50% 17%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.12) 70%, transparent 100%),
+    radial-gradient(75% 40% at 50% 100%, rgba(255, 255, 255, 0.22), transparent 75%),
+    rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(14px) saturate(1.8) brightness(1.1);
+  backdrop-filter: blur(14px) saturate(1.8) brightness(1.1);
   box-shadow:
-    0 0 34px rgba(191, 90, 242, 0.45),
-    0 0 70px rgba(10, 132, 255, 0.25);
-  animation:
-    sp-breathe 2.6s ease-in-out infinite,
-    sp-spin 3s linear infinite;
+    inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+    inset 0 0 12px rgba(255, 255, 255, 0.1),
+    0 10px 26px rgba(0, 0, 0, 0.28),
+    0 0 34px rgba(255, 255, 255, 0.1);
+  animation: sp-breathe 2.8s ease-in-out infinite;
 }
 
-/* Glassy centre with a highlight, so it reads as a lit sphere */
 .sp-orb span {
   position: absolute;
-  inset: 7px;
+  inset: 0;
   border-radius: 50%;
-  background:
-    radial-gradient(60% 50% at 35% 28%, rgba(255, 255, 255, 0.75), transparent 60%),
-    radial-gradient(circle at 50% 60%, rgba(20, 22, 34, 0.35), rgba(20, 22, 34, 0.75));
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  background: conic-gradient(
+    from var(--sp-spin),
+    transparent 0deg,
+    transparent 170deg,
+    rgba(255, 255, 255, 0.85) 250deg,
+    transparent 330deg
+  );
+  /* Only along the rim: the middle stays clear */
+  -webkit-mask: radial-gradient(farthest-side, transparent 58%, #000 88%);
+  mask: radial-gradient(farthest-side, transparent 58%, #000 88%);
+  filter: blur(3px);
+  opacity: 0.7;
+  animation: sp-spin 2.6s linear infinite;
 }
 
 .sp-orb.calm {
-  animation:
-    sp-breathe 4.5s ease-in-out infinite,
-    sp-spin 12s linear infinite;
+  animation: sp-breathe 4.5s ease-in-out infinite;
   opacity: 0.85;
+}
+
+.sp-orb.calm span {
+  animation-duration: 10s;
+  opacity: 0.35;
 }
 
 @keyframes sp-breathe {
   50% {
-    transform: scale(1.07);
+    transform: scale(1.04);
     box-shadow:
-      0 0 46px rgba(255, 55, 95, 0.45),
-      0 0 90px rgba(90, 200, 250, 0.3);
+      inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+      inset 0 0 14px rgba(255, 255, 255, 0.16),
+      0 10px 26px rgba(0, 0, 0, 0.28),
+      0 0 46px rgba(255, 255, 255, 0.18);
   }
 }
 
@@ -568,7 +594,7 @@
   padding: 12px 14px 12px 16px;
   border-radius: 14px;
   background:
-    linear-gradient(120deg, rgba(191, 90, 242, 0.13), rgba(10, 132, 255, 0.08) 60%, rgba(255, 159, 10, 0.06)),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015) 70%),
     var(--sp-card);
   font: 400 13.5px/1.55 var(--sp-read);
   color: var(--sp-text);
@@ -582,7 +608,7 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: linear-gradient(180deg, #5ac8fa, #bf5af2, #ff375f, #ff9f0a);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.25));
 }
 
 .sp-section {
@@ -645,13 +671,14 @@
 .sp-points li:first-child .sp-num {
   background: var(--sp-ai);
   box-shadow: none;
+  color: #15171f;
 }
 
 /* Amounts, percentages and dates: a soft highlighter stroke under the figure */
 .sp-figure {
   padding: 0 1px;
-  background: linear-gradient(180deg, transparent 58%, rgba(255, 196, 64, 0.3) 58%, rgba(255, 196, 64, 0.3) 92%, transparent 92%);
-  color: #fff4d6;
+  background: linear-gradient(180deg, transparent 60%, rgba(255, 255, 255, 0.16) 60%, rgba(255, 255, 255, 0.16) 92%, transparent 92%);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -863,9 +890,9 @@
 
 .sp-suggestions button {
   padding: 6px 11px;
-  border: 1px solid rgba(191, 90, 242, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
-  background: linear-gradient(120deg, rgba(191, 90, 242, 0.12), rgba(10, 132, 255, 0.08));
+  background: rgba(255, 255, 255, 0.06);
   color: var(--sp-text);
   font: 400 11.5px/1.35 var(--sp-read);
   text-align: left;
@@ -877,7 +904,7 @@
 }
 
 .sp-suggestions button:hover {
-  background: linear-gradient(120deg, rgba(191, 90, 242, 0.24), rgba(10, 132, 255, 0.16));
+  background: rgba(255, 255, 255, 0.13);
 }
 
 .sp-suggestions button:active {
@@ -901,8 +928,8 @@
 }
 
 .sp-ask:focus-within {
-  border-color: rgba(191, 90, 242, 0.6);
-  box-shadow: 0 0 0 3px rgba(191, 90, 242, 0.15);
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07);
 }
 
 .sp-ask > .sp-sparkle {
@@ -1245,4 +1272,102 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* ===== Quick look: the document's own words while the model reads ===== */
+.sp-working.peeking {
+  justify-content: flex-start;
+  padding-top: 16px;
+}
+
+.sp-working.peeking .sp-orb {
+  width: 46px;
+  height: 46px;
+  margin-bottom: 12px;
+}
+
+.sp-peek {
+  position: relative;
+  width: 100%;
+  margin-top: 18px;
+  padding: 11px 14px 3px;
+  border: 1px solid var(--sp-line);
+  border-radius: 14px;
+  background: var(--sp-card);
+  text-align: left;
+  overflow: hidden;
+  animation: sp-rise 0.45s ease both;
+}
+
+.sp-summary .sp-peek {
+  margin-top: 4px;
+}
+
+/* A light passing over it: the model is still reading */
+.sp-peek::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.07) 50%, transparent 65%);
+  background-size: 260% 100%;
+  animation: sp-sheen 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sp-sheen {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -30% 0;
+  }
+}
+
+.sp-peek-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--sp-faint);
+}
+
+.sp-peek-label .sp-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.sp-peek ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sp-peek li {
+  position: relative;
+  padding: 0 0 10px 13px;
+  font: 400 12.5px/1.5 var(--sp-read);
+  color: var(--sp-muted);
+  user-select: text;
+  -webkit-user-select: text;
+  animation: sp-rise 0.5s ease both;
+  animation-delay: calc(var(--i) * 140ms);
+}
+
+.sp-peek li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 13px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.sp-chip.icon {
+  padding: 4px 6px;
 }

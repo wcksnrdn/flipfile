@@ -19,6 +19,7 @@ fn main() {
             "set_workshop_window",
             "quit_app",
             "summary_status",
+            "summary_warm",
             "summarize",
             "summary_run",
             "summary_redo",

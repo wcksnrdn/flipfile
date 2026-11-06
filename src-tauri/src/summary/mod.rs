@@ -9,6 +9,11 @@
 // The circle starts a job with `summarize` (only files the user handed over, as for
 // convert_batch). The panel runs it with `summary_run` and receives every step on its
 // channel as it happens, while the circle shows the progress (`summary-progress`).
+//
+// Waiting is kept short three ways: the model is woken up while a file is still being
+// dragged or read (`summary_warm`), the panel shows a few telling sentences of the
+// document the moment it is read (`Peek`), and a file summarised before and unchanged
+// since comes back at once from memory (`Summaries::cache`).
 
 mod helper;
 mod report;
@@ -19,6 +24,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::time::SystemTime;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -38,6 +44,9 @@ pub enum Event {
     Reading { file: usize, page: usize, pages: usize },
     /// The text is read
     Read { file: usize, kind: &'static str, pages: usize, words: usize, ocr: bool },
+    /// A few telling sentences of the text, picked without the model: something to read
+    /// while it works
+    Peek { file: usize, sentences: Vec<String> },
     /// A long document is read in parts; `kept` is below 1 when it was condensed first
     Plan { file: usize, parts: usize, kept: f64 },
     /// Taking notes on one part, and the notes so far
@@ -47,7 +56,8 @@ pub enum Event {
     Writing { file: usize },
     /// The summary so far: its fields appear one after another as the model writes them
     Summary { file: usize, data: Value },
-    Done { file: usize, data: Value, language: String, document_language: Option<String>, seconds: f64 },
+    /// `cached`: the file was summarised before and has not changed since
+    Done { file: usize, data: Value, language: String, document_language: Option<String>, seconds: f64, cached: bool },
     Failed { file: usize, code: String, message: String },
     /// The answer to a question about a summarised file, as it is written
     Answer { file: usize, text: String, done: bool, error: Option<String> },
@@ -64,9 +74,30 @@ struct Progress {
     progress: Option<f64>,
 }
 
+/// A file as it was when dropped: summarised again only once it changes
+#[derive(Clone, PartialEq)]
+struct Key {
+    path: PathBuf,
+    size: u64,
+    modified: Option<SystemTime>,
+}
+
+impl Key {
+    fn of(path: &Path) -> Option<Key> {
+        let meta = std::fs::metadata(path).ok()?;
+        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        Some(Key { path, size: meta.len(), modified: meta.modified().ok() })
+    }
+}
+
+/// Summaries kept in memory (never on disk) until the app quits
+const CACHED: usize = 16;
+
 /// One file of the job, kept for Copy, Save and another language
+#[derive(Clone)]
 struct Doc {
     path: PathBuf,
+    key: Option<Key>,
     text: Option<Text>,
     notes: Vec<String>,
     /// The summary in every language it was written in, the document's own first
@@ -93,6 +124,8 @@ struct Job {
 pub struct Summaries {
     job: Mutex<Job>,
     running: helper::Running,
+    /// Files summarised earlier, least recently used first
+    cache: Mutex<Vec<Doc>>,
 }
 
 impl Summaries {
@@ -106,6 +139,32 @@ impl Summaries {
         job.generation += 1;
         self.running.stop();
         job.generation
+    }
+
+    /// Keeps a finished file (its text, notes and every language it was written in) for
+    /// when it is dropped again. Questions start over: they belong to that one look.
+    fn remember(&self, file: usize) {
+        let Some(mut doc) = self.job.lock().unwrap().docs.get(file).cloned() else { return };
+        let Some(key) = doc.key.clone() else { return };
+        if doc.current.is_none() || doc.text.is_none() {
+            return;
+        }
+        doc.answers.clear();
+        let mut cache = self.cache.lock().unwrap();
+        cache.retain(|earlier| earlier.key.as_ref() != Some(&key));
+        cache.push(doc);
+        if cache.len() > CACHED {
+            cache.remove(0);
+        }
+    }
+
+    /// The earlier summary of an unchanged file, now the most recently used
+    fn recall(&self, key: &Key) -> Option<Doc> {
+        let mut cache = self.cache.lock().unwrap();
+        let index = cache.iter().position(|earlier| earlier.key.as_ref() == Some(key))?;
+        let doc = cache.remove(index);
+        cache.push(doc.clone());
+        Some(doc)
     }
 }
 
@@ -221,6 +280,7 @@ pub async fn summary_run(app: AppHandle, on_event: Channel<Event>) -> Result<boo
             .iter()
             .map(|path| Doc {
                 path: path.clone(),
+                key: Key::of(path),
                 text: None,
                 notes: vec![],
                 versions: vec![],
@@ -235,7 +295,8 @@ pub async fn summary_run(app: AppHandle, on_event: Channel<Event>) -> Result<boo
         let send = Sender::new(&app, generation, &on_event, paths.len());
         send.send(Event::Start { files: paths.iter().map(|p| file_name(p).to_string()).collect() });
         for file in 0..paths.len() {
-            if !summarize_file(&app, &send, file, None) {
+            let live = if recall(&app, &send, file) { send.live() } else { summarize_file(&app, &send, file, None) };
+            if !live {
                 return;
             }
         }
@@ -268,8 +329,16 @@ pub async fn summary_redo(app: AppHandle, file: usize, language: Option<String>,
             doc.current = Some(summary.clone());
             Some((summary, doc.document_language.clone()))
         });
+        if language.is_none() {
+            // From scratch: translations of the summary being replaced go with it
+            if let Some(doc) = state.job.lock().unwrap().docs.get_mut(file) {
+                doc.versions.clear();
+                doc.current = None;
+            }
+        }
         if let (Some((data, document_language)), Some(language)) = (known, language.clone()) {
-            send.send(Event::Done { file, data, language, document_language, seconds: 0.0 });
+            state.remember(file);
+            send.send(Event::Done { file, data, language, document_language, seconds: 0.0, cached: false });
         } else if !summarize_file(&app, &send, file, language.as_deref()) {
             return;
         }
@@ -277,6 +346,25 @@ pub async fn summary_redo(app: AppHandle, file: usize, language: Option<String>,
     })
     .await
     .map_err(|e| e.to_string())
+}
+
+/// A file summarised before and unchanged since: its summary, in the language it was
+/// last shown in, is back at once. Returns whether it was.
+fn recall(app: &AppHandle, send: &Sender, file: usize) -> bool {
+    let state = app.state::<Summaries>();
+    let Some(key) = state.job.lock().unwrap().docs.get(file).and_then(|doc| doc.key.clone()) else { return false };
+    let Some(earlier) = state.recall(&key) else { return false };
+    let (Some(text), Some(data)) = (earlier.text.clone(), earlier.current.clone()) else { return false };
+    let language = earlier.versions.iter().find(|(_, version)| *version == data).map_or("en".into(), |(written, _)| written.clone());
+    let document_language = earlier.document_language.clone();
+    {
+        let mut job = state.job.lock().unwrap();
+        let Some(doc) = job.docs.get_mut(file) else { return false };
+        *doc = Doc { path: doc.path.clone(), ..earlier };
+    }
+    send.send(Event::Read { file, kind: text.kind, pages: text.pages, words: text.words, ocr: text.ocr });
+    send.send(Event::Done { file, data, language, document_language, seconds: 0.0, cached: true });
+    true
 }
 
 /// Reads one file and has it summarised. Returns false once the run is out of date.
@@ -292,6 +380,8 @@ fn summarize_file(app: &AppHandle, send: &Sender, file: usize, language: Option<
         return send.live();
     };
     let name = file_name(&path).to_string();
+    // The model loads while the text is read
+    helper::warm();
 
     let text = match cached {
         Some(text) => text,
@@ -337,6 +427,10 @@ fn summarize_file(app: &AppHandle, send: &Sender, file: usize, language: Option<
             "plan" if count("parts") > 1 => {
                 send.send(Event::Plan { file, parts: count("parts"), kept: event["kept"].as_f64().unwrap_or(1.0) })
             }
+            "peek" => {
+                let sentences = event["sentences"].as_array().map(|all| all.iter().filter_map(|s| s.as_str().map(String::from)).collect());
+                send.send(Event::Peek { file, sentences: sentences.unwrap_or_default() })
+            }
             "part" => send.send(Event::Part { file, part: count("part"), parts: count("parts") }),
             "notes" => send.send(Event::Notes { file, part: count("part"), text: event["text"].as_str().unwrap_or_default().into() }),
             "compose" => send.send(Event::Writing { file }),
@@ -356,12 +450,14 @@ fn summarize_file(app: &AppHandle, send: &Sender, file: usize, language: Option<
                         doc.notes = notes.iter().filter_map(|n| n.as_str().map(String::from)).collect();
                     }
                 }
+                state.remember(file);
                 send.send(Event::Done {
                     file,
                     data: event["data"].clone(),
                     language,
                     document_language: document_language.clone(),
                     seconds: event["seconds"].as_f64().unwrap_or(0.0),
+                    cached: false,
                 });
             }
             "error" => {
@@ -448,6 +544,12 @@ pub async fn summary_ask(app: AppHandle, file: usize, question: String, on_event
     .map_err(|e| e.to_string())
 }
 
+/// A file is being dragged over the circle: the model wakes up in the meantime
+#[tauri::command]
+pub fn summary_warm() {
+    helper::warm();
+}
+
 /// The circle was clicked after a summary: shows the panel again
 #[tauri::command]
 pub async fn summary_show(app: AppHandle) -> Result<(), String> {
@@ -509,5 +611,59 @@ pub fn summary_settings() {
 pub fn shutdown(app: &AppHandle) {
     if let Some(state) = app.try_state::<Summaries>() {
         state.running.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn doc(key: Option<Key>, summary: Option<Value>) -> Doc {
+        Doc {
+            path: key.as_ref().map_or_else(|| PathBuf::from("a.txt"), |k| k.path.clone()),
+            key,
+            text: Some(Text { text: "Hello.".into(), pages: 1, words: 1, kind: "Text", ocr: false }),
+            notes: vec![],
+            versions: summary.iter().map(|s| ("en".to_string(), s.clone())).collect(),
+            current: summary,
+            document_language: Some("en".into()),
+            answers: vec![("Why?".into(), "Because.".into())],
+        }
+    }
+
+    fn key(name: &str, size: u64) -> Key {
+        Key { path: PathBuf::from(name), size, modified: None }
+    }
+
+    #[test]
+    fn finished_files_come_back_until_they_change() {
+        let state = Summaries::default();
+        state.job.lock().unwrap().docs = vec![doc(Some(key("a.txt", 5)), Some(json!({"title": "A"}))), doc(Some(key("b.txt", 5)), None)];
+        state.remember(0);
+        state.remember(1); // not finished: nothing to keep
+
+        let earlier = state.recall(&key("a.txt", 5)).expect("kept");
+        assert_eq!(earlier.current, Some(json!({"title": "A"})));
+        assert!(earlier.answers.is_empty(), "questions start over");
+        assert!(state.recall(&key("a.txt", 6)).is_none(), "a changed file is summarized again");
+        assert!(state.recall(&key("b.txt", 5)).is_none());
+    }
+
+    #[test]
+    fn the_least_recently_used_goes_first() {
+        let state = Summaries::default();
+        for i in 0..=CACHED {
+            state.job.lock().unwrap().docs = vec![doc(Some(key(&format!("{i}.txt"), 1)), Some(json!({})))];
+            state.remember(0);
+            if i == 0 {
+                continue;
+            }
+            // The first file stays in use
+            assert!(state.recall(&key("0.txt", 1)).is_some());
+        }
+        assert_eq!(state.cache.lock().unwrap().len(), CACHED);
+        assert!(state.recall(&key("0.txt", 1)).is_some());
+        assert!(state.recall(&key("1.txt", 1)).is_none(), "the oldest unused one made room");
     }
 }

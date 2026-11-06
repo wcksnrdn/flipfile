@@ -31,12 +31,14 @@ import {
   buildWorkspaceRings,
   defaultSlots,
   getSlotsForRing,
+  hasAiSupport,
   loadWorkspacesState,
   setAiSupport,
   saveWorkspacesState,
   type CatalogEntry,
   type WorkspacesState,
 } from "./workshop";
+import { isDocument } from "./summary";
 import "./App.css";
 
 type Status = {
@@ -607,6 +609,8 @@ export default function App() {
           setDragging(true);
           setFileCount(p.paths.length);
           setMergeable(p.paths.length > 1 && p.paths.every((path) => !OFFICE_FILE.test(path)));
+          // It may be headed for Summary: the model loads while the user aims
+          if (hasAiSupport() && p.paths.some(isDocument)) invoke("summary_warm").catch(() => {});
           const { point, raw } = at(p.position);
           setHover(resolve(p.type, point, raw));
         } else if (p.type === "over") {
@@ -1042,12 +1046,11 @@ export default function App() {
               <stop offset="0" stopColor="var(--accent)" stopOpacity="0.95" />
               <stop offset="1" stopColor="var(--accent-2)" stopOpacity="0.85" />
             </linearGradient>
-            {/* Apple Intelligence colours for the AI Summary slice */}
+            {/* Pearl for the AI Summary slice: light, not colour */}
             <linearGradient id="seg-ai" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#64d2ff" />
-              <stop offset="0.4" stopColor="#bf5af2" />
-              <stop offset="0.75" stopColor="#ff375f" />
-              <stop offset="1" stopColor="#ff9f0a" />
+              <stop offset="0" stopColor="#ffffff" />
+              <stop offset="0.55" stopColor="#d6dfeb" />
+              <stop offset="1" stopColor="#ffffff" />
             </linearGradient>
           </defs>
 

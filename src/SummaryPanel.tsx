@@ -72,7 +72,7 @@ const Icon = ({ children, className }: { children: ReactNode; className?: string
   </svg>
 );
 
-/** Apple Intelligence-style sparkle: one large and one small four-pointed star */
+/** Sparkle: one large and one small four-pointed star, in pearl */
 export const Sparkle = ({ className }: { className?: string }) => (
   <svg className={cls("sp-sparkle", className)} viewBox="0 0 24 24" aria-hidden="true">
     <path d="M10.5 3c.6 4.6 3.9 7.9 8.5 8.5-4.6.6-7.9 3.9-8.5 8.5-.6-4.6-3.9-7.9-8.5-8.5C6.6 10.9 9.9 7.6 10.5 3z" />
@@ -121,6 +121,11 @@ const FolderIcon = () => (
 const SendIcon = () => (
   <Icon>
     <path d="M12 19V5.5M6.5 11 12 5.5l5.5 5.5" />
+  </Icon>
+);
+const QuoteIcon = () => (
+  <Icon>
+    <path d="M9.5 8.5c-2.4.8-4 2.9-4 5.5v2.5h4V12.5h-2M18.5 8.5c-2.4.8-4 2.9-4 5.5v2.5h4V12.5h-2" />
   </Icon>
 );
 const RetryIcon = () => (
@@ -191,6 +196,26 @@ function FileCard({ doc }: { doc: Doc }) {
   );
 }
 
+/** The document's own most telling sentences, there the moment it is read, while the
+ *  model is still on its way to a summary */
+function Peek({ sentences }: { sentences: string[] }) {
+  return (
+    <div className="sp-peek">
+      <div className="sp-peek-label">
+        <QuoteIcon />
+        Quick look · from the document
+      </div>
+      <ul>
+        {sentences.map((sentence, i) => (
+          <li key={i} style={{ "--i": i } as CSSProperties}>
+            <Rich text={sentence} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Before any of the summary exists: the model reading, with its notes as they come */
 function Working({ doc }: { doc: Doc }) {
   let status = "Reading";
@@ -224,10 +249,10 @@ function Working({ doc }: { doc: Doc }) {
         .filter(Boolean)
         .map((text, i) => ({ key: `${part}-${i}`, text }))
     )
-    .slice(-4);
+    .slice(doc.peek ? -2 : -4);
 
   return (
-    <div className="sp-working">
+    <div className={cls("sp-working", doc.peek && "peeking")}>
       <div className="sp-orb" aria-hidden="true">
         <span />
       </div>
@@ -249,6 +274,7 @@ function Working({ doc }: { doc: Doc }) {
           ))}
         </ul>
       )}
+      {doc.peek && !doc.translating && <Peek sentences={doc.peek} />}
     </div>
   );
 }
@@ -290,9 +316,11 @@ function SummaryView({
   onCheck,
   answers,
   onAsk,
+  peek,
 }: {
   summary: Summary;
   writing: boolean;
+  peek?: string[];
   checked: Set<number>;
   onCheck: (index: number) => void;
   answers: Answer[];
@@ -347,7 +375,7 @@ function SummaryView({
           </ol>
         </Section>
       )}
-      {writing && !started("points") && started("tldr") && <Skeleton lines={3} />}
+      {writing && !started("points") && (peek ? <Peek sentences={peek} /> : started("tldr") && <Skeleton lines={3} />)}
 
       {facts.length > 0 && (
         <Section title="Key figures">
@@ -653,13 +681,20 @@ export default function SummaryPanel() {
           onCheck={toggleCheck}
           answers={doc.answers}
           onAsk={canAsk ? ask : null}
+          peek={doc.translating ? undefined : doc.peek}
         />
       );
     else body = <Working doc={doc} />;
   }
 
   let footer: ReactNode = null;
-  if (doc?.stage === "done") {
+  if (doc?.stage === "done" && doc.cached) {
+    footer = (
+      <>
+        <b>Instant</b> · summarized earlier
+      </>
+    );
+  } else if (doc?.stage === "done") {
     const minutes = doc.words ? readingMinutes(doc.words) - 1 : 0;
     footer =
       minutes >= 2 ? (
@@ -680,10 +715,9 @@ export default function SummaryPanel() {
       <svg className="sp-defs" aria-hidden="true">
         <defs>
           <linearGradient id="sp-ai" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#5ac8fa" />
-            <stop offset="0.38" stopColor="#bf5af2" />
-            <stop offset="0.7" stopColor="#ff375f" />
-            <stop offset="1" stopColor="#ff9f0a" />
+            <stop offset="0" stopColor="#ffffff" />
+            <stop offset="0.55" stopColor="#d6dfeb" />
+            <stop offset="1" stopColor="#ffffff" />
           </linearGradient>
         </defs>
       </svg>
@@ -762,6 +796,16 @@ export default function SummaryPanel() {
               <LockIcon /> On this Mac
             </span>
             <span className="sp-foot-info">{footer}</span>
+            {doc.cached && !busy && (
+              <button
+                className="sp-chip icon"
+                onClick={() => redo(state.active, null)}
+                title="Summarize again from scratch"
+                aria-label="Summarize again"
+              >
+                <RetryIcon />
+              </button>
+            )}
             {other && (
               <button className="sp-chip" onClick={() => redo(state.active, other)} title="Write this summary in another language">
                 <TranslateIcon /> {languageName(other)}

@@ -96,6 +96,7 @@ pub fn run() {
             set_workshop_window,
             glass::set_glass,
             summary::summary_status,
+            summary::summary_warm,
             summary::summarize,
             summary::summary_run,
             summary::summary_redo,

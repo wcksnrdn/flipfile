@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-summary-warm"
+description = "Enables the summary_warm command without any pre-configured scope."
+commands.allow = ["summary_warm"]
+
+[[permission]]
+identifier = "deny-summary-warm"
+description = "Denies the summary_warm command without any pre-configured scope."
+commands.deny = ["summary_warm"]

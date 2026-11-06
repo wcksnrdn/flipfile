@@ -19,6 +19,7 @@ let aiSupport = IS_MAC;
 export function setAiSupport(supported: boolean) {
   aiSupport = supported;
 }
+export const hasAiSupport = () => aiSupport;
 
 export type CatalogCategory = "photo" | "photo-tools" | "office" | "data" | "video" | "music" | "nav";
 

@@ -25,6 +25,7 @@ export type SummaryEvent =
   | { type: "restart"; file: number; language: string | null }
   | { type: "reading"; file: number; page: number; pages: number }
   | { type: "read"; file: number; kind: string; pages: number; words: number; ocr: boolean }
+  | { type: "peek"; file: number; sentences: string[] }
   | { type: "plan"; file: number; parts: number; kept: number }
   | { type: "part"; file: number; part: number; parts: number }
   | { type: "notes"; file: number; part: number; text: string }
@@ -37,6 +38,7 @@ export type SummaryEvent =
       language: string;
       documentLanguage: string | null;
       seconds: number;
+      cached: boolean;
     }
   | { type: "failed"; file: number; code: string; message: string }
   | { type: "answer"; file: number; text: string; done: boolean; error: string | null }
@@ -58,6 +60,8 @@ export type Doc = {
   parts?: number;
   kept?: number;
   notes: string[];
+  // A few sentences from the document itself, shown until the summary has its points
+  peek?: string[];
   summary: Summary | null;
   answers: Answer[];
   language?: string;
@@ -65,6 +69,8 @@ export type Doc = {
   // Being translated into this language (another language was picked)
   translating?: string | null;
   seconds?: number;
+  // Summarized earlier: the file has not changed since
+  cached?: boolean;
   error?: { code: string; message: string };
   startedAt: number;
 };
@@ -112,6 +118,9 @@ export function reduce(state: PanelState, e: SummaryEvent): PanelState {
     case "read":
       next = { ...doc, kind: e.kind, pages: e.pages, words: e.words, ocr: e.ocr };
       break;
+    case "peek":
+      next = { ...doc, peek: e.sentences.length ? e.sentences : undefined };
+      break;
     case "plan":
       next = { ...doc, stage: "thinking", parts: e.parts, kept: e.kept };
       break;
@@ -139,6 +148,7 @@ export function reduce(state: PanelState, e: SummaryEvent): PanelState {
         documentLanguage: e.documentLanguage ?? doc.documentLanguage,
         translating: null,
         seconds: e.seconds || doc.seconds,
+        cached: e.cached,
       };
       break;
     case "failed":
@@ -173,6 +183,10 @@ const EXTENSION_BADGES: [RegExp, string][] = [
   [/\.epub$/i, "BOOK"],
   [/\.(json|ya?ml|xml)$/i, "DATA"],
 ];
+
+/// A document worth waking the model up for when it is dragged in (photos rarely are
+/// summarized, and loading the model costs memory)
+export const isDocument = (path: string) => EXTENSION_BADGES.some(([re]) => re.test(path));
 
 /// Short label and colour of the file's badge, from its name until the backend knows more
 export function badgeOf(name: string): { label: string; tone: string } {

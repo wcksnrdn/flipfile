@@ -21,6 +21,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
     and back.
   - Copy as Markdown (`⌘C`), save as `name_summary.md` next to the original (`⌘S`, undoable from the
     tray; questions and answers included), or drop another file on the panel.
+  - Feels quick: a **Quick look** with three telling sentences from the document appears the moment
+    it is read, the model wakes up while a document is still being dragged in, and a file dropped
+    again unchanged comes back instantly (kept in memory only, until the app quits).
   - Runs in its own helper process (`flipfile-ai`), so the app keeps launching on every macOS
     version; the slice only appears where Apple Intelligence can run.
 
