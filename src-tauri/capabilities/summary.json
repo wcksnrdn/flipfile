@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "summary",
+  "description": "The summary panel: runs the job the circle handed it, answers questions about it, copies or saves the finished summary and shows the saved file. Files dropped on the panel itself are checked against the drop grant like any other.",
+  "windows": ["summary"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "opener:allow-reveal-item-in-dir",
+    "allow-set-glass",
+    "allow-summarize",
+    "allow-summary-run",
+    "allow-summary-redo",
+    "allow-summary-ask",
+    "allow-summary-close",
+    "allow-summary-copy",
+    "allow-summary-save",
+    "allow-summary-settings"
+  ]
+}

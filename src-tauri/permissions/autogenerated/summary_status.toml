@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-summary-status"
+description = "Enables the summary_status command without any pre-configured scope."
+commands.allow = ["summary_status"]
+
+[[permission]]
+identifier = "deny-summary-status"
+description = "Denies the summary_status command without any pre-configured scope."
+commands.deny = ["summary_status"]

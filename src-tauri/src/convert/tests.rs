@@ -914,3 +914,50 @@ fn anything_becomes_slides() {
     assert_eq!(deck.slides.len(), 3);
     assert_eq!(deck.media.len(), 3);
 }
+
+#[test]
+fn summaries_read_the_text_of_every_document_kind() {
+    let dir = temp_dir("summary-text");
+    let none = &|_: usize, _: usize| {};
+
+    let docx = sample_docx(&dir);
+    let word = text::extract(&docx, none).unwrap();
+    assert_eq!(word.kind, "Word document");
+    assert!(word.text.contains("Revenue grew by twelve percent this quarter."), "{}", word.text);
+
+    // A PDF: its pages are counted, its lines joined into paragraphs
+    let pdf = run(docx.to_str().unwrap(), "pdf", None, &Options::default()).unwrap();
+    let read = text::extract(Path::new(&pdf), none).unwrap();
+    assert_eq!((read.kind, read.pages, read.ocr), ("PDF", 2, false));
+    assert!(read.text.contains("Revenue grew by twelve percent this quarter."), "{}", read.text);
+
+    let deck = text::extract(&sample_deck(&dir), none).unwrap();
+    assert_eq!(deck.kind, "Presentation");
+    assert!(deck.text.contains("Revenue grew 12%") && deck.text.contains("Bandung"), "{}", deck.text);
+
+    // Visible cells as a Markdown table, hidden sheets left out
+    let sheet = text::extract(&sample_xlsx(&dir), none).unwrap();
+    assert_eq!(sheet.kind, "Spreadsheet");
+    assert!(sheet.text.contains("Kas dan setara kas"), "{}", sheet.text);
+}
+
+/// A scanned page has no text layer: it is read by the system's text recognition
+#[cfg(target_os = "macos")]
+#[test]
+fn summaries_read_scanned_pdfs() {
+    let dir = temp_dir("summary-scan");
+    // The text of a real PDF, as pixels only
+    let pdf = run(sample_docx(&dir).to_str().unwrap(), "pdf", None, &Options::default()).unwrap();
+    let png = run(&pdf, "png", None, &Options::default()).unwrap();
+    let page = fs::read_dir(&png).unwrap().map(|e| e.unwrap().path()).min().unwrap();
+    let scan = dir.join("scan.pdf");
+    let image = image::open(&page).unwrap().to_rgb8();
+    let mut jpeg = Vec::new();
+    JpegEncoder::new_with_quality(&mut jpeg, 90).encode_image(&image).unwrap();
+    let (w, h) = image.dimensions();
+    fs::write(&scan, jpeg_pages_to_pdf(&[Page { jpeg, width: w, height: h, gray: false }])).unwrap();
+
+    let read = text::extract(&scan, &|_, _| {}).unwrap();
+    assert!(read.ocr, "a page without a text layer is recognised");
+    assert!(read.text.contains("Revenue grew"), "{}", read.text);
+}

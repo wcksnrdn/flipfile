@@ -1627,7 +1627,7 @@ fn list_depth(item: &str) -> usize {
     (item.len() - item.trim_start().len()) / 2
 }
 
-fn blocks_to_markdown(blocks: &[DocBlock]) -> String {
+pub(super) fn blocks_to_markdown(blocks: &[DocBlock]) -> String {
     let mut out = String::new();
     for b in blocks {
         match b {

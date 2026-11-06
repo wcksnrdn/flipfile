@@ -351,6 +351,7 @@ const CUSTOM_LABELS: Record<string, string> = {
   "vid-mp3": "Extract Audio",
   "vid-1080p": "1080p Video",
   "vid-720p": "720p Video",
+  "ai-summary": "AI Summary",
 };
 
 export function labelOf(id: string): string | undefined {

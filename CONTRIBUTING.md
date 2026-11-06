@@ -24,7 +24,7 @@ Before submitting a change, please keep flipfile's core philosophy in mind:
 * **[Node.js](https://nodejs.org/) 20+** (developed with Node 24)
 * **[Rust](https://rustup.rs/) (stable toolchain)**
 * **[Tauri v2 OS Prerequisites](https://tauri.app/start/prerequisites/)**:
-  * **macOS:** Xcode Command Line Tools (`xcode-select --install`)
+  * **macOS:** Xcode Command Line Tools (`xcode-select --install`); with the macOS 26 SDK or later the build also compiles `flipfile-ai` for AI summaries (with an older SDK the app builds without them)
   * **Windows:** Microsoft Visual Studio C++ Build Tools + WebView2
   * **Linux:** `libwebkit2gtk-4.1-dev`, `build-essential`, `curl`, `wget`, `file`, `libxdo-dev`, `libssl-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`
 
@@ -51,9 +51,11 @@ npm run tauri dev
 │   ├── dropTarget.ts            # Single source of truth for ring geometry & sector hit-testing
 │   ├── workshop.ts              # Ring Workshop catalog, custom workspaces & localStorage persistence
 │   ├── WorkshopPanel.tsx        # Interactive drag-and-drop Ring Workshop UI
+│   ├── SummaryPanel.tsx         # AI Summary panel (second window), state in summary.ts
 │   └── DebugOverlay.tsx         # Cursor & angle diagnostics (VITE_DEBUG_DROP=1)
 └── src-tauri/                   # Backend (Rust + Tauri v2)
-    ├── build.rs                 # Registers app commands in Tauri's ACL manifest
+    ├── build.rs                 # Registers app commands in Tauri's ACL manifest; builds flipfile-ai (macOS)
+    ├── intelligence/main.swift  # flipfile-ai: Apple Intelligence (FoundationModels) helper process
     ├── capabilities/            # Least-privilege permissions for the WebView
     └── src/
         ├── lib.rs               # Tauri setup, plugins, commands, window sizing
@@ -67,6 +69,7 @@ npm run tauri dev
         │   ├── pdf.rs           #   PDF ↔ images & multi-image PDF merging
         │   ├── word.rs          #   Word ↔ PDF & OCR → Word
         │   ├── clean.rs         #   Lossless EXIF/GPS/metadata stripping
+        │   ├── text.rs          #   Readable text of any document (incl. OCR) for AI summaries
         │   ├── memory.rs        #   System RAM budget & concurrency limiter
         │   ├── output.rs        #   Collision-safe output path generation
         │   ├── tests.rs         #   Unit test suite
@@ -75,6 +78,7 @@ npm run tauri dev
         ├── office/              # Built-in DOCX ↔ PDF (Typst), PDF → DOCX & XLSX → PDF engines
         ├── pdf/                 # PDFium renderer & minimal PDF writer
         ├── platform/            # Native OS integrations (ImageIO/WIC, Vision OCR/BG, Liquid Glass, Tray)
+        ├── summary/             # AI summaries: jobs, the flipfile-ai helper, the panel window, Markdown
         └── state/               # Managed state (grants.rs, history.rs, settings.rs)
 ```
 

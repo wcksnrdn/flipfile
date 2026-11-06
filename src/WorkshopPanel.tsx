@@ -5,8 +5,8 @@ import type { RingId } from "./dropTarget";
 import {
   CATALOG,
   CATALOG_CATEGORIES,
-  DEFAULT_ROOM_SLOTS,
   EDITABLE_RINGS,
+  defaultSlots,
   getCatalogItem,
   getSlotsForRing,
   type CatalogCategory,
@@ -189,9 +189,8 @@ export default function WorkshopPanel({
     return true;
   });
 
-  const defaultSlots = DEFAULT_ROOM_SLOTS[currentRingId] ?? [];
-  const isModified =
-    slots.length !== defaultSlots.length || slots.some((id, idx) => id !== defaultSlots[idx]);
+  const defaults = defaultSlots(currentRingId);
+  const isModified = slots.length !== defaults.length || slots.some((id, idx) => id !== defaults[idx]);
 
   const currentRingName =
     activeWorkspace.mode === "direct"

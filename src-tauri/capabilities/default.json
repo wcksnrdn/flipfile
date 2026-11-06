@@ -21,6 +21,9 @@
     "allow-set-glass",
     "allow-set-workshop-window",
     "allow-quit-app",
+    "allow-summary-status",
+    "allow-summarize",
+    "allow-summary-show",
     "updater:default",
     "process:default"
   ]

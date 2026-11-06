@@ -27,10 +27,12 @@ import {
   type RingId,
 } from "./dropTarget";
 import {
-  DEFAULT_ROOM_SLOTS,
+  AI_SUMMARY,
   buildWorkspaceRings,
+  defaultSlots,
   getSlotsForRing,
   loadWorkspacesState,
+  setAiSupport,
   saveWorkspacesState,
   type CatalogEntry,
   type WorkspacesState,
@@ -43,6 +45,15 @@ type Status = {
   tone: "busy" | "ok" | "err";
   progress?: number; // 0..1 when known (several files, or the pages of one PDF); else a spinner
   outputs?: string[];
+  ai?: boolean; // an AI summary: the panel shows the result, clicking the circle brings it back
+};
+
+// What the summary panel reports to the circle (src-tauri/src/summary/mod.rs)
+type SummaryProgress = {
+  title: string;
+  hint: string;
+  tone: "busy" | "ok" | "err" | "idle";
+  progress: number | null;
 };
 
 // Files or an image pasted with Cmd/Ctrl+V, waiting for the user to click a format.
@@ -168,7 +179,9 @@ export default function App() {
     () => wsState.workspaces.find((w) => w.id === wsState.activeId) ?? wsState.workspaces[0],
     [wsState]
   );
-  const built = useMemo(() => buildWorkspaceRings(activeWorkspace), [activeWorkspace]);
+  // Rebuilt once the backend says whether AI summaries can run here (workshop.ts)
+  const [aiSupported, setAiSupported] = useState(IS_MAC);
+  const built = useMemo(() => buildWorkspaceRings(activeWorkspace), [activeWorkspace, aiSupported]);
   const ringsRef = useRef<Record<RingId, Ring>>(built.rings);
   ringsRef.current = built.rings;
   const entryRingRef = useRef<RingId>(built.entryRing);
@@ -483,6 +496,16 @@ export default function App() {
     setHovered(null);
   };
 
+  // Summary opens the panel beside the circle; its progress arrives as summary-progress
+  const summarize = (paths: string[], toDownloads: boolean) => {
+    window.clearTimeout(resetTimer.current);
+    setStatus({ title: "Reading", hint: "Apple Intelligence", tone: "busy", ai: true });
+    invoke("summarize", { paths, toDownloads }).catch((e) => {
+      setStatus({ title: "Failed", hint: String(e), tone: "err" });
+      resetTimer.current = window.setTimeout(() => setStatus(null), 3500);
+    });
+  };
+
   const runBatch = async (paths: string[], format: string, toDownloads = false, preset?: string | null) => {
     window.clearTimeout(resetTimer.current);
     const same = format === SAME_FORMAT;
@@ -597,7 +620,8 @@ export default function App() {
           const format = resolve(p.type, point, raw);
           const chosen = presetRef.current;
           closeRing();
-          if (format) runBatch(p.paths, format, false, chosen);
+          if (format === AI_SUMMARY) summarize(p.paths, false);
+          else if (format) runBatch(p.paths, format, false, chosen);
         }
       })
       .then(keep);
@@ -678,6 +702,44 @@ export default function App() {
     listen<string | null>("settings-changed", ({ payload }) => setSummary(payload)).then((fn) =>
       cancelled ? fn() : (unlisten = fn)
     );
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // Whether this computer can write AI summaries (Apple Intelligence)
+  useEffect(() => {
+    const known = (supported: boolean) => {
+      setAiSupport(supported);
+      setAiSupported(supported);
+    };
+    invoke<{ supported: boolean }>("summary_status")
+      .then((a) => known(a.supported))
+      .catch(() => known(false));
+  }, []);
+
+  // The summary panel's progress, shown by the circle as well
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    let cancelled = false;
+    listen<SummaryProgress>("summary-progress", ({ payload }) => {
+      window.clearTimeout(resetTimer.current);
+      if (payload.tone === "idle") {
+        setStatus((s) => (s?.ai ? null : s));
+        return;
+      }
+      setStatus({
+        title: payload.title,
+        hint: payload.hint,
+        tone: payload.tone,
+        progress: payload.progress ?? undefined,
+        ai: true,
+      });
+      if (payload.tone !== "busy") {
+        resetTimer.current = window.setTimeout(() => setStatus(null), payload.tone === "ok" ? 8000 : 5000);
+      }
+    }).then((fn) => (cancelled ? fn() : (unlisten = fn)));
     return () => {
       cancelled = true;
       unlisten?.();
@@ -779,6 +841,10 @@ export default function App() {
       closeRing(); // clicking the center cancels a paste, like dropping on it
       return;
     }
+    if (status?.ai) {
+      invoke("summary_show").catch(() => {});
+      return;
+    }
     const first = status?.outputs?.[0];
     if (first) revealItemInDir(first).catch(() => {});
   };
@@ -825,11 +891,14 @@ export default function App() {
     const { paths, image } = picking;
     const chosen = presetRef.current;
     closeRing();
-    runBatch(paths, format, image, chosen);
+    if (format === AI_SUMMARY) summarize(paths, image);
+    else runBatch(paths, format, image, chosen);
   };
 
   const hoveredLabel = hovered ? labelOf(hovered) : undefined;
-  const inCategory = isCategoryRing(ringId);
+  // The lobby names its rooms; an action placed in it (AI Summary) speaks for itself
+  const hoveredAction = !!hovered && !built.rings[ringId].items.find((i) => i.id === hovered)?.nav;
+  const inCategory = isCategoryRing(ringId) && !hoveredAction;
 
   let title = "Convert";
   let hint = "Drop files here";
@@ -863,7 +932,13 @@ export default function App() {
     badge = null;
   } else if (open) {
     const verb = dragging ? "Release" : "Click";
-    badge = presetLabel ? `Size: ${presetLabel}` : ALT_SUPPORTED ? `Hold ${ALT_KEY} to resize` : summary;
+    badge = presetLabel
+      ? `Size: ${presetLabel}`
+      : hovered === AI_SUMMARY
+        ? "On this Mac"
+        : ALT_SUPPORTED
+          ? `Hold ${ALT_KEY} to resize`
+          : summary;
     if (inCategory) {
       // Category lobby — show room names
       title = "Convert";
@@ -893,6 +968,8 @@ export default function App() {
             ? `${verb} to transform photo`
           : hovered === "docx-ocr"
             ? `${verb} to read scanned text into Word`
+          : hovered === AI_SUMMARY
+            ? `${verb} to explain it with AI`
           : hovered === "vid-compress"
             ? `${verb} to shrink video file size`
           : hovered === "vid-mute"
@@ -922,7 +999,8 @@ export default function App() {
   const tone = !open && status ? status.tone : "";
   const busy = !open && status?.tone === "busy";
   const progress = busy ? status?.progress : undefined;
-  const clickable = !open && !!status?.outputs?.length;
+  const clickable = !open && (!!status?.outputs?.length || !!status?.ai);
+  const aiBusy = busy && !!status?.ai;
 
   return (
     <main
@@ -964,6 +1042,13 @@ export default function App() {
               <stop offset="0" stopColor="var(--accent)" stopOpacity="0.95" />
               <stop offset="1" stopColor="var(--accent-2)" stopOpacity="0.85" />
             </linearGradient>
+            {/* Apple Intelligence colours for the AI Summary slice */}
+            <linearGradient id="seg-ai" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#64d2ff" />
+              <stop offset="0.4" stopColor="#bf5af2" />
+              <stop offset="0.75" stopColor="#ff375f" />
+              <stop offset="1" stopColor="#ff9f0a" />
+            </linearGradient>
           </defs>
 
           {ringList.map((r) => (
@@ -983,6 +1068,7 @@ export default function App() {
                   item.disabled && "disabled",
                   item.nav && "nav",
                   r.id === "category" && "category-item",
+                  item.id === AI_SUMMARY && "ai",
                 ]
                   .filter(Boolean)
                   .join(" ");
@@ -1011,7 +1097,7 @@ export default function App() {
         {/* Drag the core to move the window, click it to reveal the result, or right-click for Ring Workshop */}
         <div
           ref={coreRef}
-          className={`core glass ${tone} ${clickable ? "clickable" : ""} ${
+          className={`core glass ${tone} ${clickable ? "clickable" : ""} ${aiBusy ? "ai" : ""} ${
             chipDrag?.targetSlice === "core" ? "drop-core" : ""
           }`}
           onMouseDown={onCoreDown}
@@ -1020,8 +1106,15 @@ export default function App() {
           onContextMenu={onCoreContextMenu}
           onMouseLeave={() => (press.current = null)}
         >
+          {/* Apple Intelligence at work: a turning ring of its colours */}
+          {aiBusy && (
+            <>
+              <span className="ai-halo-glow" aria-hidden="true" />
+              <span className="ai-halo" aria-hidden="true" />
+            </>
+          )}
           {/* Determinate ring when progress is known, otherwise a spinning arc */}
-          {busy && (
+          {busy && !aiBusy && (
             <svg
               className={`progress ${progress === undefined ? "indeterminate" : ""}`}
               viewBox={`${-PROGRESS_R - 2} ${-PROGRESS_R - 2} ${PROGRESS_R * 2 + 4} ${PROGRESS_R * 2 + 4}`}
@@ -1112,7 +1205,7 @@ export default function App() {
           }}
           onUpdateSlots={updateSlotsForRing}
           onResetRing={(targetRing) => {
-            updateSlotsForRing(targetRing, [...(DEFAULT_ROOM_SLOTS[targetRing] ?? [])]);
+            updateSlotsForRing(targetRing, defaultSlots(targetRing));
           }}
           onStartChipDrag={handleStartChipDrag}
           onWindowResized={() => sendGlass(GLASS_OPEN).catch(() => {})}

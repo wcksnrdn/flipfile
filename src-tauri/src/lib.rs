@@ -3,6 +3,7 @@ mod office; // Word <-> PDF engines
 mod pdf; // low-level PDF writing and PDFium rendering
 mod platform; // OS integration: clipboard, glass, keys, codecs, tray
 mod state; // app state: grants, history, settings
+mod summary; // AI summaries with the on-device model (Apple Intelligence)
 
 use std::sync::Mutex;
 
@@ -54,6 +55,7 @@ pub fn run() {
                 .build(),
         )
         .manage(grants::Grants::default())
+        .manage(summary::Summaries::default())
         // Record dropped files before the UI is told about the drop (see grants.rs).
         // Tauri runs these handlers synchronously right after emitting the event, so
         // the grant is always in place before the UI can call convert_batch.
@@ -92,11 +94,25 @@ pub fn run() {
             tray::settings_summary,
             quit_app,
             set_workshop_window,
-            glass::set_glass
+            glass::set_glass,
+            summary::summary_status,
+            summary::summarize,
+            summary::summary_run,
+            summary::summary_redo,
+            summary::summary_ask,
+            summary::summary_show,
+            summary::summary_close,
+            summary::summary_copy,
+            summary::summary_save,
+            summary::summary_settings
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {
+            // A summary still being written stops with the app
+            if let tauri::RunEvent::Exit = _event {
+                summary::shutdown(_app);
+            }
             // macOS: clicking the Dock icon brings back a window hidden via the tray or shortcut.
             // (Windows/Linux: a hidden window leaves the taskbar; the tray icon restores it.)
             #[cfg(target_os = "macos")]

@@ -8,3 +8,6 @@
 
 # Downloaded by scripts/fetch-pdfium.mjs
 /pdfium/
+
+# Built by build.rs from intelligence/main.swift (macOS)
+/binaries/

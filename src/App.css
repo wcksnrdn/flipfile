@@ -1347,3 +1347,76 @@ main.workshop-open .stage {
 .update-toast-text {
   color: var(--text);
 }
+
+/* ===== AI Summary (Apple Intelligence) ===== */
+/* Its slice carries Apple Intelligence's colours, so it reads as the AI one */
+.segment.ai .segment-label {
+  fill: url(#seg-ai);
+}
+
+.segment.ai .segment-sub {
+  fill: rgba(235, 235, 245, 0.7);
+}
+
+.segment.ai.active .segment-body {
+  fill: url(#seg-ai);
+  filter: drop-shadow(0 0 12px rgba(191, 90, 242, 0.65));
+}
+
+.segment.ai.active .segment-label,
+.segment.ai.active .segment-sub {
+  fill: #ffffff;
+}
+
+/* The circle while Apple Intelligence works: a turning ring of its colours with a soft glow */
+@property --ai-spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ai-spin {
+  to {
+    --ai-spin: 360deg;
+  }
+}
+
+.ai-halo,
+.ai-halo-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--ai-spin),
+    #0a84ff,
+    #5e5ce6,
+    #bf5af2,
+    #ff375f,
+    #ff9f0a,
+    #ffd60a,
+    #64d2ff,
+    #0a84ff
+  );
+  opacity: 0;
+  animation:
+    ai-spin 2.4s linear infinite,
+    progress-in 0.3s ease forwards;
+}
+
+.ai-halo {
+  inset: -5px;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+}
+
+.ai-halo-glow {
+  inset: -16px;
+  filter: blur(9px);
+  -webkit-mask: radial-gradient(farthest-side, transparent 62%, #000 76%, #000 84%, transparent 100%);
+  mask: radial-gradient(farthest-side, transparent 62%, #000 76%, #000 84%, transparent 100%);
+}
+
+.core.ai {
+  --ring: transparent;
+  --ring-glow: rgba(191, 90, 242, 0.35);
+}

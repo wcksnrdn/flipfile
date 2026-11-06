@@ -111,6 +111,19 @@ Excel or LibreOffice are used when installed; otherwise flipfile's own engine do
 
 <br clear="right">
 
+### AI Summary: drop a document, get the gist
+
+No time to read a 40-page report? Drop it on **Summary ✦** in the lobby. A glass panel opens beside the circle and **Apple Intelligence** explains the document while you watch: what kind of document it is, a headline, the one thing to know, the key points, the key figures (amounts, dates and deadlines stand out), the to-dos with who and when, and its topics.
+
+- **Any document**: PDF, Word, PowerPoint, Excel, Markdown, web pages, e-books, and scans or photos of text (read with text recognition first).
+- **Long ones too**: a long document is read part by part, and you see the notes it takes as it goes; a book is condensed to its most telling passages first, so even that takes about a minute.
+- **Ask it anything**: type a question about the document, or tap one of the questions it suggests, and get an answer from the document itself (or a plain "the document doesn't say").
+- **Your language**: the summary is written in the document's own language (Indonesian included), and one click translates it into your Mac's language and back.
+- **Keep it**: copy it (`⌘C`), or save it next to the original as `name_summary.md` (`⌘S`). Drop another file on the panel to summarize that one.
+- **Private**: Apple's on-device model writes it. The document never leaves your Mac, and it works with the Wi-Fi off.
+
+Needs a Mac with Apple silicon, macOS 26 or later and Apple Intelligence turned on (*System Settings → Apple Intelligence & Siri*). Elsewhere the slice simply isn't there.
+
 <br>
 
 ## Download
@@ -164,13 +177,13 @@ flipfile isn't notarized by Apple or code-signed for Windows yet, so the first l
 
 ## How to use
 
-1. **Drag** files onto the glass circle. The **category lobby** opens around it (**Photo · Office · Video · Music**).
+1. **Drag** files onto the glass circle. The **category lobby** opens around it (**Photo · Office · Video · Music**, and **Summary ✦** on Macs with Apple Intelligence).
 2. **Point** toward a room to enter it, then point toward a format or tool. Each **Back ‹** slice sits right where you entered from, so moving back is effortless.
 3. **Let go.** The converted file appears next to the original. Click the circle to show it.
 
 | Ring | Items |
 |---|---|
-| **Category Lobby** | **Photo** · **Office** · **Video** · **Music** |
+| **Category Lobby** | **Photo** · **Office** · **Video** · **Music** · **Summary** *(AI, macOS)* |
 | **Photo** | JPG · PNG · WEBP · HEIC *(macOS)* · PDF · **Formats •••** · **Tools ✦** · **Back ‹** |
 | **Photo → Formats** | AVIF · TIFF · GIF · BMP · ICO *(multi)* · ICNS *(macOS)* · **Pro / 3D •••** · **Back ‹** |
 | **Photo → Formats → Pro / 3D** | JPEG · TGA *(game)* · EXR *(32f HDR)* · HDR *(RGBE)* · QOI *(fast)* · PPM *(netpbm)* · SVG *(embed)* · **Back ‹** |
@@ -485,6 +498,7 @@ flipfile natively supports over **75 formats, smart tools, and conversions** acr
 | **Rich Text Format** | `.rtf` | ✓ | ✓ | Cross-platform formatted text conversions |
 | **EPUB E-Book** | `.epub` | ✓ | ✓ | E-books to clean readable documents, PDF, or presentations |
 | **OpenDocument Text** | `.odt` | ✓ | ✓ | LibreOffice / OpenOffice writer document interchange |
+| **AI Summary** *(macOS)* | any document, scan or photo of text | ✓ | `.md` | Apple Intelligence on this Mac: type, headline, key points, figures, to-dos; ask questions, translate, copy or save as Markdown |
 
 ### 📊 Spreadsheets & Structured Data
 
@@ -588,7 +602,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 
 ## Privacy
 
-flipfile works **offline**: files never leave your computer, the app makes no network requests and has no telemetry. It only remembers your recent conversions and your resize and quality choices.
+flipfile works **offline**: files never leave your computer, the app makes no network requests and has no telemetry. It only remembers your recent conversions and your resize and quality choices. AI summaries are written by Apple Intelligence's **on-device** model, so they stay on your Mac too.
 
 <details>
 <summary><b>Stored data, in detail</b></summary>
@@ -620,13 +634,14 @@ flipfile opens files from anywhere, so it is built to stay safe even if somethin
 | **Content Security Policy** (`tauri.conf.json`) | The UI may only run the app's own script, style and font files. No `eval`, no inline scripts or event handlers, no remote images, frames or network requests. `default-src 'none'`. |
 | **Dev server CSP** (`vite.config.ts`) | `tauri dev` gets the same policy from the Vite dev server (minus inline scripts/styles, which hot reload needs), so CSP problems show up during development. It is read from `devCsp` in `tauri.conf.json`. |
 | **Frozen prototypes** | `freezePrototype` blocks prototype-pollution attacks in the webview. |
-| **Least-privilege capabilities** (`capabilities/default.json`) | The UI can only listen to events, read the scale factor, move the window, reveal a file in Finder/Explorer, and call flipfile's own six commands. Opening URLs or apps, reading system paths, changing the window, registering shortcuts and anything else is refused. |
+| **Least-privilege capabilities** (`capabilities/default.json`, `capabilities/summary.json`) | The UI can only listen to events, read the scale factor, move the window, reveal a file in Finder/Explorer, and call flipfile's own commands. The summary panel can only run the summary the circle handed it, answer questions about that document, copy or save the summary and show the saved file. Opening URLs or apps, reading system paths, changing the window, registering shortcuts and anything else is refused. |
 | **App commands under the ACL** (`build.rs`) | flipfile's own commands are declared in an `AppManifest`, so they are subject to capabilities like plugin commands. |
 | **User-granted files only** (`src-tauri/src/state/grants.rs`) | The backend converts only files the user actually dropped or pasted, recorded from the native event before the UI sees it. The output folder is decided in Rust, never by the UI. Even injected script could not make flipfile read or write other files. |
 | **Input checks** | Pasted image names are sanitised; window geometry values are range-checked. |
 | **Memory-safe decoding** | Images are decoded in Rust; HEIC/AVIF by the operating system; PDFs by PDFium, pinned to a known release. |
 | **Verified PDFium** (`scripts/fetch-pdfium.mjs`) | The bundled PDFium library is pinned by SHA-256, both the downloaded archive and the extracted library, and re-checked on every build. The hashes were cross-checked against the GitHub build attestations of `bblanchon/pdfium-binaries`. Any mismatch stops the build. |
 | **Office apps run safely** (`src-tauri/src/office/apps.rs`) | When Word, Excel or LibreOffice is used, file paths are passed as arguments or environment variables, never pasted into script text; every run has a time limit and only that child process is stopped on timeout; LibreOffice gets a private, temporary profile. Word documents are read with size limits (no zip bombs), external links inside them are never followed, and their text is escaped before layout so document content cannot change the layout code. |
+| **AI in its own process** (`src-tauri/intelligence/main.swift`) | Apple Intelligence runs in a small helper, `flipfile-ai`, that gets the document's text on its input and nothing else. A model that hangs or crashes cannot take the app with it, and closing the panel ends it. The app itself links no AI framework and still runs on every macOS version. |
 | **Offline** | No network access at runtime, no telemetry, no auto-loaded remote content. |
 
 Download flipfile **only from this repository's GitHub Releases page**.

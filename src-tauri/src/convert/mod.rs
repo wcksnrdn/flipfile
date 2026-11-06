@@ -7,6 +7,7 @@
 // - word:   Word and Excel -> PDF/images, OCR -> Word
 // - slides: PowerPoint -> PDF/images/Word/outline, anything -> PowerPoint
 // - clean:  lossless metadata removal (with strip)
+// - text:   the readable text of any document, for AI summaries (src/summary)
 // - tools:  background removal, transforms, square pad, target-size compress, animated GIF
 // - output: unique output paths
 // - memory: the memory budget that decides how many files convert at once
@@ -25,6 +26,7 @@ mod slides;
 #[cfg(test)]
 mod stress;
 mod strip;
+pub mod text;
 mod tools;
 mod word;
 #[cfg(test)]
@@ -48,7 +50,8 @@ use encode::{encode, resize};
 use input::{file_name, header, open_oriented, same_format_ext, sheet_kind, word_kind};
 use media::{convert_media, is_media_target};
 use office_extra::{convert_office, is_extra_office_input, is_office_target};
-use output::{save_err, unique_output_path, Reservations};
+use output::{save_err, Reservations};
+pub(crate) use output::unique_output_path;
 use pdf::{merge_to_pdf, pdf_to_images};
 use tools::{is_tool, merge_to_gif, run_tool};
 use word::{from_sheet, from_word, ocr_to_word};

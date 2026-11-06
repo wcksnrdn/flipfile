@@ -77,7 +77,7 @@ pub(super) fn unique_output_dir(input: &Path, out_dir: Option<&Path>, suffix: &s
 /// Results never overwrite an existing file. By default they go next to the input
 /// as `name_suffix.ext`; with `out_dir` (pasted clipboard images, whose source is a
 /// temporary file) they go there under the plain name `name.ext`.
-pub(super) fn unique_output_path(input: &Path, out_dir: Option<&Path>, suffix: &str, ext: &str) -> PathBuf {
+pub(crate) fn unique_output_path(input: &Path, out_dir: Option<&Path>, suffix: &str, ext: &str) -> PathBuf {
     let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
     let (dir, base) = match out_dir {
         Some(dir) => (dir, stem.to_string()),

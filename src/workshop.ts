@@ -10,6 +10,16 @@ import {
 
 const IS_MAC = /Mac/i.test(navigator.userAgent);
 
+/** AI summary of a document by Apple Intelligence (src/SummaryPanel.tsx); macOS only */
+export const AI_SUMMARY = "ai-summary";
+
+// Whether this computer can write AI summaries: assumed on macOS until the backend says.
+// Without it the lobby keeps its four rooms and other rings show Summary greyed out.
+let aiSupport = IS_MAC;
+export function setAiSupport(supported: boolean) {
+  aiSupport = supported;
+}
+
 export type CatalogCategory = "photo" | "photo-tools" | "office" | "data" | "video" | "music" | "nav";
 
 export type CatalogEntry = Item & {
@@ -92,6 +102,7 @@ export const CATALOG: CatalogEntry[] = [
   { id: "rtf", label: "RTF", sub: "rich text", title: "Rich Text Format (.rtf)", category: "office" },
   { id: "epub", label: "EPUB", sub: "e-book", title: "EPUB E-Book (.epub)", category: "office" },
   { id: "odt", label: "ODT", sub: "open doc", title: "OpenDocument Text (.odt)", category: "office" },
+  { id: AI_SUMMARY, label: "Summary", sub: "AI ✦", title: "AI Summary (Apple Intelligence, on this Mac)", category: "office", disabled: !IS_MAC },
 
   // ─── Spreadsheets & Developer Data ────────────────────────────────────────
   { id: "xlsx", label: "EXCEL", sub: "xlsx", title: "Excel Workbook (.xlsx)", category: "data" },
@@ -154,7 +165,8 @@ export function getCatalogItem(id: string): CatalogEntry | undefined {
 
 // Default slot IDs for each editable ring (excluding the automatic "back" item on sub-rings)
 export const DEFAULT_ROOM_SLOTS: Record<RingId, string[]> = {
-  category: ["cat-photo", "cat-office", "cat-video", "cat-music"],
+  // Summary sits right in the lobby: drop a document on it, no room to enter first
+  category: IS_MAC ? ["cat-photo", "cat-office", "cat-video", "cat-music", AI_SUMMARY] : ["cat-photo", "cat-office", "cat-video", "cat-music"],
   custom: ["png", "jpg", "webp", "nobg", "pdf", "docx", "xlsx", "mp4"],
   photo: ["jpg", "png", "webp", "heic", "pdf", "photo-formats-nav", "photo-tools-nav"],
   "photo-formats": ["avif", "tiff", "gif", "bmp", "ico", "icns", "photo-pro-nav"],
@@ -282,7 +294,13 @@ export function getSlotsForRing(ws: WorkspaceConfig, ringId: RingId): string[] {
   }
   const custom = ws.roomSlots[ringId];
   if (custom && custom.length > 0) return custom;
-  return DEFAULT_ROOM_SLOTS[ringId] ?? [];
+  return defaultSlots(ringId);
+}
+
+/** A ring's default slots on this computer (no Summary where it can't run) */
+export function defaultSlots(ringId: RingId): string[] {
+  const defaults = DEFAULT_ROOM_SLOTS[ringId] ?? [];
+  return aiSupport ? defaults : defaults.filter((id) => id !== AI_SUMMARY);
 }
 
 function idsToItems(ids: string[]): Item[] {
@@ -294,7 +312,7 @@ function idsToItems(ids: string[]): Item[] {
         id: entry.id,
         label: entry.label,
         sub: entry.sub,
-        disabled: entry.disabled,
+        disabled: entry.disabled || (id === AI_SUMMARY && !aiSupport),
         nav: entry.nav,
         preset: entry.preset,
       });

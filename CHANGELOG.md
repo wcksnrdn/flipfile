@@ -6,6 +6,24 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **AI Summary (macOS, Apple Intelligence)**: drop a document on **Summary ✦** in the lobby and a
+  glass panel beside the circle explains it, written live by Apple's on-device model: document
+  type, headline, the one thing to know, key points, key figures, to-dos and topics.
+  - Reads PDF, Word, PowerPoint, Excel, Markdown, web pages, e-books, and scans or photos of text
+    (text recognition first); legacy `.doc`/`.ppt`/`.xls` through Word, PowerPoint, Excel or LibreOffice.
+  - Long documents are read part by part with live notes; very long ones are condensed to their
+    most telling sentences first, so a book takes about a minute.
+  - **Ask**: questions about the document (typed, or one of three it suggests) are answered from
+    its most relevant passages, or with "the document doesn't say".
+  - Written in the document's language; one click translates the summary into the Mac's language
+    and back.
+  - Copy as Markdown (`⌘C`), save as `name_summary.md` next to the original (`⌘S`, undoable from the
+    tray; questions and answers included), or drop another file on the panel.
+  - Runs in its own helper process (`flipfile-ai`), so the app keeps launching on every macOS
+    version; the slice only appears where Apple Intelligence can run.
+
 ## [0.5.2] - 2026-11-05
 
 ### Fixed
