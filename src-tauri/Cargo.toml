@@ -113,6 +113,8 @@ windows = { version = "0.62", features = [
   "Win32_Globalization",
   # The computer's memory size (src/convert/memory.rs)
   "Win32_System_SystemInformation",
+  # Video -> MP4 with Windows' built-in Media Foundation engine (src/convert/media.rs)
+  "Media_MediaProperties", "Media_Transcoding", "Storage", "Storage_Search",
 ] }
 
 

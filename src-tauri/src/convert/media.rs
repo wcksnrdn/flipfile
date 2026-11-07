@@ -6,6 +6,8 @@
 // 2. Built-in OS media engines on macOS (`/usr/bin/afconvert` for audio and
 //    `/usr/bin/avconvert` for video/audio extraction), so WAV, M4A, AAC, ALAC, FLAC,
 //    AIFF, CAF, MP4 and MOV work out of the box with zero installs.
+// 3. Windows' built-in Media Foundation engine (`Windows.Media.Transcoding`) for MP4,
+//    1080p, 720p and Compress, so MOV -> MP4 works there with zero installs too.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -278,10 +280,124 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
         }
     }
 
+    // 3. Windows' built-in video converter (Media Foundation)
+    #[cfg(windows)]
+    {
+        let short_side = match format {
+            "mp4" => Some(None),
+            "vid-compress" => Some(Some(540)),
+            "vid-1080p" => Some(Some(1080)),
+            "vid-720p" => Some(Some(720)),
+            _ => None,
+        };
+        if let Some(short_side) = short_side {
+            windows_transcode(input, &output, short_side, &name)?;
+            return Ok(Converted::file(input, &output));
+        }
+    }
+
     Err(format!(
-        "\"{name}\": converting to {} requires ffmpeg (install via `brew install ffmpeg` on macOS or `winget install ffmpeg` on Windows); MP4, MOV, 1080p, 720p & Compress work built-in on macOS",
+        "\"{name}\": converting to {} requires ffmpeg (install via `brew install ffmpeg` on macOS or `winget install ffmpeg` on Windows); MP4, MOV, 1080p, 720p & Compress work built-in on macOS, and MP4, 1080p, 720p & Compress on Windows",
         format.to_uppercase()
     ))
+}
+
+/// Converts a video to MP4 (H.264 + AAC) with Windows' own Media Foundation engine, which
+/// reads MP4, MOV, M4V, WMV and AVI. `short_side` caps the shorter side of the picture
+/// (1080p, 720p, Compress); `None` keeps the source size.
+#[cfg(windows)]
+fn windows_transcode(input: &Path, output: &Path, short_side: Option<u32>, name: &str) -> Result<(), String> {
+    use windows::Media::MediaProperties::{MediaEncodingProfile, VideoEncodingQuality};
+    use windows::Media::Transcoding::{MediaTranscoder, TranscodeFailureReason};
+    use windows::Storage::{CreationCollisionOption, StorageFile, StorageFolder};
+    use windows::core::HSTRING;
+
+    // The engine wants absolute paths
+    let absolute = |p: &Path| std::path::absolute(p).map_err(|e| format!("\"{name}\": {e}"));
+    let source_path = HSTRING::from(absolute(input)?.as_os_str());
+    let output = absolute(output)?;
+    let (Some(dir), Some(file_name)) = (output.parent(), output.file_name()) else {
+        return Err(save_err("invalid output path"));
+    };
+    let (dir, file_name) = (HSTRING::from(dir.as_os_str()), HSTRING::from(file_name));
+
+    let run = || -> windows::core::Result<TranscodeFailureReason> {
+        let source = StorageFile::GetFileFromPathAsync(&source_path)?.join()?;
+        let profile = match short_side {
+            None => MediaEncodingProfile::CreateMp4(VideoEncodingQuality::Auto)?,
+            Some(short) => {
+                let quality = match short {
+                    1080 => VideoEncodingQuality::HD1080p,
+                    720 => VideoEncodingQuality::HD720p,
+                    _ => VideoEncodingQuality::Wvga,
+                };
+                let profile = MediaEncodingProfile::CreateMp4(quality)?;
+                let video = profile.Video()?;
+                // The preset's bitrate, with the source's aspect ratio (portrait videos
+                // are not letterboxed into a landscape frame) and frame rate
+                if let Ok(src) = MediaEncodingProfile::CreateFromFileAsync(&source)?.join().and_then(|p| p.Video()) {
+                    let (w, h) = (src.Width()?, src.Height()?);
+                    if w > 0 && h > 0 {
+                        let (w, h) = fit_short_side(w, h, short);
+                        video.SetWidth(w)?;
+                        video.SetHeight(h)?;
+                    }
+                    let (from, to) = (src.FrameRate()?, video.FrameRate()?);
+                    if from.Numerator()? > 0 && from.Denominator()? > 0 {
+                        to.SetNumerator(from.Numerator()?)?;
+                        to.SetDenominator(from.Denominator()?)?;
+                    }
+                }
+                profile
+            }
+        };
+        let folder = StorageFolder::GetFolderFromPathAsync(&dir)?.join()?;
+        let target = folder.CreateFileAsync(&file_name, CreationCollisionOption::FailIfExists)?.join()?;
+        let prepared = MediaTranscoder::new()?.PrepareFileTranscodeAsync(&source, &target, &profile)?.join()?;
+        if !prepared.CanTranscode()? {
+            return prepared.FailureReason();
+        }
+        prepared.TranscodeAsync()?.join()?;
+        Ok(TranscodeFailureReason::None)
+    };
+    let result = match run() {
+        Ok(TranscodeFailureReason::None) => Ok(()),
+        Ok(TranscodeFailureReason::CodecNotFound) => Err(format!(
+            "\"{name}\": Windows has no decoder for this video's format (iPhone videos are HEVC, which needs Microsoft's \"HEVC Video Extensions\"); or install ffmpeg (`winget install ffmpeg`)"
+        )),
+        Ok(_) => Err(format!("\"{name}\": Windows could not convert this video; install ffmpeg (`winget install ffmpeg`) for every format")),
+        Err(e) => Err(format!("\"{name}\": {}", e.message())),
+    };
+    // No empty or half-written file is left behind (the name was free)
+    if result.is_err() {
+        let _ = fs::remove_file(&output);
+    }
+    result
+}
+
+/// The picture size with its shorter side capped at `short` (never enlarged), keeping
+/// the aspect ratio and rounding to the even sizes H.264 needs.
+#[cfg(any(windows, test))]
+fn fit_short_side(w: u32, h: u32, short: u32) -> (u32, u32) {
+    let k = (short as f64 / w.min(h) as f64).min(1.0);
+    let even = |v: u32| (((v as f64 * k).round() as u32) & !1).max(2);
+    (even(w), even(h))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fit_short_side;
+
+    #[test]
+    fn fit_short_side_keeps_orientation() {
+        assert_eq!(fit_short_side(1920, 1080, 720), (1280, 720));
+        assert_eq!(fit_short_side(1080, 1920, 720), (720, 1280));
+        assert_eq!(fit_short_side(3840, 2160, 540), (960, 540));
+        // Never enlarged
+        assert_eq!(fit_short_side(640, 360, 1080), (640, 360));
+        // Odd sizes become even
+        assert_eq!(fit_short_side(1001, 1999, 1080), (1000, 1998));
+    }
 }
 
 fn run_cmd(mut cmd: Command, name: &str) -> Result<(), String> {
