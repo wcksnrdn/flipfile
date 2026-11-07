@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "flipfile"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "arboard",
  "docx-rs",
