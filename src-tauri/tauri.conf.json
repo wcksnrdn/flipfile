@@ -63,6 +63,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "resources": {
       "pdfium/*pdfium.*": "pdfium/"
     },

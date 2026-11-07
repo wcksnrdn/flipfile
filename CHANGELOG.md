@@ -14,6 +14,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
   "requires ffmpeg". Without ffmpeg, Windows' built-in Media Foundation engine converts the
   video, keeping portrait videos portrait and the original frame rate. iPhone (HEVC) videos
   need Windows' HEVC Video Extensions.
+- **Check for updates** no longer says "Could not check for updates": releases now include
+  the signed update files (`latest.json`) the in-app updater looks for.
 
 ## [0.6.0] - 2026-11-06
 
