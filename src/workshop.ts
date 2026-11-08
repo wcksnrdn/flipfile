@@ -76,6 +76,8 @@ export const CATALOG: CatalogEntry[] = [
 
   // ─── Photo Smart Tools ────────────────────────────────────────────────────
   { id: "nobg", label: "Remove", sub: "BG", title: "AI Remove Background", category: "photo-tools", disabled: !IS_MAC },
+  { id: "up-2x", label: "Upscale", sub: "2×", title: "AI Upscale 2×", category: "photo-tools" },
+  { id: "up-4x", label: "Upscale", sub: "4×", title: "AI Upscale 4×", category: "photo-tools" },
   { id: "clean", label: "Clean", sub: "EXIF", title: "Strip EXIF & GPS Metadata", category: "photo-tools" },
   { id: "square", label: "Square", sub: "1:1", title: "Pad to 1:1 Square", category: "photo-tools" },
   { id: "gif-anim", label: "GIF", sub: "anim", title: "Combine Photos → Animated GIF", category: "photo-tools" },
@@ -172,7 +174,7 @@ export const DEFAULT_ROOM_SLOTS: Record<RingId, string[]> = {
   photo: ["jpg", "png", "webp", "heic", "pdf", "photo-formats-nav", "photo-tools-nav"],
   "photo-formats": ["avif", "tiff", "gif", "bmp", "ico", "icns", "photo-pro-nav"],
   "photo-pro": ["jpeg", "tga", "exr", "hdr", "qoi", "ppm", "svg"],
-  "photo-tools": ["photo-compress-nav", "nobg", "photo-transform-nav", "square", "gif-anim", "clean"],
+  "photo-tools": ["photo-compress-nav", "nobg", "up-2x", "up-4x", "photo-transform-nav", "square", "gif-anim", "clean"],
   "photo-compress": ["cmp-auto", "cmp-1m", "cmp-500k", "cmp-200k", "cmp-100k", "cmp-lossless"],
   "photo-transform": ["rot-r", "rot-l", "rot-180", "flip-h", "flip-v", "grayscale"],
   office: ["pdf", "docx", "docx-ocr", "xlsx", "pptx", "csv", "office-docs-nav", "office-data-nav"],

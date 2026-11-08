@@ -79,6 +79,9 @@ pub fn run() {
             clipboard::clear_temp(app.handle());
             if let Ok(dir) = app.path().resource_dir() {
                 pdf::render::set_library_dir(dir.join("pdfium"));
+                platform::upscale::set_model_dir(dir.join("models"));
+                #[cfg(not(target_os = "macos"))]
+                platform::onnx::set_library_dir(dir.join("onnxruntime"));
             }
 
             // Another app may already own the shortcut; the tray still works without it.

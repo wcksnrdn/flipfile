@@ -76,6 +76,9 @@ fn scenarios() -> Vec<Scenario> {
         s("batch24 merge->pdf", Photos(BATCH), "pdf", None),
         s("batch12 gif-anim", Photos(12), "gif-anim", None),
         mac("batch8 heic->jpg", Heics(HEIC_BATCH), "jpg"),
+        mac("upscale 0.4mp 4x", One("small.jpg"), "up-4x"),
+        mac("upscale 1080p 2x", One("fullhd.jpg"), "up-2x"),
+        mac("upscale 12mp 2x", One("photo.jpg"), "up-2x"),
         s("pdf 24p ->png", One("doc.pdf"), "png", None),
         s("pdf 24p ->jpg", One("doc.pdf"), "jpg", None),
         s("pdf 24p ->docx", One("doc.pdf"), "docx", None),
@@ -507,6 +510,12 @@ fn report_docx(source: &DynamicImage) -> Vec<u8> {
 
 /// Copies of the report, for a batch of documents, and a long CSV (added to older corpora too)
 fn add_documents(dir: &Path) {
+    // Photos to upscale, sharp at their size: as small as old web photos, and Full HD
+    for (name, w, h) in [("small.jpg", 800, 450), ("fullhd.jpg", 1920, 1080)] {
+        if !dir.join(name).exists() {
+            write_jpeg(&source_photo().resize_exact(w, h, FilterType::Lanczos3), &dir.join(name));
+        }
+    }
     let big = dir.join("big.csv");
     if !big.exists() {
         let mut text = String::from("Date,Account,Description,Region,Qty,Price,Tax,Total\n");

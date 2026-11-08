@@ -22,7 +22,7 @@ const TARGETS: &[&str] = &[
 ];
 
 /// System engines, slow to start
-const SLOW_TARGETS: &[&str] = &["docx-ocr", "nobg"];
+const SLOW_TARGETS: &[&str] = &["docx-ocr", "nobg", "up-2x", "up-4x"];
 
 const LIMIT: Duration = Duration::from_secs(60);
 
