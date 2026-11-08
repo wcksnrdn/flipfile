@@ -124,6 +124,20 @@ No time to read a 40-page report? Drop it on **AI ✦** in the lobby. A glass pa
 
 Needs a Mac with Apple silicon, macOS 26 or later and Apple Intelligence turned on (*System Settings → Apple Intelligence & Siri*). Elsewhere the slice simply isn't there.
 
+### AI Upscale: old photos, faces sharp again
+
+Drop a small, blurry or old photo on **Upscale 2×** or **Upscale 4×** (*Photo → Tools*) and flipfile redraws it two or four times larger. Faces get their own AI: every face is restored, with eyes, lashes, brows, lips, skin and hair drawn back in, while the person keeps their own face (their eye colour, skin tone and features stay theirs).
+
+- **Faces restored**: each face is found (by Vision on the Mac, by [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) on Windows and Linux), aligned and redrawn by [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus), then blended back in seamlessly, even when several faces touch.
+- **Everything else, sharper**: [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) x4plus brings back natural detail in small photos; large pictures use its fast compact model. Edges and text come out crisp, JPEG blocks and noise disappear.
+- **Old photos too**: a picture that is large but blurry (an old photo shown bigger than it was taken, a screenshot of one, an enlarged image) is recognised and read at the size its detail really has, so it comes back sharper instead of just bigger.
+- **Your format**: `photo_2x.jpg` stays a JPG, `logo_4x.png` keeps its transparency (icons and GIFs come out as PNG).
+- **Private and offline**: the models (about 110 MB, part of flipfile) run on your computer: on a Mac's Neural Engine, on Windows on the graphics card (any DirectX 12 GPU, built-in ones too, through DirectML), on Linux on the processor. Nothing is uploaded, nothing extra is downloaded, and nothing needs installing.
+- **As fast as your computer allows**: on a Mac with Apple silicon a small photo takes a few seconds and Full HD to 4K about 15 (the circle shows how far it has got). flipfile measures how quick your computer is and uses the detailed model only where it finishes in reasonable time: without a capable GPU (Linux, Windows without one, Intel Macs), most pictures get the fast model and the faces are still restored.
+- It draws plausible detail rather than recovering what the camera never captured. Results are limited to 64 megapixels.
+
+macOS 13 Ventura or later, Windows 10 or later, Linux.
+
 <br>
 
 ## Download
@@ -228,6 +242,7 @@ flipfile includes a native, cryptographically signed auto-updater powered by Tau
 <summary><b>Photo tools & Pro / 3D formats (Remove BG, target-size compress, transform, square, animated GIF, EXR/HDR/TGA/QOI/SVG)</b></summary>
 
 - **Remove BG** *(macOS 14+)*: uses macOS Vision's built-in subject-lifting model (`VNGenerateForegroundInstanceMaskRequest`) completely offline to cut out the foreground subject and save a transparent PNG (`photo_nobg.png`).
+- **Upscale 2× / 4×**: Real-ESRGAN (x4plus up to Full HD when this computer is quick enough, as measured tile by tile; compact otherwise), tile by tile with overlapping margins so no seams show; 2× is the 4× result averaged down. Large but blurry pictures (detected by how little they lose when halved) are halved first. Faces (Vision on macOS, YuNet elsewhere) are aligned to a 512 px template, restored by RestoreFormer++ and blended back over an ellipse. macOS runs the models with Core ML (Neural Engine, CPU); Windows and Linux with ONNX Runtime (DirectML GPU on Windows, CPU on Linux). Keeps the file's format and transparency (`photo_2x.jpg`), up to 64 MP.
 - **Compress to target size** (**1 MB · 500 KB · 200 KB · 100 KB**): binary-searches encoder quality (and progressively scales resolution down if needed) so the output strictly fits under your byte budget—ideal for web forms and upload portals.
 - **Lossless compress**: runs `oxipng` on PNGs, strips metadata losslessly from JPEGs, writes lossless WebP, or Deflate-compresses TIFFs without changing a single pixel.
 - **Transform**: rotate 90° clockwise, 90° counter-clockwise, 180°, flip horizontally or vertically, or convert to grayscale (B&W) in the file's own format.
@@ -472,6 +487,7 @@ flipfile natively supports over **75 formats, smart tools, and conversions** acr
 | Tool | Action | Description |
 |---|---|---|
 | **AI Remove Background** | `Remove BG` | Automatically separates foreground subjects using macOS Vision AI (lossless `.png` output) |
+| **AI Upscale** | `Upscale 2×`, `Upscale 4×` | Redraws small, blurry or old photos 2× or 4× larger and restores every face (Real-ESRGAN + RestoreFormer++ on your computer, same format, up to 64 MP) |
 | **Clean Metadata & EXIF** | `Clean EXIF` | Losslessly removes EXIF, GPS locations, camera serials, and comments from JPG/PNG without re-encoding |
 | **Square 1:1 Framing** | `Square 1:1` | Pads photo into a perfect 1:1 square aspect ratio with smart blurred backdrop (max 16,384 px) |
 | **Combine → Animated GIF** | `GIF anim` | Combines multiple selected photos into a smooth, looping animated GIF |
@@ -574,6 +590,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Multi-page PDF → PNG | folder `document_pages/` with `page-01.png`, `page-02.png`, … |
 | Clean metadata | `photo_clean.jpg` |
 | Remove background | `photo_nobg.png` |
+| AI upscale 2× / 4× | `photo_2x.jpg` / `photo_4x.jpg` |
 | Target-size / lossless compress | `photo_200kb.jpg` / `photo_lossless.png` |
 | Rotate / flip / grayscale | `photo_rotated.jpg` / `photo_flipped.jpg` / `photo_grayscale.jpg` |
 | Square 1:1 pad | `photo_square.jpg` |
@@ -662,7 +679,7 @@ To report a vulnerability, please don't open a public issue; contact the maintai
 - [Node.js](https://nodejs.org) 20+ (developed with 24)
 - [Rust](https://rustup.rs) (stable)
 - The [Tauri v2 prerequisites](https://tauri.app/start/prerequisites/) for your OS (Xcode Command Line Tools on macOS, WebView2 + MSVC Build Tools on Windows, WebKitGTK and friends on Linux)
-- Internet access the first time, to download PDFium
+- Internet access the first time, to download PDFium, the AI upscaling models and (on Windows and Linux) ONNX Runtime
 
 ### Run
 
@@ -683,7 +700,7 @@ PDFIUM_PLATFORM=mac-x64 npm run fetch-pdfium
 npm run tauri build
 ```
 
-The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb` on Linux). PDFium is bundled as a resource. The release app is about 42 MB on macOS (about 19 MB compressed for download): PDFium is about 7.7 MB and the Typst layout engine for Word → PDF most of the rest.
+The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb` on Linux). PDFium is bundled as a resource. The release app is about 150 MB on macOS: the AI upscaling models are 106 MB, PDFium about 7.7 MB, and the Typst layout engine for Word → PDF most of the rest. `npm run fetch-models` (run by `tauri dev` and `tauri build`) downloads the models into `src-tauri/models/` from the `models-1` release (Core ML on macOS, ONNX elsewhere), pinned by SHA-256 like PDFium; `scripts/upscale-model/convert.py` and `export_onnx.py` rebuild them from the original weights. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`, pinned the same way; the Windows and Linux apps grow by about 140 MB. To test that engine on a Mac too, run both with `FLIPFILE_ONNX=1`. The licences are in `src-tauri/models/LICENSES.md`.
 
 ### App icon
 
@@ -765,6 +782,9 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
 ├── package.json
 ├── scripts/
 │   ├── fetch-pdfium.mjs     # downloads & SHA-256-verifies PDFium for the current platform
+│   ├── fetch-models.mjs     # downloads & SHA-256-verifies the AI upscaling models
+│   ├── fetch-onnxruntime.mjs # downloads & SHA-256-verifies ONNX Runtime (Windows, Linux)
+│   ├── upscale-model/       # builds those models (Real-ESRGAN, RestoreFormer++ → Core ML, ONNX)
 │   ├── install.sh           # one-line installer for macOS & Linux
 │   └── install.ps1          # one-line installer for Windows PowerShell
 ├── src/                     # UI (React + TypeScript)
@@ -786,7 +806,9 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         │   ├── mod.rs       #   batching, progress, dispatch per file
         │   ├── input.rs     #   file detection, decoding with EXIF orientation & ICC → sRGB
         │   ├── encode.rs    #   SIMD resize + content-aware image encoders (JPG/PNG/WEBP/AVIF/ICO/ICNS/EXR/HDR/TGA/QOI/PPM/SVG)
-        │   ├── tools.rs     #   photo tools: remove BG, target-size compress, transform, square, animated GIF
+        │   ├── tools.rs     #   photo tools: remove BG, upscale, target-size compress, transform, square, animated GIF
+        │   ├── upscale.rs   #   AI upscaling shared by every system: tiles with margins, 2× / 4×, alpha
+        │   ├── faces.rs     #   face restoration: alignment, blending restored faces back in
         │   ├── pdf.rs       #   PDF → images, images → merged PDF (streaming page-by-page)
         │   ├── word.rs      #   Word → PDF/images, OCR → Word
         │   ├── slides.rs    #   PowerPoint ↔ PDF/images/Word handout/outlines, anything → .pptx
@@ -821,6 +843,10 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
         ├── platform/        # OS integration
         │   ├── system_codec.rs # HEIC/AVIF/PSD/RAW via ImageIO (macOS read/write) / WIC (Windows read)
         │   ├── background.rs #  subject background removal via macOS Vision
+        │   ├── upscale.rs   #   the AI upscaling models: Core ML on macOS, ONNX Runtime elsewhere
+        │   ├── onnx.rs      #   ONNX Runtime: loads the bundled engine, DirectML GPU on Windows
+        │   ├── faces.rs     #   faces and their landmarks: macOS Vision, else YuNet
+        │   ├── yunet.rs     #   YuNet face detector (Windows, Linux)
         │   ├── appearance.rs #  follows light/dark system appearance for app & tray icons
         │   ├── tray.rs      #   menu bar / tray menu, show/hide, Ring Workshop trigger
         │   ├── clipboard.rs #   ⌘V / Ctrl+V: images and copied files

@@ -6,6 +6,30 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **AI Upscale 2× / 4× with face restoration (macOS, Windows, Linux)**: drop a small, blurry or old photo on
+  **Upscale 2×** or **Upscale 4×** in *Photo → Tools* and flipfile redraws it two or four times
+  larger, restoring every face in it.
+  - Faces are found (macOS Vision; YuNet, MIT, on Windows and Linux), aligned to a 512 px template and redrawn by RestoreFormer++
+    (Apache-2.0; model code written for flipfile), which keeps each person's identity, then blended
+    back over an ellipse; faces that touch are handed over smoothly, without seams.
+  - The rest of the picture is upscaled by Real-ESRGAN (BSD-3-Clause): x4plus for pictures up to
+    Full HD when the computer is quick enough, the fast compact model otherwise, tile by tile with
+    overlapping margins so no seams show; 2× is the 4× result averaged down. How quick the
+    computer is gets measured as it works: when x4plus turns out far too slow, the picture starts
+    over with the compact model after a few tiles, and later pictures go to it straight away.
+  - Large but blurry pictures (old photos shown bigger than they were taken, screenshots of them)
+    are recognised and halved first, so they come back sharper rather than only bigger.
+  - All on the computer, with the progress shown in the circle. macOS: Core ML (Neural Engine and
+    CPU), a few seconds for a small photo, about 15 for Full HD to 4K on an M1 Pro. Windows: ONNX
+    Runtime on the GPU through DirectML (any DirectX 12 GPU), the CPU without one. Linux: ONNX
+    Runtime on the CPU. The file keeps its format and transparency (`photo_2x.jpg`); results up
+    to 64 MP.
+  - The models (about 110 MB) are bundled; builds download them with `npm run fetch-models`, and
+    ONNX Runtime 1.24.4 (Microsoft's official build; telemetry off) with
+    `npm run fetch-onnxruntime`, all pinned by SHA-256.
+
 ## [0.6.1] - 2026-11-07
 
 ### Fixed
