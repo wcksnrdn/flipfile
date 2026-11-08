@@ -206,10 +206,16 @@ fn convert_audio(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
 
 fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<Converted, String> {
     let name = file_name(input);
+    let src_ext = input
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_lowercase)
+        .unwrap_or_default();
     let (out_ext, suffix) = match format {
         "vid-gif" => ("gif", "animated"),
         "vid-compress" => ("mp4", "compressed"),
-        "vid-mute" => ("mp4", "muted"),
+        // Mute preserves the source container (MOV stays MOV, everything else → MP4)
+        "vid-mute" => (if src_ext == "mov" { "mov" } else { "mp4" }, "muted"),
         "vid-1080p" => ("mp4", "1080p"),
         "vid-720p" => ("mp4", "720p"),
         other => (other, "converted"),
@@ -258,9 +264,14 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
         return Ok(Converted::file(input, &output));
     }
 
-    // 2. macOS built-in video converter (`/usr/bin/avconvert`)
+    // 2. macOS built-in video converter (AVFoundation passthrough for Mute, /usr/bin/avconvert for presets)
     #[cfg(target_os = "macos")]
     {
+        if format == "vid-mute" {
+            macos_mute(input, &output, &name)?;
+            return Ok(Converted::file(input, &output));
+        }
+
         let preset = match format {
             "mp4" | "mov" => Some("PresetHighestQuality"),
             "vid-compress" => Some("Preset960x540"),
@@ -283,6 +294,11 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
     // 3. Windows' built-in video converter (Media Foundation)
     #[cfg(windows)]
     {
+        if format == "vid-mute" {
+            windows_mute(input, &output, &name)?;
+            return Ok(Converted::file(input, &output));
+        }
+
         let short_side = match format {
             "mp4" => Some(None),
             "vid-compress" => Some(Some(540)),
@@ -297,9 +313,187 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
     }
 
     Err(format!(
-        "\"{name}\": converting to {} requires ffmpeg (install via `brew install ffmpeg` on macOS or `winget install ffmpeg` on Windows); MP4, MOV, 1080p, 720p & Compress work built-in on macOS, and MP4, 1080p, 720p & Compress on Windows",
+        "\"{name}\": converting to {} requires ffmpeg (install via `brew install ffmpeg` on macOS or `winget install ffmpeg` on Windows); MP4, MOV, Mute, 1080p, 720p & Compress work built-in on macOS, and MP4, Mute, 1080p, 720p & Compress on Windows",
         format.to_uppercase()
     ))
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "AVFoundation", kind = "framework")]
+unsafe extern "C" {}
+
+/// Strips audio from a video using AVFoundation's passthrough preset (lossless stream copy).
+/// Works out of the box on every macOS version with zero external tools.
+#[cfg(target_os = "macos")]
+fn macos_mute(input: &Path, output: &Path, name: &str) -> Result<(), String> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send, Encode, Encoding, RefEncode};
+    use objc2_foundation::{NSString, NSURL};
+
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug)]
+    struct CMTime {
+        value: i64,
+        timescale: i32,
+        flags: u32,
+        epoch: i64,
+    }
+
+    unsafe impl Encode for CMTime {
+        const ENCODING: Encoding = Encoding::Struct(
+            "CMTime",
+            &[i64::ENCODING, i32::ENCODING, u32::ENCODING, i64::ENCODING],
+        );
+    }
+    unsafe impl RefEncode for CMTime {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug)]
+    struct CMTimeRange {
+        start: CMTime,
+        duration: CMTime,
+    }
+
+    unsafe impl Encode for CMTimeRange {
+        const ENCODING: Encoding = Encoding::Struct(
+            "CMTimeRange",
+            &[CMTime::ENCODING, CMTime::ENCODING],
+        );
+    }
+    unsafe impl RefEncode for CMTimeRange {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
+
+    const K_CMTIME_ZERO: CMTime = CMTime {
+        value: 0,
+        timescale: 1,
+        flags: 1,
+        epoch: 0,
+    };
+
+    let in_str = input.to_str().ok_or_else(|| format!("\"{name}\": invalid input path"))?;
+    let out_str = output.to_str().ok_or_else(|| format!("\"{name}\": invalid output path"))?;
+
+    let in_ns = NSString::from_str(in_str);
+    let out_ns = NSString::from_str(out_str);
+
+    let in_url = NSURL::fileURLWithPath(&in_ns);
+    let out_url = NSURL::fileURLWithPath(&out_ns);
+
+    let is_mov = output
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("mov"));
+
+    objc2::rc::autoreleasepool(|_| -> Result<(), String> {
+        let asset: *mut AnyObject = unsafe { msg_send![class!(AVAsset), assetWithURL: &*in_url] };
+        if asset.is_null() {
+            return Err(format!("\"{name}\": could not open video asset"));
+        }
+
+        let media_type = NSString::from_str("vide");
+        let tracks: *mut AnyObject = unsafe { msg_send![asset, tracksWithMediaType: &*media_type] };
+        let count: usize = if tracks.is_null() { 0 } else { unsafe { msg_send![tracks, count] } };
+        if count == 0 {
+            return Err(format!("\"{name}\": no video track found"));
+        }
+        let video_track: *mut AnyObject = unsafe { msg_send![tracks, objectAtIndex: 0usize] };
+
+        let composition: *mut AnyObject = unsafe { msg_send![class!(AVMutableComposition), composition] };
+        if composition.is_null() {
+            return Err(format!("\"{name}\": could not create composition"));
+        }
+
+        let comp_track: *mut AnyObject = unsafe {
+            msg_send![composition, addMutableTrackWithMediaType: &*media_type, preferredTrackID: 0i32]
+        };
+        if comp_track.is_null() {
+            return Err(format!("\"{name}\": could not add composition track"));
+        }
+
+        let duration: CMTime = unsafe { msg_send![asset, duration] };
+        let range = CMTimeRange {
+            start: K_CMTIME_ZERO,
+            duration,
+        };
+        let mut err: *mut AnyObject = std::ptr::null_mut();
+        let inserted: bool = unsafe {
+            msg_send![
+                comp_track,
+                insertTimeRange: range,
+                ofTrack: video_track,
+                atTime: K_CMTIME_ZERO,
+                error: &mut err
+            ]
+        };
+        if !inserted {
+            return Err(format!("\"{name}\": could not extract video stream"));
+        }
+
+        let preset = NSString::from_str("AVAssetExportPresetPassthrough");
+        let session: *mut AnyObject = unsafe {
+            msg_send![class!(AVAssetExportSession), exportSessionWithAsset: composition, presetName: &*preset]
+        };
+        if session.is_null() {
+            return Err(format!("\"{name}\": could not create export session"));
+        }
+
+        let file_type = if is_mov {
+            NSString::from_str("com.apple.quicktime-movie")
+        } else {
+            NSString::from_str("public.mpeg-4")
+        };
+
+        unsafe {
+            let _: () = msg_send![session, setOutputURL: &*out_url];
+            let _: () = msg_send![session, setOutputFileType: &*file_type];
+        }
+
+        let _ = fs::remove_file(output);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let block = block2::RcBlock::new(move || {
+            let _ = tx.send(());
+        });
+
+        unsafe {
+            let _: () = msg_send![session, exportAsynchronouslyWithCompletionHandler: &*block];
+        }
+
+        let _ = rx.recv();
+
+        let status: isize = unsafe { msg_send![session, status] };
+        // AVAssetExportSessionStatusCompleted = 3
+        if status != 3 {
+            let session_err: *mut AnyObject = unsafe { msg_send![session, error] };
+            let desc = if !session_err.is_null() {
+                let ns_desc: *mut AnyObject = unsafe { msg_send![session_err, localizedDescription] };
+                if !ns_desc.is_null() {
+                    let s: *const std::ffi::c_char = unsafe { msg_send![ns_desc, UTF8String] };
+                    if !s.is_null() {
+                        unsafe { std::ffi::CStr::from_ptr(s).to_string_lossy().to_string() }
+                    } else {
+                        "mute export failed".to_string()
+                    }
+                } else {
+                    "mute export failed".to_string()
+                }
+            } else {
+                "mute export failed".to_string()
+            };
+            let _ = std::fs::remove_file(output);
+            return Err(format!("\"{name}\": {desc}"));
+        }
+
+        Ok(())
+    })
+}
+
+/// Mutes a video (H.264 video without audio) with Windows' own Media Foundation engine.
+#[cfg(windows)]
+fn windows_mute(input: &Path, output: &Path, name: &str) -> Result<(), String> {
+    windows_transcode_internal(input, output, None, true, name)
 }
 
 /// Converts a video to MP4 (H.264 + AAC) with Windows' own Media Foundation engine, which
@@ -307,6 +501,17 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
 /// (1080p, 720p, Compress); `None` keeps the source size.
 #[cfg(windows)]
 fn windows_transcode(input: &Path, output: &Path, short_side: Option<u32>, name: &str) -> Result<(), String> {
+    windows_transcode_internal(input, output, short_side, false, name)
+}
+
+#[cfg(windows)]
+fn windows_transcode_internal(
+    input: &Path,
+    output: &Path,
+    short_side: Option<u32>,
+    mute: bool,
+    name: &str,
+) -> Result<(), String> {
     use windows::Media::MediaProperties::{MediaEncodingProfile, VideoEncodingQuality};
     use windows::Media::Transcoding::{MediaTranscoder, TranscodeFailureReason};
     use windows::Storage::{CreationCollisionOption, StorageFile, StorageFolder};
@@ -351,6 +556,9 @@ fn windows_transcode(input: &Path, output: &Path, short_side: Option<u32>, name:
                 profile
             }
         };
+        if mute {
+            let _ = profile.SetAudio(None);
+        }
         let folder = StorageFolder::GetFolderFromPathAsync(&dir)?.join()?;
         let target = folder.CreateFileAsync(&file_name, CreationCollisionOption::FailIfExists)?.join()?;
         let prepared = MediaTranscoder::new()?.PrepareFileTranscodeAsync(&source, &target, &profile)?.join()?;

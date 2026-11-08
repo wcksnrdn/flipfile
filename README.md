@@ -335,11 +335,11 @@ Old binary `.ppt` / `.pps` / `.pot` and `.odp` files need PowerPoint or LibreOff
 - **Video formats (`Video`)**: convert between **MP4** (H.264 + AAC), **MOV**, **WEBM** (VP9 + Opus), **MKV**, **AVI** and **FLV**, or drop a video on **GIF clip** to create a 12 fps Lanczos-scaled animated GIF (`clip_animated.gif`).
 - **Video tools (`Video → Tools`)**:
   - **Compress**: re-encodes with higher CRF + faststart (`clip_compressed.mp4`).
-  - **Mute**: strips the audio track without re-encoding the video stream (`clip_muted.mp4`).
+  - **Mute**: strips the audio track (`clip_muted.mp4`; a MOV stays a MOV, `clip_muted.mov`). Built in without `ffmpeg`: on macOS through AVFoundation, without re-encoding the video; on Windows through Media Foundation.
   - **Audio extract**: extracts the audio track to `.mp3` (with `ffmpeg`) or `.m4a` (built-in on macOS).
   - **1080p / 720p**: downscales video to Full HD or HD while preserving aspect ratio.
 - **Music / Audio (`Music` & `Music → More`)**: convert between **MP3**, **WAV**, **M4A (AAC)**, **FLAC**, **OGG Vorbis**, **AIFF**, **OPUS**, **AAC**, **CAF** (Apple CoreAudio), **ALAC** (Apple Lossless `.m4a`) and **WMA**—or drop a video file onto any audio format to extract its soundtrack.
-- **Engines**: uses `ffmpeg` when installed on your computer (supports every format and tool); on macOS, `/usr/bin/afconvert` and `/usr/bin/avconvert` are used automatically when `ffmpeg` is not installed, so **WAV, M4A, AAC, ALAC, FLAC, AIFF, CAF, MP4, MOV, 1080p, 720p and Compress** work out of the box with zero installs.
+- **Engines**: uses `ffmpeg` when installed on your computer (supports every format and tool); on macOS, `/usr/bin/afconvert` and `/usr/bin/avconvert` are used automatically when `ffmpeg` is not installed, so **WAV, M4A, AAC, ALAC, FLAC, AIFF, CAF, MP4, MOV, Mute, 1080p, 720p and Compress** work out of the box with zero installs.
 
 </details>
 

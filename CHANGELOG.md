@@ -29,6 +29,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
   - The models (about 110 MB) are bundled; builds download them with `npm run fetch-models`, and
     ONNX Runtime 1.24.4 (Microsoft's official build; telemetry off) with
     `npm run fetch-onnxruntime`, all pinned by SHA-256.
+- **Mute video without ffmpeg (macOS, Windows)**: *Video → Tools → Mute* now works out of the box.
+  macOS removes the audio through AVFoundation without re-encoding the video (lossless);
+  Windows through its built-in Media Foundation engine. A MOV stays a MOV (`clip_muted.mov`).
 
 ## [0.6.1] - 2026-11-07
 
