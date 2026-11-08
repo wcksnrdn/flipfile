@@ -16,6 +16,7 @@
 mod bench;
 mod clean;
 mod encode;
+mod faces;
 mod input;
 mod media;
 mod memory;
@@ -28,6 +29,7 @@ mod stress;
 mod strip;
 pub mod text;
 mod tools;
+mod upscale;
 mod word;
 #[cfg(test)]
 mod tests;
@@ -53,14 +55,14 @@ use office_extra::{convert_office, is_extra_office_input, is_office_target};
 use output::{save_err, Reservations};
 pub(crate) use output::unique_output_path;
 use pdf::{merge_to_pdf, pdf_to_images};
-use tools::{is_tool, merge_to_gif, run_tool};
+use tools::{is_tool, is_upscale, merge_to_gif, run_tool};
 use word::{from_sheet, from_word, ocr_to_word};
 
 #[derive(Clone, Serialize)]
 pub struct Progress {
     done: usize,
     total: usize,
-    unit: &'static str, // "file", or "page" while a single PDF is being rendered
+    unit: &'static str, // "file", "page" while a single PDF is being rendered, "step" while one image is upscaled
 }
 
 /// Reports `(pages done, total pages)` while rendering a PDF.
@@ -130,6 +132,7 @@ pub async fn convert_batch(
         let result = run_batch(&paths, &format, out_dir.as_deref(), &options, suffix, &on_progress);
         // An idle flipfile should not hold on to what the last document needed
         office::typeset::release_caches();
+        crate::platform::upscale::release();
         result
     })
     .await
@@ -189,11 +192,13 @@ fn run_batch(
     if format == "pptx" && paths.len() > 1 && all_images && !paths.iter().any(|p| pdf_render::is_pdf(&header(Path::new(p)))) {
         return slides::merge_to_pptx(paths, on_progress, out_dir, options);
     }
-    // A single PDF can take a while: report its pages instead of the one file.
+    // A single PDF can take a while: report its pages instead of the one file
+    // (or for an upscale, its steps).
     let single = paths.len() == 1;
+    let unit = if is_upscale(format) { "step" } else { "page" };
     let on_page = |done: usize, total: usize| {
         if single {
-            let _ = on_progress.send(Progress { done, total, unit: "page" });
+            let _ = on_progress.send(Progress { done, total, unit });
         }
     };
     let results = par_map(paths, on_progress, |p| memory::cost(p, format), |p| {
@@ -329,7 +334,7 @@ fn convert(
         return clean(input, out_dir).map(|path| Converted { path, pages: 0, sizes: None, note: None });
     }
     if is_tool(format) {
-        return run_tool(input, format, out_dir, options);
+        return run_tool(input, format, out_dir, options, on_page);
     }
 
     let (ext, suffix) = match format {

@@ -81,7 +81,7 @@ const OFFICE_FILE =
 
 // Dropping on a size preset keeps each file's own format (see SAME_FORMAT in convert.rs)
 const SAME_FORMAT = "same";
-type Progress = { done: number; total: number; unit: "file" | "page" };
+type Progress = { done: number; total: number; unit: "file" | "page" | "step" };
 
 // If the drop position itself resolves to nothing, a hover this recent still counts.
 const HOVER_GRACE_MS = 150;
@@ -109,6 +109,8 @@ const formatBytes = (n: number) =>
 const IS_MAC = /Mac/i.test(navigator.userAgent);
 const ALT_SUPPORTED = IS_MAC || /Windows/i.test(navigator.userAgent);
 const ALT_KEY = IS_MAC ? "⌥" : "Alt";
+// Where the AI tools run: this computer, never a server
+const ON_DEVICE = IS_MAC ? "On this Mac" : /Windows/i.test(navigator.userAgent) ? "On this PC" : "On this computer";
 const ALT_POLL_MS = 80;
 
 // "Clipboard 2026-10-20 at 14.03.12", in local time (matches the macOS screenshot style)
@@ -515,7 +517,7 @@ export default function App() {
     const label = same ? (labelOf(preset ?? "") ?? "Done") : (labelOf(format) ?? format.toUpperCase()) + presetLabel;
     const many = paths.length > 1;
     setStatus({
-      title: many ? `0/${paths.length}` : "Converting",
+      title: many ? `0/${paths.length}` : format.startsWith("up-") ? "Upscaling" : "Converting",
       hint: `→ ${label}`,
       tone: "busy",
       progress: many ? 0 : undefined,
@@ -525,8 +527,9 @@ export default function App() {
     onProgress.onmessage = ({ done, total, unit }) =>
       setStatus((s) => {
         if (s?.tone !== "busy") return s;
-        // A single PDF reports its pages; several files report files
+        // A single PDF reports its pages, a single upscale its steps; several files report files
         if (unit === "page" && total > 1) return { ...s, title: `Page ${done}/${total}`, progress: done / total };
+        if (unit === "step" && total > 0) return { ...s, title: `${Math.floor((done / total) * 100)}%`, progress: done / total };
         if (unit === "file" && many) return { ...s, title: `${done}/${total}`, progress: done / total };
         return s;
       });
@@ -936,10 +939,12 @@ export default function App() {
     badge = null;
   } else if (open) {
     const verb = dragging ? "Release" : "Click";
-    badge = presetLabel
-      ? `Size: ${presetLabel}`
-      : hovered === AI_SUMMARY
-        ? "On this Mac"
+    // Upscaling sets its own size, so size presets don't apply to it
+    const aiTool = hovered === AI_SUMMARY || hovered?.startsWith("up-");
+    badge = aiTool
+      ? ON_DEVICE
+      : presetLabel
+        ? `Size: ${presetLabel}`
         : ALT_SUPPORTED
           ? `Hold ${ALT_KEY} to resize`
           : summary;
@@ -954,6 +959,8 @@ export default function App() {
           ? `${verb} to strip metadata`
           : hovered === "nobg"
             ? `${verb} to remove background`
+          : hovered?.startsWith("up-")
+            ? `${verb} to enlarge with AI`
           : hovered === "square"
             ? `${verb} to pad to 1:1 square`
           : hovered === "gif-anim"

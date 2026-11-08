@@ -74,6 +74,9 @@ pub(super) fn cost(path: &str, format: &str) -> u64 {
         .map(|(w, h)| match format {
             // The canvas, as wide as the longest side
             "square" => u64::from(w.max(h).min(super::tools::SQUARE_MAX)).pow(2),
+            // The photo and its enlargement
+            "up-2x" => u64::from(w) * u64::from(h) * 5,
+            "up-4x" => u64::from(w) * u64::from(h) * 17,
             _ => u64::from(w) * u64::from(h),
         })
         // HEIC holds about 1/24 of its pixels' size

@@ -128,6 +128,8 @@ const PHOTO_TOOLS = alignedSubRing(
   [
     { id: "photo-compress-nav", label: "Compress", sub: "size", nav: "photo-compress" },
     { id: "nobg", label: "Remove", sub: "BG", disabled: !IS_MAC },
+    { id: "up-2x", label: "Upscale", sub: "2×" },
+    { id: "up-4x", label: "Upscale", sub: "4×" },
     { id: "photo-transform-nav", label: "Transform", sub: "↻", nav: "photo-transform" },
     { id: "square", label: "Square", sub: "1:1" },
     { id: "gif-anim", label: "GIF", sub: "anim" },
@@ -330,6 +332,8 @@ export const DEFAULT_RING: RingId = "category";
 const CUSTOM_LABELS: Record<string, string> = {
   "docx-ocr": "WORD OCR",
   nobg: "Remove BG",
+  "up-2x": "Upscale 2×",
+  "up-4x": "Upscale 4×",
   "gif-anim": "Animated GIF",
   "cmp-auto": "Auto Compress",
   "cmp-1m": "Max 1 MB",

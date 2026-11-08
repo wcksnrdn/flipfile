@@ -86,8 +86,10 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
 objc2-vision = { version = "0.3", default-features = false, features = [
   "std", "objc2-core-foundation", "VNRequest", "VNRecognizeTextRequest", "VNRequestHandler", "VNObservation", "VNTypes",
   "VNGenerateForegroundInstanceMaskRequest", "objc2-core-video", "objc2-core-graphics",
+  # faces restored by AI upscaling (src/platform/faces.rs)
+  "VNDetectFaceLandmarksRequest", "VNFaceLandmarks", "VNObservation",
 ] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange", "NSData", "NSString", "NSUserDefaults", "NSLocale", "NSIndexSet", "NSArray", "NSDictionary", "NSError"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSRange", "NSData", "NSString", "NSUserDefaults", "NSLocale", "NSIndexSet", "NSArray", "NSDictionary", "NSError", "NSURL", "NSValue"] }
 objc2-image-io = { version = "0.3", default-features = false, features = [
   "std",
   "objc2-core-graphics",
@@ -96,6 +98,12 @@ objc2-image-io = { version = "0.3", default-features = false, features = [
 ] }
 # Reading the background-removal mask (src/platform/background.rs)
 objc2-core-video = { version = "0.3.2", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn"] }
+block2 = "0.6"
+# AI upscaling with the bundled model on the Neural Engine (src/platform/upscale.rs)
+objc2-core-ml = { version = "0.3", default-features = false, features = [
+  "std", "block2", "MLModel", "MLModelConfiguration", "MLMultiArray", "MLFeatureProvider", "MLFeatureValue",
+  "MLDictionaryFeatureProvider",
+] }
 
 # The computer's memory size (src/convert/memory.rs) and peak memory in benchmarks;
 # already part of the build.
@@ -115,7 +123,17 @@ windows = { version = "0.62", features = [
   "Win32_System_SystemInformation",
   # Video -> MP4 with Windows' built-in Media Foundation engine (src/convert/media.rs)
   "Media_MediaProperties", "Media_Transcoding", "Storage", "Storage_Search",
+  # Loading the bundled DirectML for AI upscaling (src/platform/onnx.rs)
+  "Win32_System_LibraryLoader",
 ] }
+# AI upscaling on the GPU (src/platform/onnx.rs)
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["directml"] }
+
+# AI upscaling on Windows and Linux: ONNX Runtime (src/platform/onnx.rs), loaded at run time
+# from the bundled library (scripts/fetch-onnxruntime.mjs) instead of linked or downloaded
+# by the crate
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-24"] }
 
 
 # `tauri dev` builds without optimisation. The image encoders (AVIF/rav1e, GIF palette
@@ -125,6 +143,10 @@ windows = { version = "0.62", features = [
 [dev-dependencies]
 # Builds sample Word files for the tests
 docx-rs = "0.4"
+
+# The Windows/Linux AI upscaling engine, tested on a Mac too (FLIPFILE_ONNX=1 npm run fetch-onnxruntime)
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-24"] }
 
 [profile.dev.package."*"]
 opt-level = 3

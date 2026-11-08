@@ -1,4 +1,4 @@
-// Photo room tools: background removal, geometric transforms (rotate, flip, grayscale),
+// Photo room tools: background removal, AI upscaling, geometric transforms (rotate, flip, grayscale),
 // 1:1 square padding, lossless and target-size compression, and animated GIF creation.
 
 use image::codecs::gif::{GifEncoder, Repeat};
@@ -17,7 +17,8 @@ use super::input::{file_name, header, open_oriented, same_format_ext};
 use super::memory;
 use super::output::{save_err, unique_output_path};
 use super::strip::strip_jpeg;
-use super::{isolate, par_map, BatchResult, Converted, Progress};
+use super::upscale::{self, MAX_PIXELS};
+use super::{isolate, par_map, BatchResult, Converted, OnPage, Progress};
 use crate::pdf::render as pdf_render;
 use crate::platform::background;
 use crate::state::settings::{Options, Resize, COMPRESS_QUALITY};
@@ -31,6 +32,8 @@ pub(super) fn is_tool(format: &str) -> bool {
     matches!(
         format,
         "nobg"
+            | "up-2x"
+            | "up-4x"
             | "rot-r"
             | "rot-l"
             | "rot-180"
@@ -48,12 +51,18 @@ pub(super) fn is_tool(format: &str) -> bool {
     )
 }
 
-/// Runs a single-file photo tool on `input`.
+/// True for the AI upscaling tools, which report their progress in steps
+pub(super) fn is_upscale(format: &str) -> bool {
+    matches!(format, "up-2x" | "up-4x")
+}
+
+/// Runs a single-file photo tool on `input`; `on_step` hears an upscale's progress.
 pub(super) fn run_tool(
     input: &Path,
     tool: &str,
     out_dir: Option<&Path>,
     options: &Options,
+    on_step: OnPage,
 ) -> Result<Converted, String> {
     let name = file_name(input);
     if pdf_render::is_pdf(&header(input)) {
@@ -62,6 +71,8 @@ pub(super) fn run_tool(
 
     match tool {
         "nobg" => remove_bg_file(input, out_dir, options),
+        "up-2x" => upscale_file(input, 2, out_dir, options, on_step),
+        "up-4x" => upscale_file(input, 4, out_dir, options, on_step),
         "rot-r" | "rot-l" | "rot-180" | "flip-h" | "flip-v" | "grayscale" => {
             transform_file(input, tool, out_dir, options)
         }
@@ -86,6 +97,37 @@ fn remove_bg_file(input: &Path, out_dir: Option<&Path>, options: &Options) -> Re
         .save_with_format(&output, ImageFormat::Png)
         .map_err(save_err)?;
     Ok(Converted::file(input, &output))
+}
+
+/// Enlarges a photo 2x or 4x with the AI models (src/convert/upscale.rs), restoring its
+/// faces, keeping the file's own format: `photo_2x.jpg`. The size presets don't apply:
+/// the size is the point.
+fn upscale_file(input: &Path, factor: u32, out_dir: Option<&Path>, options: &Options, on_step: OnPage) -> Result<Converted, String> {
+    let name = file_name(input);
+    let mut ext = same_format_ext(input)?;
+    // Icons can't hold a large image, and an animated GIF would keep only its first frame
+    if matches!(ext.as_str(), "ico" | "icns" | "gif" | "svg") {
+        ext = "png".into();
+    }
+    let (img, _) = open_oriented(input)?;
+    let pixels = u64::from(img.width()) * u64::from(img.height()) * u64::from(factor * factor);
+    if pixels > MAX_PIXELS {
+        let most = (MAX_PIXELS as f64 / f64::from(factor * factor)).sqrt() as u64;
+        return Err(format!(
+            "\"{name}\" is too large to upscale {factor}× (it would be {} MP; up to about {most} × {most} px can be)",
+            pixels / 1_000_000
+        ));
+    }
+    let (larger, faces) = upscale::upscale(&img, factor, &mut upscale::Bundled, on_step)?;
+    let output = unique_output_path(input, out_dir, &format!("{factor}x"), &ext);
+    encode(&larger, &ext, &output, options.quality)?;
+    let mut converted = Converted::file(input, &output);
+    converted.note = match faces {
+        0 => None,
+        1 => Some("1 face restored".into()),
+        n => Some(format!("{n} faces restored")),
+    };
+    Ok(converted)
 }
 
 /// Rotates, flips, or converts to grayscale while keeping the file's own format.
