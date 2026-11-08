@@ -11,3 +11,10 @@
 
 # Built by build.rs from intelligence/main.swift (macOS)
 /binaries/
+
+# Downloaded by scripts/fetch-models.mjs (macOS)
+/models/*.mlmodelc/
+/models/*.onnx
+/models/*.partial/
+# Downloaded by scripts/fetch-onnxruntime.mjs
+/onnxruntime/
