@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-08
+
 ### Added
 
 - **AI Upscale 2× / 4× with face restoration (macOS, Windows, Linux)**: drop a small, blurry or old photo on
@@ -256,7 +258,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/wcksnrdn/flipfile/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/wcksnrdn/flipfile/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wcksnrdn/flipfile/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/wcksnrdn/flipfile/compare/v0.5.1...v0.5.2
