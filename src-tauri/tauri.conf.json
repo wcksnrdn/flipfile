@@ -4,9 +4,9 @@
   "version": "0.6.1",
   "identifier": "com.satria.flipfile",
   "build": {
-    "beforeDevCommand": "npm run fetch-pdfium && npm run dev",
+    "beforeDevCommand": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run fetch-pdfium && npm run build",
+    "beforeBuildCommand": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && npm run build",
     "frontendDist": "../dist"
   },
   "app": {

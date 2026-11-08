@@ -37,6 +37,12 @@ jobs:
       - name: Fetch PDFium
         run: npm run fetch-pdfium
 
+      # The ONNX engine and models too: the Windows/Linux upscaling engine is tested here
+      - name: Fetch AI models
+        env:
+          FLIPFILE_ONNX: "1"
+        run: npm run fetch-models && npm run fetch-onnxruntime
+
       - name: Rust tests
         working-directory: src-tauri
         env:

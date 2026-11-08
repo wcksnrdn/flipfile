@@ -10,10 +10,12 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "fetch-pdfium": "node scripts/fetch-pdfium.mjs",
+    "fetch-models": "node scripts/fetch-models.mjs",
+    "fetch-onnxruntime": "node scripts/fetch-onnxruntime.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run fetch-pdfium && cd src-tauri && cargo test",
+    "test": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && cd src-tauri && cargo test",
     "stress": "npm run fetch-pdfium && cd src-tauri && cargo test --lib convert::stress -- --include-ignored",
-    "bench": "npm run fetch-pdfium && cd src-tauri && cargo test --profile bench --lib convert::bench::bench -- --exact --ignored --nocapture"
+    "bench": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && cd src-tauri && cargo test --profile bench --lib convert::bench::bench -- --exact --ignored --nocapture"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.3.0",
