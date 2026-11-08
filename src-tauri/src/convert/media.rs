@@ -214,8 +214,7 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
     let (out_ext, suffix) = match format {
         "vid-gif" => ("gif", "animated"),
         "vid-compress" => ("mp4", "compressed"),
-        // Mute preserves the source container (MOV stays MOV, everything else → MP4)
-        "vid-mute" => (if src_ext == "mov" { "mov" } else { "mp4" }, "muted"),
+        "vid-mute" => (muted_ext(&src_ext, cfg!(target_os = "macos") || find_ffmpeg().is_some()), "muted"),
         "vid-1080p" => ("mp4", "1080p"),
         "vid-720p" => ("mp4", "720p"),
         other => (other, "converted"),
@@ -322,6 +321,12 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
 #[link(name = "AVFoundation", kind = "framework")]
 unsafe extern "C" {}
 
+/// The container of a muted video: a MOV stays a MOV when the engine can write one
+/// (ffmpeg, macOS' AVFoundation); everything else, and Windows' own engine, gives MP4.
+fn muted_ext(src_ext: &str, mov_writable: bool) -> &'static str {
+    if src_ext == "mov" && mov_writable { "mov" } else { "mp4" }
+}
+
 /// Strips audio from a video using AVFoundation's passthrough preset (lossless stream copy).
 /// Works out of the box on every macOS version with zero external tools.
 #[cfg(target_os = "macos")]
@@ -366,6 +371,24 @@ fn macos_mute(input: &Path, output: &Path, name: &str) -> Result<(), String> {
         const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
     }
 
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug)]
+    struct CGAffineTransform {
+        a: f64,
+        b: f64,
+        c: f64,
+        d: f64,
+        tx: f64,
+        ty: f64,
+    }
+
+    unsafe impl Encode for CGAffineTransform {
+        const ENCODING: Encoding = Encoding::Struct("CGAffineTransform", &[f64::ENCODING; 6]);
+    }
+    unsafe impl RefEncode for CGAffineTransform {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
+
     const K_CMTIME_ZERO: CMTime = CMTime {
         value: 0,
         timescale: 1,
@@ -397,7 +420,10 @@ fn macos_mute(input: &Path, output: &Path, name: &str) -> Result<(), String> {
         let tracks: *mut AnyObject = unsafe { msg_send![asset, tracksWithMediaType: &*media_type] };
         let count: usize = if tracks.is_null() { 0 } else { unsafe { msg_send![tracks, count] } };
         if count == 0 {
-            return Err(format!("\"{name}\": no video track found"));
+            // AVFoundation reads MP4, MOV and M4V; not WebM, MKV, AVI or FLV
+            return Err(format!(
+                "\"{name}\": macOS can't read this video's format; install ffmpeg (`brew install ffmpeg`) to mute it"
+            ));
         }
         let video_track: *mut AnyObject = unsafe { msg_send![tracks, objectAtIndex: 0usize] };
 
@@ -430,6 +456,12 @@ fn macos_mute(input: &Path, output: &Path, name: &str) -> Result<(), String> {
         };
         if !inserted {
             return Err(format!("\"{name}\": could not extract video stream"));
+        }
+        // The track's orientation: phones store portrait videos sideways with a rotation,
+        // which a composition track doesn't take over by itself
+        unsafe {
+            let transform: CGAffineTransform = msg_send![video_track, preferredTransform];
+            let _: () = msg_send![comp_track, setPreferredTransform: transform];
         }
 
         let preset = NSString::from_str("AVAssetExportPresetPassthrough");
@@ -556,8 +588,9 @@ fn windows_transcode_internal(
                 profile
             }
         };
+        // Without an audio stream (an error here must not leave a "muted" video with sound)
         if mute {
-            let _ = profile.SetAudio(None);
+            profile.SetAudio(None)?;
         }
         let folder = StorageFolder::GetFolderFromPathAsync(&dir)?.join()?;
         let target = folder.CreateFileAsync(&file_name, CreationCollisionOption::FailIfExists)?.join()?;
@@ -594,7 +627,15 @@ fn fit_short_side(w: u32, h: u32, short: u32) -> (u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    use super::fit_short_side;
+    use super::{fit_short_side, muted_ext};
+
+    #[test]
+    fn muted_videos_keep_mov_where_it_can_be_written() {
+        assert_eq!(muted_ext("mov", true), "mov");
+        assert_eq!(muted_ext("mov", false), "mp4", "Windows' own engine writes MP4 only");
+        assert_eq!(muted_ext("mp4", true), "mp4");
+        assert_eq!(muted_ext("mkv", true), "mp4");
+    }
 
     #[test]
     fn fit_short_side_keeps_orientation() {
@@ -623,3 +664,4 @@ fn run_cmd(mut cmd: Command, name: &str) -> Result<(), String> {
         Err(format!("\"{name}\": {msg}"))
     }
 }
+

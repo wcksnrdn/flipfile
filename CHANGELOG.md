@@ -30,8 +30,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
     ONNX Runtime 1.24.4 (Microsoft's official build; telemetry off) with
     `npm run fetch-onnxruntime`, all pinned by SHA-256.
 - **Mute video without ffmpeg (macOS, Windows)**: *Video → Tools → Mute* now works out of the box.
-  macOS removes the audio through AVFoundation without re-encoding the video (lossless);
-  Windows through its built-in Media Foundation engine. A MOV stays a MOV (`clip_muted.mov`).
+  macOS removes the audio through AVFoundation without re-encoding the video (lossless, portrait
+  videos stay portrait) and keeps a MOV a MOV (`clip_muted.mov`); Windows re-encodes through its
+  built-in Media Foundation engine, to MP4.
 
 ## [0.6.1] - 2026-11-07
 
