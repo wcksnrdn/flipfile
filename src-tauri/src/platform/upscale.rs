@@ -6,18 +6,21 @@
 // - Windows and Linux: ONNX Runtime (src/platform/onnx.rs) runs the same models, exported
 //   by scripts/upscale-model/export_onnx.py; on Windows on the GPU (DirectML).
 //
-// Three models, all reading and writing planar RGB floats (all red values, then green,
+// Four models, all reading and writing planar RGB floats (all red values, then green,
 // then blue):
-// - two upscalers of a TILE x TILE tile, SCALE times larger, values 0 to 1: a fast one
-//   (Real-ESRGAN compact) and a detailed one (Real-ESRGAN x4plus, about ten times slower);
+// - three upscalers of a square tile, SCALE times larger, values 0 to 1: a fast one
+//   (Real-ESRGAN compact) and a detailed one (Real-ESRGAN x4plus, about ten times slower)
+//   of TILE x TILE tiles, and one for faces (4xFaceUpSharpLDAT) of FACE_TILE x FACE_TILE;
 // - a face restorer of a FACE x FACE face aligned to a template, values -1 to 1
 //   (RestoreFormer++).
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-/// The side of the tile the upscalers read
+/// The side of the tile the fast and detailed upscalers read
 pub const TILE: usize = 256;
+/// The side of the tile the face upscaler reads
+pub const FACE_TILE: usize = 128;
 /// How much larger the upscalers make it
 pub const SCALE: usize = 4;
 /// The side of the aligned face the face model reads and returns
@@ -30,6 +33,18 @@ pub enum Upscaler {
     Fast,
     /// Real-ESRGAN x4plus: natural detail on photos, for small pictures
     Detailed,
+    /// 4xFaceUpSharpLDAT: trained on faces, draws sharp eyes, lashes, brows, hair and skin
+    Face,
+}
+
+impl Upscaler {
+    /// The side of the tile it reads
+    pub fn tile(self) -> usize {
+        match self {
+            Upscaler::Fast | Upscaler::Detailed => TILE,
+            Upscaler::Face => FACE_TILE,
+        }
+    }
 }
 
 static MODEL_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -51,20 +66,20 @@ pub(crate) fn model_path(file: &str) -> Option<PathBuf> {
 }
 
 /// What each step takes here before any has been measured, in seconds: a tile of the
-/// fast upscaler, a tile of the detailed one, a face. (On Windows, this loads the fast
-/// model to learn whether there is a GPU.)
-pub fn expected_seconds() -> [f32; 3] {
+/// fast upscaler, a tile of the detailed one, a face restored, a tile of the face
+/// upscaler. (On Windows, this loads the fast model to learn whether there is a GPU.)
+pub fn expected_seconds() -> [f32; 4] {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        // Neural Engine (M1 Pro); faces on the CPU
-        [0.027, 0.3, 0.5]
+        // Neural Engine (M1 Pro); faces on the CPU, the face upscaler on the GPU
+        [0.027, 0.3, 0.5, 0.55]
     } else if cfg!(target_os = "macos") {
         // Intel: the GPU, at best
-        [0.2, 3.0, 2.0]
+        [0.2, 3.0, 2.0, 3.0]
     } else {
         #[cfg(not(target_os = "macos"))]
         return onnx_models::expected_seconds();
         #[allow(unreachable_code)]
-        [0.6, 15.0, 4.0]
+        [0.6, 15.0, 4.0, 4.0]
     }
 }
 
@@ -74,6 +89,7 @@ pub fn upscale_tile(upscaler: Upscaler, tile: &[f32]) -> Result<Vec<f32>, String
     match upscaler {
         Upscaler::Fast => coreml::FAST.run(tile),
         Upscaler::Detailed => coreml::DETAILED.run(tile),
+        Upscaler::Face => coreml::FACE_UP.run(tile),
     }
 }
 
@@ -108,19 +124,22 @@ pub fn release() {
 /// engine has been fetched there)
 #[cfg(any(not(target_os = "macos"), test))]
 pub mod onnx_models {
-    use super::{Upscaler, FACE, SCALE, TILE};
+    use super::{Upscaler, FACE, SCALE};
     use crate::platform::onnx::{Device, Model};
 
     static FAST: Model = Model::new("upscale.onnx", true);
     static DETAILED: Model = Model::new("upscale-large.onnx", true);
     static FACES: Model = Model::new("faces.onnx", true);
+    static FACE_UP: Model = Model::new("faces-upscale.onnx", true);
 
     pub fn upscale_tile(upscaler: Upscaler, tile: &[f32]) -> Result<Vec<f32>, String> {
         let model = match upscaler {
             Upscaler::Fast => &FAST,
             Upscaler::Detailed => &DETAILED,
+            Upscaler::Face => &FACE_UP,
         };
-        planar(model.run("image", &[1, 3, TILE, TILE], tile, &["upscaled"])?, TILE * SCALE)
+        let side = upscaler.tile();
+        planar(model.run("image", &[1, 3, side, side], tile, &["upscaled"])?, side * SCALE)
     }
 
     pub fn restore_face(face: &[f32]) -> Result<Vec<f32>, String> {
@@ -143,17 +162,17 @@ pub mod onnx_models {
 
     #[cfg_attr(test, allow(dead_code))]
     pub fn release() {
-        for model in [&FAST, &DETAILED, &FACES] {
+        for model in [&FAST, &DETAILED, &FACES, &FACE_UP] {
             model.release();
         }
     }
 
     /// See super::expected_seconds: measured with ONNX Runtime on an M1 Pro's CPU; a
     /// GPU's guessed (integrated GPUs, the slowest likely, take about a tenth)
-    pub fn expected_seconds() -> [f32; 3] {
+    pub fn expected_seconds() -> [f32; 4] {
         match FAST.prepare() {
-            Some(Device::Gpu) => [0.1, 1.5, 0.8],
-            _ => [0.6, 15.0, 4.0],
+            Some(Device::Gpu) => [0.1, 1.5, 0.8, 1.0],
+            _ => [0.6, 15.0, 4.0, 3.6],
         }
     }
 
@@ -189,7 +208,7 @@ mod coreml {
     };
     use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString, NSURL};
 
-    use super::{model_path, FACE, SCALE, TILE};
+    use super::{model_path, FACE, FACE_TILE, SCALE, TILE};
 
     /// One bundled model: its file, its input and output (planar RGB squares), where it
     /// runs, and the model itself once loaded. Loading takes a moment, so a model stays
@@ -213,6 +232,10 @@ mod coreml {
     // CPU it loads in 0.8 s (the GPU compiles for 4.8 s, every launch) and needs 270 MB
     // less memory, for 0.5 s a face instead of 0.2 s.
     pub static FACES: Spec = Spec::new("faces.mlmodelc", ("face", FACE), ("restored", FACE), MLComputeUnits::CPUOnly);
+    // Float32 arithmetic on the GPU, 0.5 s a tile: the Neural Engine's compiler takes over
+    // 20 minutes on this transformer
+    pub static FACE_UP: Spec =
+        Spec::new("faces-upscale.mlmodelc", ("image", FACE_TILE), ("upscaled", FACE_TILE * SCALE), MLComputeUnits::CPUAndGPU);
 
     impl Spec {
         const fn new(
