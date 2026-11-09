@@ -15,8 +15,8 @@
 // FLIPFILE_ONNX=1 fetches the ONNX models on a Mac too, to test the Windows/Linux engine
 // there. To publish new models, run the scripts, archive the folders and files
 // (`tar -czf flipfile-models-N.tar.gz upscale.mlmodelc upscale-large.mlmodelc
-// faces.mlmodelc`; `tar -czf flipfile-models-onnx-N.tar.gz upscale.onnx upscale-large.onnx
-// faces.onnx yunet.onnx`), attach both to a release `models-N` that is not marked as the
+// faces.mlmodelc faces-upscale.mlmodelc`; `tar -czf flipfile-models-onnx-N.tar.gz
+// upscale.onnx upscale-large.onnx faces.onnx yunet.onnx faces-upscale.onnx`), attach both to a release `models-N` that is not marked as the
 // latest release (the in-app updater reads the latest one), and record the hashes here.
 
 import { execFileSync } from "node:child_process";
@@ -26,16 +26,16 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "models-1";
+const VERSION = "models-2";
 const RELEASE = `https://github.com/wcksnrdn/flipfile/releases/download/${VERSION}`;
 
 // Each set: its archive and pinned hash, the folders or files it holds (replaced as a
 // whole), and the pinned hash of every file
 const SETS = {
   coreml: {
-    url: `${RELEASE}/flipfile-models-1.tar.gz`,
-    archive: "764da7b2032c3698e51f7ce49c7bf187ca47e9250c92dd514c2d5561b63e741b",
-    entries: ["upscale.mlmodelc", "upscale-large.mlmodelc", "faces.mlmodelc"],
+    url: `${RELEASE}/flipfile-models-2.tar.gz`,
+    archive: "42af598dcdbd6935e7f7ca262e8d2dd9b08fb8c750b27318186fadbd95b7028a",
+    entries: ["upscale.mlmodelc", "upscale-large.mlmodelc", "faces.mlmodelc", "faces-upscale.mlmodelc"],
     files: {
       "upscale.mlmodelc/analytics/coremldata.bin": "939bd25cb6f733debaff2d96656db1d243ef104879967caf2b73be26b1560ff2",
       "upscale.mlmodelc/coremldata.bin": "9ab3dd8c107a184c44f096d44ddbc2093886a81618838e4d3916cd07b4c194aa",
@@ -49,22 +49,27 @@ const SETS = {
       "faces.mlmodelc/coremldata.bin": "22ae07ebcb7266421763cfcdeb456dcdcfb79f440d464c53e4e2a8232952cfaa",
       "faces.mlmodelc/model.mil": "e8eca3e9eff9c6f88fbc6fff9c029dbe536d18ac2040cebfa5435e4beea507d3",
       "faces.mlmodelc/weights/weight.bin": "9781e5c1d2f0d25c0ad1a83d77bc4b57260e97d32ec8dc30437c3fb392f62f52",
+      "faces-upscale.mlmodelc/analytics/coremldata.bin": "00b579b74ef1392028e063e15079ad928d8f37662c52e2bc3332a96f4e52922a",
+      "faces-upscale.mlmodelc/coremldata.bin": "775ef3470bff2a16e88bdc10426e475883d2b7458cb7504970ace1f2ff85599b",
+      "faces-upscale.mlmodelc/model.mil": "91d3d2f06594905a3b52c38d980afbe387d06958f03be6a37a5fd212841dc7a9",
+      "faces-upscale.mlmodelc/weights/weight.bin": "163b35b5ed44e505371b2e962be6d9daf648f9da7d078ce8b0910a3aa510f36d",
     },
   },
   onnx: {
-    url: `${RELEASE}/flipfile-models-onnx-1.tar.gz`,
-    archive: "8728224c5e42b16cbd0db71c4b96e4919c59ae6b24fb4e283d23a58e8cd89c35",
-    entries: ["upscale.onnx", "upscale-large.onnx", "faces.onnx", "yunet.onnx"],
+    url: `${RELEASE}/flipfile-models-onnx-2.tar.gz`,
+    archive: "e74e913e3048851ff3d6e84a749902d2c2bf2d50d9e455708bf984385eb69cdb",
+    entries: ["upscale.onnx", "upscale-large.onnx", "faces.onnx", "yunet.onnx", "faces-upscale.onnx"],
     files: {
       "upscale.onnx": "c88b3c063179e944ab58612cfa37526c9062d026103da8c09507f38b92ce2795",
       "upscale-large.onnx": "52580cc02fb8d84bbbeb7a1c6855d6ba958122b31671cc747265f29198d9b60d",
       "faces.onnx": "7954c397267b83a9972ca0baf223a729a47bcc055435c67056652db6bee134d6",
       "yunet.onnx": "ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0",
+      "faces-upscale.onnx": "9b0da336ae79e207ecbfd4f3dad637296f15ea0b9b8e42547596e8b3a2af304f",
     },
   },
 };
 
-// Each archive is ~99 MB; anything far larger is not what we asked for.
+// Each archive is ~115 MB; anything far larger is not what we asked for.
 const MAX_DOWNLOAD_BYTES = 160 * 1024 * 1024;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -96,7 +101,7 @@ async function fetchSet(name, set) {
     console.warn(`AI models: ${bad.map(([p]) => p).join(", ")} missing or changed; downloading them again.`);
   }
 
-  console.log(`Downloading the AI upscaling models (${VERSION}, ${name}, ~99 MB)…`);
+  console.log(`Downloading the AI upscaling models (${VERSION}, ${name}, ~115 MB)…`);
   let res;
   try {
     res = await fetch(set.url, { redirect: "follow" });
