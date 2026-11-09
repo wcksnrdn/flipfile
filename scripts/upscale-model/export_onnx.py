@@ -5,6 +5,7 @@ Core ML models of macOS (convert.py), so the results match:
 - upscale.onnx (2.4 MB): Real-ESRGAN's compact general model, denoise 0.5 (compact.py).
 - upscale-large.onnx (33 MB): Real-ESRGAN x4plus (rrdbnet.py).
 - faces.onnx (71 MB): RestoreFormer++ (restoreformer.py).
+- faces-upscale.onnx (33 MB): 4xFaceUpSharpLDAT (dat.py), the face upscaler, on 128 px tiles.
 - yunet.onnx (0.2 MB): YuNet, the face detector (MIT, Shiqi Yu; OpenCV Zoo's
   face_detection_yunet_2026may.onnx, copied as it is). macOS uses Vision instead.
 
@@ -12,14 +13,15 @@ Every model reads and writes planar RGB floats at a fixed size, as the Core ML o
 Weights are stored smaller than PyTorch's float32 and widened back when a model is
 loaded or run, so all arithmetic stays float32 (ONNX Runtime's CPU engine is slow in
 float16): the upscalers as float16 (one Cast each), the face model as 8-bit integers
-with one scale per output channel (one DequantizeLinear each), as on macOS.
+with one scale per output channel (one DequantizeLinear each), as on macOS; so is the
+face upscaler.
 
 Weights are read with `weights_only=True`: tensors only, no code in the checkpoints runs.
 
     python3.11 -m venv venv && ./venv/bin/pip install torch onnx onnxruntime numpy
     (download the four checkpoints as in convert.py, and face_detection_yunet_2026may.onnx from
     https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
-    ./venv/bin/python export_onnx.py ../../src-tauri/models
+    ./venv/bin/python export_onnx.py ../../src-tauri/models [model names; all by default]
 """
 
 import shutil
@@ -33,11 +35,13 @@ import torch
 from onnx import helper, numpy_helper
 
 import compact
+import dat
 import restoreformer
 import rrdbnet
 
 TILE = 256
 FACE = 512
+FACE_TILE = 128
 # Smaller tensors (biases, norms) stay float32: they hardly count
 SMALL = 4096
 
@@ -52,6 +56,34 @@ def shrink(path: Path, mode: str):
     each widened back to float32 by a node in front of its first use"""
     model = onnx.load(str(path))
     graph = model.graph
+    # Large constants inside the graph (tables computed when the weights were loaded)
+    # become weights too, so they are stored smaller like the others
+    nodes = []
+    for node in graph.node:
+        if node.op_type == "Constant" and node.attribute[0].type == onnx.AttributeProto.TENSOR:
+            values = numpy_helper.to_array(node.attribute[0].t)
+            if values.dtype == np.float32 and values.size >= SMALL:
+                graph.initializer.append(numpy_helper.from_array(values, node.output[0]))
+                continue
+        nodes.append(node)
+    del graph.node[:]
+    graph.node.extend(nodes)
+    # Identical tensors (the face upscaler's window masks, one per shifted block) are stored once
+    first, same = {}, {}
+    for tensor in graph.initializer:
+        key = (tensor.data_type, tuple(tensor.dims), numpy_helper.to_array(tensor).tobytes())
+        if key in first:
+            same[tensor.name] = first[key]
+        else:
+            first[key] = tensor.name
+    if same:
+        unique = [t for t in graph.initializer if t.name not in same]
+        del graph.initializer[:]
+        graph.initializer.extend(unique)
+        for node in graph.node:
+            for i, name in enumerate(node.input):
+                if name in same:
+                    node.input[i] = same[name]
     kept, added = [], []
     for tensor in graph.initializer:
         values = numpy_helper.to_array(tensor)
@@ -96,10 +128,22 @@ def check(net, example, path: Path, inputs: str, outputs: str):
     print(f"{path.name} ({path.stat().st_size / 1e6:.1f} MB): mean difference from PyTorch {np.abs(got - expected).mean():.4f}")
 
 
-def main(out_dir: Path, weights: Path):
+def main(out_dir: Path, weights: Path, only):
     out_dir.mkdir(parents=True, exist_ok=True)
     tile = torch.rand(1, 3, TILE, TILE)
     bsd = "BSD-3-Clause, Copyright (c) 2021 Xintao Wang"
+    wanted = lambda name: not only or name in only
+
+    if wanted("faces-upscale"):
+        net = dat.load("4xFaceUpSharpLDAT.safetensors", FACE_TILE)
+        face_tile = torch.rand(1, 3, FACE_TILE, FACE_TILE)
+        path = out_dir / "faces-upscale.onnx"
+        export(net, face_tile, path, "image", "upscaled")
+        shrink(path, "int8")
+        describe(path, "4xFaceUpSharpLDAT (DAT): 4x of a 128 px tile of a face", "CC-BY-4.0, 4xFaceUpSharpLDAT by Philip Hofmann (Phhofm)")
+        check(net, face_tile, path, "image", "upscaled")
+    if only and not only - {"faces-upscale"}:
+        return
 
     net = compact.load()
     path = out_dir / "upscale.onnx"
@@ -128,4 +172,4 @@ def main(out_dir: Path, weights: Path):
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1] if len(sys.argv) > 1 else "."), Path("."))
+    main(Path(sys.argv[1] if len(sys.argv) > 1 else "."), Path("."), set(sys.argv[2:]))
