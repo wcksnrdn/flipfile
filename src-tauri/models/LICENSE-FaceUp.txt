@@ -1,0 +1,12 @@
+4xFaceUpSharpLDAT
+Copyright (c) 2023 Philip Hofmann (Phhofm)
+https://github.com/Phhofm/models/releases/tag/4xFaceUpDAT_Series
+
+Licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+Changes made for flipfile: the released weights (4xFaceUpSharpLDAT.safetensors) were
+converted to Core ML (faces-upscale.mlmodelc) and ONNX (faces-upscale.onnx) for 128 px
+tiles, with the weights stored as 8-bit integers; the network (DAT, Chen et al., ICCV
+2023) was reimplemented for this in scripts/upscale-model/dat.py. The weights are
+provided as is, without warranties of any kind.

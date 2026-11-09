@@ -5,11 +5,13 @@
       "models/upscale.onnx": "models/upscale.onnx",
       "models/upscale-large.onnx": "models/upscale-large.onnx",
       "models/faces.onnx": "models/faces.onnx",
+      "models/faces-upscale.onnx": "models/faces-upscale.onnx",
       "models/yunet.onnx": "models/yunet.onnx",
       "models/LICENSES.md": "models/LICENSES.md",
       "models/LICENSE-Real-ESRGAN.txt": "models/LICENSE-Real-ESRGAN.txt",
       "models/LICENSE-RestoreFormerPlusPlus.txt": "models/LICENSE-RestoreFormerPlusPlus.txt",
       "models/LICENSE-YuNet.txt": "models/LICENSE-YuNet.txt",
+      "models/LICENSE-FaceUp.txt": "models/LICENSE-FaceUp.txt",
       "onnxruntime/libonnxruntime.so": "onnxruntime/libonnxruntime.so",
       "onnxruntime/LICENSE-onnxruntime.txt": "onnxruntime/LICENSE-onnxruntime.txt",
       "onnxruntime/ThirdPartyNotices-onnxruntime.txt": "onnxruntime/ThirdPartyNotices-onnxruntime.txt"
