@@ -128,11 +128,11 @@ Needs a Mac with Apple silicon, macOS 26 or later and Apple Intelligence turned 
 
 Drop a small, blurry or old photo on **Upscale 2×** or **Upscale 4×** (*Photo → Tools*) and flipfile redraws it two or four times larger. Faces get their own AI: every face is restored, with eyes, lashes, brows, lips, skin and hair drawn back in, while the person keeps their own face (their eye colour, skin tone and features stay theirs).
 
-- **Faces restored**: each face is found (by Vision on the Mac, by [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) on Windows and Linux), aligned and redrawn by [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus), then blended back in seamlessly, even when several faces touch.
+- **Faces in HD**: each face is found (by Vision on the Mac, by [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) on Windows and Linux) and drawn by an AI trained on faces, [4xFaceUpSharpLDAT](https://github.com/Phhofm/models/releases/tag/4xFaceUpDAT_Series): sharp eyes, lashes, brows, hair and skin, while glasses, jewellery and the person's own features stay exactly as they are. Small or damaged faces (old photos, faces in a crowd) are first restored by [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus). Faces blend back in seamlessly, even when several touch.
 - **Everything else, sharper**: [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) x4plus brings back natural detail in small photos; large pictures use its fast compact model. Edges and text come out crisp, JPEG blocks and noise disappear.
 - **Old photos too**: a picture that is large but blurry (an old photo shown bigger than it was taken, a screenshot of one, an enlarged image) is recognised and read at the size its detail really has, so it comes back sharper instead of just bigger.
 - **Your format**: `photo_2x.jpg` stays a JPG, `logo_4x.png` keeps its transparency (icons and GIFs come out as PNG).
-- **Private and offline**: the models (about 110 MB, part of flipfile) run on your computer: on a Mac's Neural Engine, on Windows on the graphics card (any DirectX 12 GPU, built-in ones too, through DirectML), on Linux on the processor. Nothing is uploaded, nothing extra is downloaded, and nothing needs installing.
+- **Private and offline**: the models (about 140 MB, part of flipfile) run on your computer: on a Mac's Neural Engine, on Windows on the graphics card (any DirectX 12 GPU, built-in ones too, through DirectML), on Linux on the processor. Nothing is uploaded, nothing extra is downloaded, and nothing needs installing.
 - **As fast as your computer allows**: on a Mac with Apple silicon a small photo takes a few seconds and Full HD to 4K about 15 (the circle shows how far it has got). flipfile measures how quick your computer is and uses the detailed model only where it finishes in reasonable time: without a capable GPU (Linux, Windows without one, Intel Macs), most pictures get the fast model and the faces are still restored.
 - It draws plausible detail rather than recovering what the camera never captured. Results are limited to 64 megapixels.
 
@@ -242,7 +242,7 @@ flipfile includes a native, cryptographically signed auto-updater powered by Tau
 <summary><b>Photo tools & Pro / 3D formats (Remove BG, target-size compress, transform, square, animated GIF, EXR/HDR/TGA/QOI/SVG)</b></summary>
 
 - **Remove BG** *(macOS 14+)*: uses macOS Vision's built-in subject-lifting model (`VNGenerateForegroundInstanceMaskRequest`) completely offline to cut out the foreground subject and save a transparent PNG (`photo_nobg.png`).
-- **Upscale 2× / 4×**: Real-ESRGAN (x4plus up to Full HD when this computer is quick enough, as measured tile by tile; compact otherwise), tile by tile with overlapping margins so no seams show; 2× is the 4× result averaged down. Large but blurry pictures (detected by how little they lose when halved) are halved first. Faces (Vision on macOS, YuNet elsewhere) are aligned to a 512 px template, restored by RestoreFormer++ and blended back over an ellipse. macOS runs the models with Core ML (Neural Engine, CPU); Windows and Linux with ONNX Runtime (DirectML GPU on Windows, CPU on Linux). Keeps the file's format and transparency (`photo_2x.jpg`), up to 64 MP.
+- **Upscale 2× / 4×**: Real-ESRGAN (x4plus up to Full HD when this computer is quick enough, as measured tile by tile; compact otherwise), tile by tile with overlapping margins so no seams show; 2× is the 4× result averaged down. Large but blurry pictures (detected by how little they lose when halved) are halved first. Faces (Vision on macOS, YuNet elsewhere): large ones (eyes 64 px apart or more) are drawn straight from the picture by 4xFaceUpSharpLDAT (DAT, a transformer trained on faces; 128 px tiles, on the GPU), small ones aligned to a 512 px template, restored by RestoreFormer++, then enlarged by 4xFaceUpSharpLDAT; each is blended back over an ellipse. The face upscaler is used where it fits in 45 s a face (2 min a picture) on this computer, else faces are only restored. macOS runs the models with Core ML (Neural Engine, CPU); Windows and Linux with ONNX Runtime (DirectML GPU on Windows, CPU on Linux). Keeps the file's format and transparency (`photo_2x.jpg`), up to 64 MP.
 - **Compress to target size** (**1 MB · 500 KB · 200 KB · 100 KB**): binary-searches encoder quality (and progressively scales resolution down if needed) so the output strictly fits under your byte budget—ideal for web forms and upload portals.
 - **Lossless compress**: runs `oxipng` on PNGs, strips metadata losslessly from JPEGs, writes lossless WebP, or Deflate-compresses TIFFs without changing a single pixel.
 - **Transform**: rotate 90° clockwise, 90° counter-clockwise, 180°, flip horizontally or vertically, or convert to grayscale (B&W) in the file's own format.
@@ -487,7 +487,7 @@ flipfile natively supports over **75 formats, smart tools, and conversions** acr
 | Tool | Action | Description |
 |---|---|---|
 | **AI Remove Background** | `Remove BG` | Automatically separates foreground subjects using macOS Vision AI (lossless `.png` output) |
-| **AI Upscale** | `Upscale 2×`, `Upscale 4×` | Redraws small, blurry or old photos 2× or 4× larger and restores every face (Real-ESRGAN + RestoreFormer++ on your computer, same format, up to 64 MP) |
+| **AI Upscale** | `Upscale 2×`, `Upscale 4×` | Redraws small, blurry or old photos 2× or 4× larger and restores every face (Real-ESRGAN, 4xFaceUpSharpLDAT and RestoreFormer++ on your computer, same format, up to 64 MP) |
 | **Clean Metadata & EXIF** | `Clean EXIF` | Losslessly removes EXIF, GPS locations, camera serials, and comments from JPG/PNG without re-encoding |
 | **Square 1:1 Framing** | `Square 1:1` | Pads photo into a perfect 1:1 square aspect ratio with smart blurred backdrop (max 16,384 px) |
 | **Combine → Animated GIF** | `GIF anim` | Combines multiple selected photos into a smooth, looping animated GIF |
@@ -700,7 +700,7 @@ PDFIUM_PLATFORM=mac-x64 npm run fetch-pdfium
 npm run tauri build
 ```
 
-The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb` on Linux). PDFium is bundled as a resource. The release app is about 150 MB on macOS: the AI upscaling models are 106 MB, PDFium about 7.7 MB, and the Typst layout engine for Word → PDF most of the rest. `npm run fetch-models` (run by `tauri dev` and `tauri build`) downloads the models into `src-tauri/models/` from the `models-1` release (Core ML on macOS, ONNX elsewhere), pinned by SHA-256 like PDFium; `scripts/upscale-model/convert.py` and `export_onnx.py` rebuild them from the original weights. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`, pinned the same way; the Windows and Linux apps grow by about 140 MB. To test that engine on a Mac too, run both with `FLIPFILE_ONNX=1`. The licences are in `src-tauri/models/LICENSES.md`.
+The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb` on Linux). PDFium is bundled as a resource. The release app is about 190 MB on macOS: the AI upscaling models are 138 MB, PDFium about 7.7 MB, and the Typst layout engine for Word → PDF most of the rest. `npm run fetch-models` (run by `tauri dev` and `tauri build`) downloads the models into `src-tauri/models/` from the `models-2` release (Core ML on macOS, ONNX elsewhere), pinned by SHA-256 like PDFium; `scripts/upscale-model/convert.py` and `export_onnx.py` rebuild them from the original weights. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`, pinned the same way; the Windows and Linux apps grow by about 180 MB. To test that engine on a Mac too, run both with `FLIPFILE_ONNX=1`. The licences are in `src-tauri/models/LICENSES.md`.
 
 ### App icon
 
@@ -784,7 +784,7 @@ This shows a red dot where flipfile thinks the cursor is, plus a readout of the 
 │   ├── fetch-pdfium.mjs     # downloads & SHA-256-verifies PDFium for the current platform
 │   ├── fetch-models.mjs     # downloads & SHA-256-verifies the AI upscaling models
 │   ├── fetch-onnxruntime.mjs # downloads & SHA-256-verifies ONNX Runtime (Windows, Linux)
-│   ├── upscale-model/       # builds those models (Real-ESRGAN, RestoreFormer++ → Core ML, ONNX)
+│   ├── upscale-model/       # builds those models (Real-ESRGAN, RestoreFormer++, FaceUp DAT → Core ML, ONNX)
 │   ├── install.sh           # one-line installer for macOS & Linux
 │   └── install.ps1          # one-line installer for Windows PowerShell
 ├── src/                     # UI (React + TypeScript)
