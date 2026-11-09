@@ -28,7 +28,7 @@ use image::{DynamicImage, GrayImage, RgbImage, RgbaImage};
 use super::encode::{has_transparency, resize_exact};
 use super::faces;
 use crate::platform::faces::Face;
-use crate::platform::upscale::{Upscaler, SCALE, TILE};
+use crate::platform::upscale::{Upscaler, SCALE};
 
 /// The largest result (64 megapixels: a 256 MB image); larger ones are refused
 pub(super) const MAX_PIXELS: u64 = 64_000_000;
@@ -39,9 +39,21 @@ pub(super) const MAX_PIXELS: u64 = 64_000_000;
 const DETAILED_PIXELS: u64 = 2_100_000;
 const DETAILED_SECONDS: f32 = 20.0;
 
+/// The most the face upscaler may take on one face here: a selfie's face takes some 30 s
+/// on an M1 Pro's GPU; a CPU would take minutes, and the face is then treated as before
+/// it existed (see faces.rs)
+const FACE_UP_SECONDS: f32 = 45.0;
+/// ... and on all the faces of a picture (a group photo), the largest faces first
+const FACE_UP_TOTAL_SECONDS: f32 = 120.0;
+
 /// Context kept around each tile, in pixels of the original
 const MARGIN: usize = 16;
-const STEP: usize = TILE - 2 * MARGIN;
+
+/// How many tiles `upscaler` reads to cover a w x h picture
+pub(super) fn tile_count(w: usize, h: usize, upscaler: Upscaler) -> usize {
+    let step = upscaler.tile() - 2 * MARGIN;
+    w.div_ceil(step) * h.div_ceil(step)
+}
 
 /// Below this, a picture counts as blurry (see `softness`). Measured: enlarged or
 /// out-of-focus photos 0.20-0.27; photos at their own size, AI images, screenshots,
@@ -50,7 +62,8 @@ const SOFT: f64 = 0.29;
 
 /// The machine learning upscaling needs: on this computer, or stand-ins in tests
 pub(super) trait Models {
-    /// One tile (3 x TILE x TILE planar floats, 0 to 1) made SCALE times larger
+    /// One tile (3 x side x side planar floats, 0 to 1, side being the upscaler's tile)
+    /// made SCALE times larger
     fn upscale_tile(&mut self, upscaler: Upscaler, tile: &[f32]) -> Result<Vec<f32>, String>;
     /// The faces in a picture; none when they can't be looked for
     fn find_faces(&mut self, image: &RgbImage) -> Vec<Face>;
@@ -70,17 +83,10 @@ pub(super) struct Timings {
     fast: f32,
     detailed: f32,
     face: f32,
+    /// A tile of the face upscaler
+    face_tile: f32,
     /// How long the detailed upscaler may take on a picture
     budget: f32,
-}
-
-impl Timings {
-    fn tile(&self, upscaler: Upscaler) -> f32 {
-        match upscaler {
-            Upscaler::Fast => self.fast,
-            Upscaler::Detailed => self.detailed,
-        }
-    }
 }
 
 /// Measured while the app runs; first the guess for this hardware
@@ -109,8 +115,8 @@ impl Models for Bundled {
     fn timings(&mut self) -> Timings {
         let mut timings = TIMINGS.lock().unwrap_or_else(|e| e.into_inner());
         *timings.get_or_insert_with(|| {
-            let [fast, detailed, face] = crate::platform::upscale::expected_seconds();
-            Timings { fast, detailed, face, budget: DETAILED_SECONDS }
+            let [fast, detailed, face, face_tile] = crate::platform::upscale::expected_seconds();
+            Timings { fast, detailed, face, face_tile, budget: DETAILED_SECONDS }
         })
     }
 
@@ -125,36 +131,55 @@ pub(super) struct Work<'a> {
     done: usize,
     total: usize,
     report: &'a dyn Fn(usize, usize),
-    /// What a tile and a face count for in `total`, as planned
-    costs: (usize, usize),
+    /// What a tile of the fast and of the detailed upscaler, a face restored and a tile
+    /// of the face upscaler count for in `total`, as planned
+    costs: [usize; 4],
     timings: Timings,
-    /// Tiles of each upscaler, and faces, done so far
-    seen: [usize; 3],
+    /// Tiles of each upscaler, and faces restored, done so far (indexed as `costs`)
+    seen: [usize; 4],
+}
+
+/// Where an upscaler's tiles are counted in `Work::costs` and `seen`
+fn kind(upscaler: Upscaler) -> usize {
+    match upscaler {
+        Upscaler::Fast => 0,
+        Upscaler::Detailed => 1,
+        Upscaler::Face => 3,
+    }
 }
 
 impl<'a> Work<'a> {
     fn new(timings: Timings, report: &'a dyn Fn(usize, usize)) -> Self {
-        Work { done: 0, total: 0, report, costs: (0, 0), timings, seen: [0; 3] }
+        Work { done: 0, total: 0, report, costs: [0; 4], timings, seen: [0; 4] }
     }
 
-    /// What is left: `tiles` of `upscaler`, then `faces`
-    fn plan(&mut self, upscaler: Upscaler, tiles: usize, faces: usize) {
-        self.costs = (millis(self.timings.tile(upscaler)), millis(self.timings.face));
-        self.total = self.done + tiles * self.costs.0 + faces * self.costs.1;
+    /// What is left: `tiles` of `upscaler`, then `faces` restored, and `face_tiles` of
+    /// the face upscaler
+    fn plan(&mut self, upscaler: Upscaler, tiles: usize, faces: usize, face_tiles: usize) {
+        let t = self.timings;
+        self.costs = [millis(t.fast), millis(t.detailed), millis(t.face), millis(t.face_tile)];
+        self.total = self.done + tiles * self.costs[kind(upscaler)] + faces * self.costs[2] + face_tiles * self.costs[3];
     }
 
     fn tile_done(&mut self, upscaler: Upscaler, took: Duration) {
-        let (slot, kind) = match upscaler {
-            Upscaler::Fast => (&mut self.timings.fast, 0),
-            Upscaler::Detailed => (&mut self.timings.detailed, 1),
+        let kind = kind(upscaler);
+        let slot = match upscaler {
+            Upscaler::Fast => &mut self.timings.fast,
+            Upscaler::Detailed => &mut self.timings.detailed,
+            Upscaler::Face => &mut self.timings.face_tile,
         };
         learn(slot, &mut self.seen[kind], took);
-        self.step(self.costs.0);
+        self.step(self.costs[kind]);
     }
 
     pub(super) fn face_done(&mut self, took: Duration) {
         learn(&mut self.timings.face, &mut self.seen[2], took);
-        self.step(self.costs.1);
+        self.step(self.costs[2]);
+    }
+
+    /// How many tiles of the face upscaler fit in `seconds` here
+    fn face_tiles_in(&self, seconds: f32) -> usize {
+        (seconds / self.timings.face_tile.max(0.001)) as usize
     }
 
     /// Whether the detailed upscaler, as timed on the tiles done, would take far longer
@@ -214,23 +239,34 @@ pub(super) fn upscale(
     let half = soft.then(|| resize_exact(&DynamicImage::ImageRgb8(rgb.clone()), (w / 2).max(1), (h / 2).max(1)).to_rgb8());
     let source = half.as_ref().unwrap_or(&rgb);
     let pixels = u64::from(source.width()) * u64::from(source.height());
-    let tiles = (source.width() as usize).div_ceil(STEP) * (source.height() as usize).div_ceil(STEP);
+    let tiles = tile_count(source.width() as usize, source.height() as usize, Upscaler::Detailed);
     let timings = models.timings();
     let detailed = pixels <= DETAILED_PIXELS && tiles as f32 * timings.detailed <= timings.budget;
     let upscaler = if detailed { Upscaler::Detailed } else { Upscaler::Fast };
 
+    let mut work = Work::new(timings, report);
     let found = models.find_faces(&rgb);
-    let faces = found.iter().filter(|face| faces::worth_restoring(face, soft)).count();
-    if faces > 0 {
+    // The largest faces first, while the face upscaler's time lasts
+    let mut order: Vec<usize> = (0..found.len()).collect();
+    order.sort_by(|&a, &b| faces::eyes(&found[b]).total_cmp(&faces::eyes(&found[a])));
+    let (each, mut left) = (work.face_tiles_in(FACE_UP_SECONDS), work.face_tiles_in(FACE_UP_TOTAL_SECONDS));
+    let mut treatments = vec![None; found.len()];
+    for i in order {
+        let treatment = faces::treat(&found[i], rgb.dimensions(), factor, soft, each.min(left));
+        left -= treatment.map_or(0, |t| t.tiles());
+        treatments[i] = treatment;
+    }
+    let restoring = treatments.iter().flatten().filter(|t| t.restores()).count();
+    let face_tiles: usize = treatments.iter().flatten().map(faces::Treatment::tiles).sum();
+    if restoring > 0 {
         models.prepare_faces();
     }
-    let mut work = Work::new(timings, report);
-    work.plan(upscaler, tiles, faces);
+    work.plan(upscaler, tiles, restoring, face_tiles);
     let factor_read = if half.is_some() { 4 } else { factor as usize };
-    let result = match enlarge(source, factor_read, upscaler, models, &mut work) {
+    let result = match enlarge(source, factor_read, upscaler, models, &mut work, true) {
         Err(Stop::TooSlow) => {
-            work.plan(Upscaler::Fast, tiles, faces);
-            enlarge(source, factor_read, Upscaler::Fast, models, &mut work)
+            work.plan(Upscaler::Fast, tiles, restoring, face_tiles);
+            enlarge(source, factor_read, Upscaler::Fast, models, &mut work, false)
         }
         result => result,
     };
@@ -248,7 +284,7 @@ pub(super) fn upscale(
         resize_exact(&DynamicImage::ImageRgb8(enlarged), out_w, out_h).to_rgb8()
     };
 
-    let restored = faces::restore(&rgb, &mut larger, &found, factor, soft, models, &mut work)?;
+    let restored = faces::restore(&rgb, &mut larger, &found, &treatments, factor, models, &mut work)?;
     models.learned(work.timings);
 
     if !has_transparency(img) {
@@ -264,28 +300,45 @@ pub(super) fn upscale(
     Ok((DynamicImage::ImageRgba8(combined), restored))
 }
 
+/// A face enlarged `factor` (2 or 4) times by the face upscaler
+pub(super) fn enlarge_face(face: &RgbImage, factor: usize, models: &mut dyn Models, work: &mut Work) -> Result<RgbImage, String> {
+    enlarge(face, factor, Upscaler::Face, models, work, false).map_err(|stop| match stop {
+        Stop::Failed(message) => message,
+        Stop::TooSlow => unreachable!("never given up on"),
+    })
+}
+
 /// One pass of an upscaler over the whole picture, tile by tile: `factor` (2 or 4) times
-/// larger. The detailed upscaler is given up on when it turns out far too slow here.
-fn enlarge(rgb: &RgbImage, factor: usize, upscaler: Upscaler, models: &mut dyn Models, work: &mut Work) -> Result<RgbImage, Stop> {
+/// larger. With `give_up`, the detailed upscaler is given up on when it turns out far
+/// too slow here.
+fn enlarge(
+    rgb: &RgbImage,
+    factor: usize,
+    upscaler: Upscaler,
+    models: &mut dyn Models,
+    work: &mut Work,
+    give_up: bool,
+) -> Result<RgbImage, Stop> {
     let shrink = SCALE / factor;
     let (w, h) = (rgb.width() as usize, rgb.height() as usize);
     let (out_w, out_h) = (w * factor, h * factor);
     let pixels = rgb.as_raw();
     let mut out = vec![0u8; out_w * out_h * 3];
 
-    let step = STEP;
-    let tiles = w.div_ceil(step) * h.div_ceil(step);
-    let side = TILE * SCALE;
-    let mut tile = vec![0f32; 3 * TILE * TILE];
+    let read = upscaler.tile();
+    let step = read - 2 * MARGIN;
+    let tiles = tile_count(w, h, upscaler);
+    let side = read * SCALE;
+    let mut tile = vec![0f32; 3 * read * read];
     for top in (0..h).step_by(step) {
         for left in (0..w).step_by(step) {
             // The tile and its margin; beyond the picture's edge, its edge pixels repeat
-            for y in 0..TILE {
+            for y in 0..read {
                 let row = (top + y).saturating_sub(MARGIN).min(h - 1) * w;
-                for x in 0..TILE {
+                for x in 0..read {
                     let at = (row + (left + x).saturating_sub(MARGIN).min(w - 1)) * 3;
                     for c in 0..3 {
-                        tile[(c * TILE + y) * TILE + x] = f32::from(pixels[at + c]) / 255.0;
+                        tile[(c * read + y) * read + x] = f32::from(pixels[at + c]) / 255.0;
                     }
                 }
             }
@@ -315,7 +368,7 @@ fn enlarge(rgb: &RgbImage, factor: usize, upscaler: Upscaler, models: &mut dyn M
                 }
             }
             work.tile_done(upscaler, took);
-            if upscaler == Upscaler::Detailed && work.too_slow(tiles) {
+            if give_up && upscaler == Upscaler::Detailed && work.too_slow(tiles) {
                 return Err(Stop::TooSlow);
             }
         }
@@ -398,7 +451,7 @@ mod tests {
     }
 
     /// As guessed for a Mac with a Neural Engine
-    const MAC: Timings = Timings { fast: 0.027, detailed: 0.3, face: 0.5, budget: DETAILED_SECONDS };
+    const MAC: Timings = Timings { fast: 0.027, detailed: 0.3, face: 0.5, face_tile: 0.55, budget: DETAILED_SECONDS };
 
     impl Default for Nearest {
         fn default() -> Self {
@@ -415,12 +468,13 @@ mod tests {
                 std::thread::sleep(self.detailed);
             }
             self.tiles.push(upscaler);
-            let side = TILE * SCALE;
+            let read = upscaler.tile();
+            let side = read * SCALE;
             let mut out = vec![0f32; 3 * side * side];
             for c in 0..3 {
                 for y in 0..side {
                     for x in 0..side {
-                        out[(c * side + y) * side + x] = tile[(c * TILE + y / SCALE) * TILE + x / SCALE];
+                        out[(c * side + y) * side + x] = tile[(c * read + y / SCALE) * read + x / SCALE];
                     }
                 }
             }
@@ -545,12 +599,45 @@ mod tests {
         let img = DynamicImage::ImageRgb8(texture(400, 300));
         let (up, faces) = upscale(&img, 4, &mut models, &|_, _| {}).unwrap();
         assert_eq!((faces, models.restored), (1, 1), "the face with eyes 4 px apart is too small to restore");
+        // Drawn some 1.9x as large as the template in the result: the restored 512 px face
+        // is enlarged 2x by the face upscaler (6 x 6 of its tiles)
+        assert_eq!(models.tiles.iter().filter(|&&u| u == Upscaler::Face).count(), 36);
         assert_eq!((up.width(), up.height()), (1600, 1200));
         // Restored as it went in (stand-in model), the face blends back without a visible
         // change at its centre or its edge
         let (up, plain) = (up.to_rgb8(), resize_exact(&img, 1600, 1200).to_rgb8());
         let diff = |x: u32, y: u32| (0..3).map(|c| i32::from(up.get_pixel(x, y)[c]) - i32::from(plain.get_pixel(x, y)[c])).map(i32::abs).max().unwrap();
         assert!(diff(800, 600) < 70, "{}", diff(800, 600));
+    }
+
+    /// A face as large as in a selfie: eyes 100 px apart in a 600 x 500 picture
+    const LARGE: Face = Face { points: [[250.0, 200.0], [350.0, 200.0], [300.0, 260.0], [258.0, 310.0], [342.0, 310.0]] };
+
+    #[test]
+    fn large_faces_are_drawn_by_the_face_upscaler() {
+        let mut models = Nearest { faces: vec![LARGE], ..Default::default() };
+        let img = DynamicImage::ImageRgb8(texture(600, 500));
+        let (up, faces) = upscale(&img, 2, &mut models, &|_, _| {}).unwrap();
+        // Straight from the picture: not restored, so the restorer isn't even loaded
+        assert_eq!((faces, models.restored, models.prepared), (1, 0, false));
+        let face_tiles = models.tiles.iter().filter(|&&u| u == Upscaler::Face).count();
+        assert!(face_tiles > 0 && face_tiles < 60, "{face_tiles}");
+        // The stand-in upscaler repeats pixels: the face goes back exactly in place
+        let (up, plain) = (up.to_rgb8(), resize_exact(&img, 1200, 1000).to_rgb8());
+        for (x, y) in [(600, 520), (520, 440), (700, 640)] {
+            let nearest = img.to_rgb8().get_pixel(x / 2, y / 2).0;
+            assert_eq!(up.get_pixel(x, y).0, nearest, "at {x},{y}, plain {:?}", plain.get_pixel(x, y).0);
+        }
+    }
+
+    #[test]
+    fn a_slow_computer_leaves_faces_to_the_restorer() {
+        // 10 s a tile of the face upscaler: at most 4 tiles a face
+        let timings = Timings { face_tile: 10.0, ..MAC };
+        let mut models = Nearest { faces: vec![LARGE], timings, ..Default::default() };
+        let (_, faces) = upscale(&DynamicImage::ImageRgb8(texture(600, 500)), 2, &mut models, &|_, _| {}).unwrap();
+        assert_eq!((faces, models.restored), (1, 1), "restored, as before the face upscaler");
+        assert!(!models.tiles.contains(&Upscaler::Face));
     }
 
     #[test]
@@ -573,7 +660,7 @@ mod tests {
     fn a_slow_computer_gets_the_fast_upscaler() {
         // Guessed quick enough for the detailed upscaler, but its tiles turn out to take
         // 20 ms: 9 tiles would be 0.18 s, far beyond the 0.03 s it may take
-        let timings = Timings { fast: 0.0001, detailed: 0.001, face: 0.001, budget: 0.03 };
+        let timings = Timings { fast: 0.0001, detailed: 0.001, face: 0.001, face_tile: 0.001, budget: 0.03 };
         let mut models = Nearest { timings, detailed: Duration::from_millis(20), ..Default::default() };
         let steps = std::cell::RefCell::new(vec![]);
         let img = DynamicImage::ImageRgb8(texture(600, 600));
@@ -659,8 +746,8 @@ mod tests {
         }
 
         fn timings(&mut self) -> Timings {
-            let [fast, detailed, face] = crate::platform::upscale::onnx_models::expected_seconds();
-            Timings { fast, detailed, face, budget: DETAILED_SECONDS }
+            let [fast, detailed, face, face_tile] = crate::platform::upscale::onnx_models::expected_seconds();
+            Timings { fast, detailed, face, face_tile, budget: DETAILED_SECONDS }
         }
 
         fn learned(&mut self, _timings: Timings) {}
@@ -677,6 +764,39 @@ mod tests {
             eprintln!("skipped: the ONNX engine (Windows and Linux) is not fetched here");
         }
         fetched
+    }
+
+    /// The face upscaler too: a sharp pattern shrunk to a quarter comes back 4x closer to
+    /// it than by Lanczos
+    #[test]
+    fn the_face_upscaler_brings_back_sharpness() {
+        if cfg!(target_os = "macos") || onnx_fetched() {
+            face_upscaler_sharpens(&mut Bundled);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_onnx_face_upscaler_brings_back_sharpness() {
+        if onnx_fetched() {
+            face_upscaler_sharpens(&mut Onnx);
+        }
+    }
+
+    fn face_upscaler_sharpens(models: &mut dyn Models) {
+        let truth = RgbImage::from_fn(384, 256, |x, y| {
+            let ink = (x / 24 % 3 == 0 && y / 16 % 2 == 0) || (x % 128 > 80 && y > 128 && y < 220);
+            if ink { image::Rgb([40, 30, 25]) } else { image::Rgb([235, 200, 180]) }
+        });
+        let small = resize_exact(&DynamicImage::ImageRgb8(truth.clone()), 96, 64).to_rgb8();
+        let mut work = Work::new(MAC, &|_, _| {});
+        work.plan(Upscaler::Face, tile_count(96, 64, Upscaler::Face), 0, 0);
+        let up = enlarge_face(&small, 4, models, &mut work).unwrap();
+        assert_eq!(up.dimensions(), (384, 256));
+        let plain = resize_exact(&DynamicImage::ImageRgb8(small), 384, 256).to_rgb8();
+        let error = |img: &RgbImage| -> u64 { img.pixels().zip(truth.pixels()).map(|(a, b)| u64::from(a[0].abs_diff(b[0]))).sum() };
+        let (ai, lanczos) = (error(&up), error(&plain));
+        assert!(ai < lanczos, "face upscaler {ai} should be closer to the sharp original than Lanczos {lanczos}");
     }
 
     #[cfg(target_os = "macos")]

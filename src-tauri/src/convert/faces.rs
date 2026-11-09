@@ -1,22 +1,29 @@
-// AI upscaling's faces. An upscaler sharpens what is there; a face in an old or small
-// photo has too little left to sharpen. So every face is restored by a face model
-// (RestoreFormer++, src/platform/upscale.rs) that redraws it from a dictionary of
-// high-quality face parts while keeping the person's identity, then blended into the
-// upscaled picture.
+// AI upscaling's faces. The general upscalers sharpen what is there but know nothing of
+// faces; two face models do:
+// - a face upscaler (4xFaceUpSharpLDAT), trained on faces, which draws them 4x larger
+//   with sharp eyes, lashes, brows, hair and skin, keeping what is there (glasses, the
+//   person's features) as it is;
+// - a face restorer (RestoreFormer++), which redraws a small or damaged face (an old
+//   photo, a face in a crowd) from a dictionary of high-quality face parts while keeping
+//   the person's identity, on a 512 px face.
+// A face large enough to read (eyes 64 px apart or more) is drawn by the face upscaler
+// straight from the picture. A smaller one is restored, then enlarged by the face
+// upscaler to the size it is drawn in the result (a restored 512 px face shown 1800 px
+// across would come out soft by bicubic alone). On a computer too slow for the face
+// upscaler (a CPU without a GPU), faces are only restored, as before it existed.
 //
-// Each face is first aligned to the template the model was trained on: a 512 x 512 crop
-// with the eyes, nose and mouth corners where FFHQ (the face dataset) puts them, found by
-// fitting a similarity (scale, rotation, shift) to five landmarks. The restored face goes
-// back the same way (bicubic: an upscaler on it would make skin look waxy), and fades in
-// over an ellipse covering the face, so hair, ears and background stay the upscaler's.
-// Where two faces' ellipses overlap, each pixel belongs to the face whose centre is
-// nearest, with a soft hand-over between them.
+// The restorer reads each face aligned to the template it was trained on: a 512 x 512
+// crop with the eyes, nose and mouth corners where FFHQ (the face dataset) puts them,
+// found by fitting a similarity (scale, rotation, shift) to five landmarks. Every face
+// goes back over an ellipse covering it, fading out at its edge, so hair, ears and
+// background stay the upscaler's. Where two faces' ellipses overlap, each pixel belongs
+// to the face whose centre is nearest, with a soft hand-over between them.
 
 use image::RgbImage;
 
-use super::upscale::{Models, Work};
+use super::upscale::{self, Models, Work};
 use crate::platform::faces::Face;
-use crate::platform::upscale::FACE;
+use crate::platform::upscale::{Upscaler, FACE};
 
 /// Where FFHQ's 512 px faces have their eyes, nose tip and mouth corners (as facexlib,
 /// which the face models were trained with, aligns them)
@@ -35,6 +42,13 @@ const FADE: f32 = 0.25;
 
 /// Faces with eyes closer than this (pixels) are too small to tell a face model anything
 const MIN_EYES: f32 = 8.0;
+
+/// Faces with eyes at least this far apart (pixels) are drawn by the face upscaler
+/// straight from the picture; smaller ones are restored first
+const LARGE_EYES: f32 = 64.0;
+
+/// Context kept around a face's ellipse when it is cut out of the picture, in pixels
+const CROP_MARGIN: f32 = 8.0;
 
 /// A similarity transform: (x, y) -> (a x - b y + tx, b x + a y + ty)
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -73,7 +87,6 @@ impl Similarity {
     }
 
     /// How much it enlarges
-    #[cfg(test)]
     fn scale(&self) -> f32 {
         (self.a * self.a + self.b * self.b).sqrt()
     }
@@ -151,56 +164,138 @@ pub(super) fn coverage([x, y]: [f32; 2]) -> f32 {
     ((1.0 - r) / FADE).clamp(0.0, 1.0)
 }
 
-/// A restored face ready to blend in: its pixels (the template's), and the mapping from
-/// the result's pixels to the template
+/// A face ready to blend in: its pixels, the mapping from the result's pixels to them,
+/// and the one to the template (where the face's ellipse is)
 struct Layer {
     pixels: RgbImage,
+    to_pixels: Similarity,
     to_face: Similarity,
     centre: [f32; 2],
 }
 
-/// Whether a face is worth restoring: not too small to tell the model anything, and not
-/// already more detailed than the model's 512 px face. `soft`: see `restore`.
-pub(super) fn worth_restoring(face: &Face, soft: bool) -> bool {
-    let template_eyes = TEMPLATE[1][0] - TEMPLATE[0][0];
-    let eyes = ((face.points[1][0] - face.points[0][0]).powi(2) + (face.points[1][1] - face.points[0][1]).powi(2)).sqrt();
-    let detail = if soft { eyes / 2.0 } else { eyes };
-    eyes >= MIN_EYES && detail <= template_eyes * 1.6
+/// What is done to a face
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Treatment {
+    /// Restored by the face restorer, then enlarged `zoom` times (1, 2 or 4) by the face
+    /// upscaler
+    Restore { zoom: usize },
+    /// Drawn by the face upscaler straight from this part of the picture: left, top,
+    /// width, height
+    Enlarge { crop: [u32; 4] },
 }
 
-/// Restores the faces of `original` (`factor` times smaller than `result`) into `result`.
-/// `soft` says the picture holds about half the detail its size suggests (see
-/// upscale.rs), which lets larger faces still gain from the face model. Returns how many
-/// faces were restored.
+impl Treatment {
+    /// Whether it runs the face restorer
+    pub(super) fn restores(&self) -> bool {
+        matches!(self, Treatment::Restore { .. })
+    }
+
+    /// The tiles of the face upscaler it takes
+    pub(super) fn tiles(&self) -> usize {
+        match *self {
+            Treatment::Restore { zoom: 1 } => 0,
+            Treatment::Restore { .. } => upscale::tile_count(FACE, FACE, Upscaler::Face),
+            Treatment::Enlarge { crop: [_, _, w, h] } => upscale::tile_count(w as usize, h as usize, Upscaler::Face),
+        }
+    }
+}
+
+/// How far apart a face's eyes are, in pixels: its size
+pub(super) fn eyes(face: &Face) -> f32 {
+    ((face.points[1][0] - face.points[0][0]).powi(2) + (face.points[1][1] - face.points[0][1]).powi(2)).sqrt()
+}
+
+/// What to do to a face in a picture of `size`, made `factor` times larger. `soft` says
+/// the picture holds about half the detail its size suggests (see upscale.rs), which
+/// lets larger faces still gain from the restorer. The face upscaler may take at most
+/// `allowed` tiles on it; None: the face is left as upscaled (too small to tell a face
+/// model anything, or already more detailed than the restorer's face).
+pub(super) fn treat(face: &Face, size: (u32, u32), factor: u32, soft: bool, allowed: usize) -> Option<Treatment> {
+    let eyes = eyes(face);
+    if eyes < MIN_EYES {
+        return None;
+    }
+    let to_template = Similarity::fit(&face.points, &TEMPLATE);
+    if eyes >= LARGE_EYES {
+        let enlarge = Treatment::Enlarge { crop: crop(&to_template, size) };
+        if enlarge.tiles() <= allowed {
+            return Some(enlarge);
+        }
+    }
+    let template_eyes = TEMPLATE[1][0] - TEMPLATE[0][0];
+    let detail = if soft { eyes / 2.0 } else { eyes };
+    if detail > template_eyes * 1.6 {
+        return None;
+    }
+    // Enlarged to about the size it is drawn in the result
+    let drawn = factor as f32 / to_template.scale();
+    let zoom = if drawn > 2.4 { 4 } else if drawn > 1.25 { 2 } else { 1 };
+    let restore = Treatment::Restore { zoom };
+    Some(if restore.tiles() <= allowed { restore } else { Treatment::Restore { zoom: 1 } })
+}
+
+/// The part of a picture of `size` holding a face's ellipse, with a margin
+fn crop(to_template: &Similarity, (w, h): (u32, u32)) -> [u32; 4] {
+    let ([cx, cy], [rx, ry]) = ELLIPSE;
+    let back = to_template.inverse();
+    let corners = [[cx - rx, cy - ry], [cx + rx, cy - ry], [cx - rx, cy + ry], [cx + rx, cy + ry]].map(|p| back.apply(p));
+    let low = |i: usize| corners.iter().map(|p| p[i]).fold(f32::MAX, f32::min) - CROP_MARGIN;
+    let high = |i: usize| corners.iter().map(|p| p[i]).fold(f32::MIN, f32::max) + CROP_MARGIN;
+    let (x0, y0) = (low(0).floor().clamp(0.0, w as f32 - 1.0) as u32, low(1).floor().clamp(0.0, h as f32 - 1.0) as u32);
+    let (x1, y1) = (high(0).ceil().clamp(1.0, w as f32) as u32, high(1).ceil().clamp(1.0, h as f32) as u32);
+    [x0, y0, x1.max(x0 + 1) - x0, y1.max(y0 + 1) - y0]
+}
+
+/// Puts the faces of `original` (`factor` times smaller than `result`) into `result`,
+/// each as `treatments` says. Returns how many faces were redrawn.
 pub(super) fn restore(
     original: &RgbImage,
     result: &mut RgbImage,
     faces: &[Face],
+    treatments: &[Option<Treatment>],
     factor: u32,
-    soft: bool,
     models: &mut dyn Models,
     work: &mut Work,
 ) -> Result<usize, String> {
-    let factor = factor as f32;
+    let f = factor as f32;
     let mut layers = vec![];
-    for face in faces.iter().filter(|face| worth_restoring(face, soft)) {
+    for (face, treatment) in faces.iter().zip(treatments) {
+        let Some(treatment) = *treatment else { continue };
         let to_template = Similarity::fit(&face.points, &TEMPLATE);
-        let started = std::time::Instant::now();
-        let restored = models.restore_face(&aligned(original, &to_template))?;
-        let took = started.elapsed();
-        if restored.len() != 3 * FACE * FACE {
-            return Err("face restoration: the model gave a face of the wrong size".into());
-        }
-        let pixels = RgbImage::from_fn(FACE as u32, FACE as u32, |x, y| {
-            let at = |c: usize| ((restored[(c * FACE + y as usize) * FACE + x as usize] + 1.0) * 127.5).round().clamp(0.0, 255.0) as u8;
-            image::Rgb([at(0), at(1), at(2)])
-        });
         // Result pixel -> original pixel (centres aligned) -> template
-        let to_original = Similarity { a: 1.0 / factor, b: 0.0, tx: 0.5 / factor - 0.5, ty: 0.5 / factor - 0.5 };
+        let to_original = Similarity { a: 1.0 / f, b: 0.0, tx: 0.5 / f - 0.5, ty: 0.5 / f - 0.5 };
         let to_face = compose(&to_template, &to_original);
         let centre = to_face.inverse().apply(ELLIPSE.0);
-        layers.push(Layer { pixels, to_face, centre });
-        work.face_done(took);
+        let (pixels, to_pixels) = match treatment {
+            Treatment::Restore { zoom } => {
+                let started = std::time::Instant::now();
+                let restored = models.restore_face(&aligned(original, &to_template))?;
+                let took = started.elapsed();
+                if restored.len() != 3 * FACE * FACE {
+                    return Err("face restoration: the model gave a face of the wrong size".into());
+                }
+                let pixels = RgbImage::from_fn(FACE as u32, FACE as u32, |x, y| {
+                    let at = |c: usize| ((restored[(c * FACE + y as usize) * FACE + x as usize] + 1.0) * 127.5).round().clamp(0.0, 255.0) as u8;
+                    image::Rgb([at(0), at(1), at(2)])
+                });
+                work.face_done(took);
+                if zoom > 1 {
+                    // Template pixel centres to those of the enlarged face
+                    let z = zoom as f32;
+                    let to_zoomed = Similarity { a: z, b: 0.0, tx: 0.5 * z - 0.5, ty: 0.5 * z - 0.5 };
+                    (upscale::enlarge_face(&pixels, zoom, models, work)?, compose(&to_zoomed, &to_face))
+                } else {
+                    (pixels, to_face)
+                }
+            }
+            Treatment::Enlarge { crop: [x, y, w, h] } => {
+                let part = image::imageops::crop_imm(original, x, y, w, h).to_image();
+                // At the result's scale: its pixels line up with the result's
+                let pixels = upscale::enlarge_face(&part, factor as usize, models, work)?;
+                (pixels, Similarity { a: 1.0, b: 0.0, tx: -(x as f32 * f), ty: -(y as f32 * f) })
+            }
+        };
+        layers.push(Layer { pixels, to_pixels, to_face, centre });
     }
     if !layers.is_empty() {
         blend(result, &layers);
@@ -245,7 +340,9 @@ fn blend(result: &mut RgbImage, layers: &[Layer]) {
                 let distance = ((x as f32 - layer.centre[0]).powi(2) + (y as f32 - layer.centre[1]).powi(2)).sqrt();
                 nearest = nearest.min(distance);
                 cover = cover.max(m);
-                let colour = [0, 1, 2].map(|c| sample_bicubic(layer.pixels.as_raw(), FACE, FACE, face[0], face[1], c));
+                let [u, v] = layer.to_pixels.apply([x as f32, y as f32]);
+                let (lw, lh) = (layer.pixels.width() as usize, layer.pixels.height() as usize);
+                let colour = [0, 1, 2].map(|c| sample_bicubic(layer.pixels.as_raw(), lw, lh, u, v, c));
                 *slot = (m, distance, colour);
             }
             if cover <= 0.0 {
