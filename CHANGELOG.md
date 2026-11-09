@@ -6,6 +6,21 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **AI Upscale: faces in HD**: faces are now drawn by 4xFaceUpSharpLDAT (CC-BY-4.0, Philip
+  Hofmann), a 4x upscaler trained on faces: sharp eyes, lashes, brows, hair and skin. A face
+  large enough to read (a selfie, a portrait) is drawn straight from the photo, so glasses,
+  jewellery and the person's features stay exactly as they are; before, every face was redrawn
+  by RestoreFormer++ at 512 px and enlarged by bicubic, which made selfies upscaled 4x soft and
+  could change glasses. Small or damaged faces are still restored by RestoreFormer++ first, then
+  enlarged by the face upscaler to the size they are drawn at.
+  - Runs on the GPU (Core ML on the Mac, ONNX Runtime with DirectML on Windows): about 30 s for a
+    selfie's face on an M1 Pro. Where it would take more than 45 s a face (2 min a picture),
+    faces are only restored, as before.
+  - The network (DAT) was reimplemented for flipfile in `scripts/upscale-model/dat.py`; the
+    models (release `models-2`) grow by about 32 MB.
+
 ## [0.7.0] - 2026-11-08
 
 ### Added
