@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "flipfile",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "identifier": "com.satria.flipfile",
   "build": {
     "beforeDevCommand": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && npm run dev",
