@@ -6,6 +6,13 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **AI Upscale: a higher size limit**: the result (the photo's pixels × 2² or 4²) could be at
+  most 64 MP, which refused Upscale 2× on an ordinary 20 MP camera or phone photo. Raised to
+  200 MP: a 50 MP photo now fits at 2×, a 12.5 MP one at 4×. The memory a picture needs scales
+  with it, not any fixed amount, so this isn't a tradeoff against lower-end computers.
+
 ## [0.7.1] - 2026-11-10
 
 ### Changed
