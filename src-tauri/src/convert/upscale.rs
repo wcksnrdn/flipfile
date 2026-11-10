@@ -30,8 +30,11 @@ use super::faces;
 use crate::platform::faces::Face;
 use crate::platform::upscale::{Upscaler, SCALE};
 
-/// The largest result (64 megapixels: a 256 MB image); larger ones are refused
-pub(super) const MAX_PIXELS: u64 = 64_000_000;
+/// The largest result (200 megapixels: an 800 MB RGBA image); larger ones are refused.
+/// Lets a 50 MP photo (most real cameras) through at 2x, a 12.5 MP one (most phone
+/// photos) at 4x; the memory a picture needs scales with it (see memory.rs), not the
+/// absolute size, so this isn't tied to any particular amount of RAM.
+pub(super) const MAX_PIXELS: u64 = 200_000_000;
 
 /// The detailed upscaler is for pictures up to Full HD (what the model reads first; to 4K
 /// at 2x), whose tiles should take at most this long here: Full HD is 45 tiles, 13 s on

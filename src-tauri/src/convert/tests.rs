@@ -1184,3 +1184,28 @@ fn test_pro_3d_batch_conversion() {
         }
     }
 }
+
+/// A photo too large to upscale is refused before any AI model runs (so this doesn't
+/// need the real models, and passes on every OS); the limit scales with the factor, so a
+/// photo too big for 4x can still be fine for 2x. A real-world case this guards: a
+/// 20 MP photo (3648 x 5472, a common phone/camera resolution) must pass at 2x.
+#[test]
+fn oversized_photos_are_refused_before_the_model_runs() {
+    let dir = temp_dir("upscale-huge");
+    // Just over the 4x limit (currently ~12.5 MP input), comfortably under the 2x one
+    let side = (upscale::MAX_PIXELS as f64 / 16.0).sqrt() as u32 + 10;
+    let path = dir.join("huge.png");
+    DynamicImage::ImageRgb8(RgbImage::from_pixel(side, side, Rgb([10, 20, 30]))).save(&path).unwrap();
+
+    let err = run(path.to_str().unwrap(), "up-4x", None, &Options::default()).unwrap_err();
+    assert!(err.contains("too large to upscale"), "{err}");
+    assert!(err.contains("4×"), "{err}");
+
+    // A 20 MP photo (3648 x 5472): must fit at 2x under the current limit
+    let photo = dir.join("photo20mp.png");
+    DynamicImage::ImageRgb8(RgbImage::from_pixel(3648, 5472, Rgb([10, 20, 30]))).save(&photo).unwrap();
+    let pixels_2x = 3648u64 * 5472 * 4;
+    assert!(pixels_2x <= upscale::MAX_PIXELS, "a 20 MP photo no longer fits at 2x ({pixels_2x} px)");
+
+    let _ = fs::remove_dir_all(&dir);
+}
