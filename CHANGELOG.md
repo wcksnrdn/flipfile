@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-10
+
 ### Changed
 
 - **AI Upscale: faces in HD**: faces are now drawn by 4xFaceUpSharpLDAT (CC-BY-4.0, Philip
@@ -273,7 +275,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/wcksnrdn/flipfile/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wcksnrdn/flipfile/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/wcksnrdn/flipfile/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wcksnrdn/flipfile/compare/v0.5.2...v0.6.0
