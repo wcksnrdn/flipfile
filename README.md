@@ -187,6 +187,19 @@ flipfile isn't notarized by Apple or code-signed for Windows yet, so the first l
 
 </details>
 
+<details>
+<summary><b>Verify your download</b></summary>
+
+The warning above means no paid certificate yet, not that anything was flagged. You can check the file yourself:
+
+- **Build provenance**: every installer is built by GitHub Actions from the tagged commit and carries a signed attestation. `gh attestation verify flipfile_x.y.z_aarch64.dmg --repo wcksnrdn/flipfile` shows the workflow and commit that made it, and fails if the file was changed.
+- **Checksums**: compare against `SHA256SUMS.txt` on the release page with `shasum -a 256 -c SHA256SUMS.txt --ignore-missing` (Windows: `certutil -hashfile <file> SHA256`).
+- **Offline test**: turn off Wi-Fi, every feature still works.
+
+Details in [SECURITY.md](SECURITY.md#verify-your-download).
+
+</details>
+
 <br>
 
 ## How to use
@@ -619,7 +632,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 
 ## Privacy
 
-flipfile works **offline**: files never leave your computer, the app makes no network requests and has no telemetry. It only remembers your recent conversions and your resize and quality choices. AI summaries are written by Apple Intelligence's **on-device** model, so they stay on your Mac too.
+flipfile works **offline**: files never leave your computer, there is no account and no telemetry. The only network request is the update check, which reads `latest.json` from this repo's GitHub Releases and sends nothing about you or your files. It only remembers your recent conversions and your resize and quality choices. AI summaries are written by Apple Intelligence's **on-device** model, so they stay on your Mac too.
 
 <details>
 <summary><b>Stored data, in detail</b></summary>
@@ -659,11 +672,11 @@ flipfile opens files from anywhere, so it is built to stay safe even if somethin
 | **Verified PDFium** (`scripts/fetch-pdfium.mjs`) | The bundled PDFium library is pinned by SHA-256, both the downloaded archive and the extracted library, and re-checked on every build. The hashes were cross-checked against the GitHub build attestations of `bblanchon/pdfium-binaries`. Any mismatch stops the build. |
 | **Office apps run safely** (`src-tauri/src/office/apps.rs`) | When Word, Excel or LibreOffice is used, file paths are passed as arguments or environment variables, never pasted into script text; every run has a time limit and only that child process is stopped on timeout; LibreOffice gets a private, temporary profile. Word documents are read with size limits (no zip bombs), external links inside them are never followed, and their text is escaped before layout so document content cannot change the layout code. |
 | **AI in its own process** (`src-tauri/intelligence/main.swift`) | Apple Intelligence runs in a small helper, `flipfile-ai`, that gets the document's text on its input and nothing else. A model that hangs or crashes cannot take the app with it, and closing the panel ends it. The app itself links no AI framework and still runs on every macOS version. |
-| **Offline** | No network access at runtime, no telemetry, no auto-loaded remote content. |
+| **Offline** | No telemetry and no remote content; the webview can only talk to the app itself. The single request, the update check, goes to GitHub Releases, and an update is installed only if it carries the maintainer's signature. |
 
 Download flipfile **only from this repository's GitHub Releases page**.
 
-To report a vulnerability, please don't open a public issue; contact the maintainer privately (see `SECURITY.md` once added).
+To report a vulnerability, please don't open a public issue; contact the maintainer privately (see [SECURITY.md](SECURITY.md)).
 
 </details>
 
