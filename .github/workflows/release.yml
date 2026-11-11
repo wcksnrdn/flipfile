@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: write
+  # signed build provenance for every installer (actions/attest-build-provenance)
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -74,3 +77,37 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
+
+      # Proves each installer was built here, from this commit of the public repo.
+      # Anyone can check a download with:
+      #   gh attestation verify <file> --repo wcksnrdn/flipfile
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+
+  # One SHA256SUMS.txt for the whole release, so a download can be checked with
+  # `shasum -a 256 -c SHA256SUMS.txt --ignore-missing` (or `certutil -hashfile` on Windows).
+  checksums:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+          [ -n "$tag" ] || tag="v$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          mkdir assets && cd assets
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY"
+          rm -f SHA256SUMS.txt
+          sha256sum -- * | tee ../SHA256SUMS.txt
+          gh release upload "$tag" ../SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"
