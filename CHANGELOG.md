@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-12
+
 ### Added
 
 - **Transcribe: recordings and videos to subtitles and transcripts (macOS, Windows, Linux)**:
@@ -301,7 +303,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/wcksnrdn/flipfile/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/wcksnrdn/flipfile/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wcksnrdn/flipfile/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/wcksnrdn/flipfile/compare/v0.6.0...v0.6.1
