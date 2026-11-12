@@ -1924,7 +1924,7 @@ fn blocks_to_odt(blocks: &[DocBlock], _title: &str) -> Result<Vec<u8>, String> {
     Ok(buf.into_inner())
 }
 
-fn blocks_to_docx(blocks: &[DocBlock]) -> Result<Vec<u8>, String> {
+pub(super) fn blocks_to_docx(blocks: &[DocBlock]) -> Result<Vec<u8>, String> {
     let mut buf = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(&mut buf);
     let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);

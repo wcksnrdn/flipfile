@@ -136,6 +136,8 @@ const CATEGORY_LABELS: Partial<Record<RingId, string>> = {
   "video-tools": "Video Tools",
   music: "Music",
   "music-more": "More Audio",
+  "music-transcribe": "Transcribe",
+  "video-transcribe": "Subtitles",
 };
 
 type ChipDrag = {
@@ -517,7 +519,7 @@ export default function App() {
     const label = same ? (labelOf(preset ?? "") ?? "Done") : (labelOf(format) ?? format.toUpperCase()) + presetLabel;
     const many = paths.length > 1;
     setStatus({
-      title: many ? `0/${paths.length}` : format.startsWith("up-") ? "Upscaling" : "Converting",
+      title: many ? `0/${paths.length}` : format.startsWith("up-") ? "Upscaling" : format.startsWith("tr-") ? "Listening" : "Converting",
       hint: `→ ${label}`,
       tone: "busy",
       progress: many ? 0 : undefined,
@@ -939,8 +941,8 @@ export default function App() {
     badge = null;
   } else if (open) {
     const verb = dragging ? "Release" : "Click";
-    // Upscaling sets its own size, so size presets don't apply to it
-    const aiTool = hovered === AI_SUMMARY || hovered?.startsWith("up-");
+    // Upscaling sets its own size, so size presets don't apply to it (nor to transcripts)
+    const aiTool = hovered === AI_SUMMARY || hovered?.startsWith("up-") || hovered?.startsWith("tr-");
     badge = aiTool
       ? ON_DEVICE
       : presetLabel
@@ -961,6 +963,10 @@ export default function App() {
             ? `${verb} to remove background`
           : hovered?.startsWith("up-")
             ? `${verb} to enlarge with AI`
+          : hovered === "tr-srt" || hovered === "tr-vtt"
+            ? `${verb} to make subtitles with AI`
+          : hovered?.startsWith("tr-")
+            ? `${verb} to write down what is said`
           : hovered === "square"
             ? `${verb} to pad to 1:1 square`
           : hovered === "gif-anim"

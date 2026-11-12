@@ -23,7 +23,7 @@ export type Answer = { question: string; text: string; done: boolean; error?: st
 export type SummaryEvent =
   | { type: "start"; files: string[] }
   | { type: "restart"; file: number; language: string | null }
-  | { type: "reading"; file: number; page: number; pages: number }
+  | { type: "reading"; file: number; page: number; pages: number; listening: boolean }
   | { type: "read"; file: number; kind: string; pages: number; words: number; ocr: boolean }
   | { type: "peek"; file: number; sentences: string[] }
   | { type: "plan"; file: number; parts: number; kept: number }
@@ -56,6 +56,8 @@ export type Doc = {
   // Reading progress: pages for PDFs and scans, parts for long documents
   page?: number;
   readPages?: number;
+  // A recording being written down first: `page` is then percent done
+  listening?: boolean;
   part?: number;
   parts?: number;
   kept?: number;
@@ -113,7 +115,14 @@ export function reduce(state: PanelState, e: SummaryEvent): PanelState {
       };
       break;
     case "reading":
-      next = { ...doc, stage: "reading", page: e.page, readPages: e.pages, startedAt: doc.stage === "waiting" ? Date.now() : doc.startedAt };
+      next = {
+        ...doc,
+        stage: "reading",
+        page: e.page,
+        readPages: e.pages,
+        listening: e.listening,
+        startedAt: doc.stage === "waiting" ? Date.now() : doc.startedAt,
+      };
       break;
     case "read":
       next = { ...doc, kind: e.kind, pages: e.pages, words: e.words, ocr: e.ocr };
@@ -182,6 +191,9 @@ const EXTENSION_BADGES: [RegExp, string][] = [
   [/\.html?$/i, "WEB"],
   [/\.epub$/i, "BOOK"],
   [/\.(json|ya?ml|xml)$/i, "DATA"],
+  // Spoken: transcribed first
+  [/\.(mp3|wav|m4a|aac|flac|ogg|oga|opus|aiff?|caf|wma|amr|m4b|weba)$/i, "AUD"],
+  [/\.(mp4|mov|m4v|mkv|webm|avi|flv|wmv|mpe?g|ts|3gp|ogv)$/i, "VID"],
 ];
 
 /// A document worth waking the model up for when it is dragged in (photos rarely are
@@ -201,6 +213,8 @@ export function badgeOf(name: string): { label: string; tone: string } {
     WEB: "teal",
     BOOK: "yellow",
     DATA: "teal",
+    AUD: "pink",
+    VID: "pink",
     IMG: "purple",
   };
   return { label, tone: tone[label] };

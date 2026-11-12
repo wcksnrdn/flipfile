@@ -344,6 +344,9 @@
 .sp-badge.purple {
   --tone: #bf5af2;
 }
+.sp-badge.pink {
+  --tone: #ff375f;
+}
 
 .sp-file-text {
   min-width: 0;

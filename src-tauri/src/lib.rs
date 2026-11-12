@@ -116,6 +116,7 @@ pub fn run() {
             // A summary still being written stops with the app
             if let tauri::RunEvent::Exit = _event {
                 summary::shutdown(_app);
+                platform::whisper::release();
             }
             // macOS: clicking the Dock icon brings back a window hidden via the tray or shortcut.
             // (Windows/Linux: a hidden window leaves the taskbar; the tray icon restores it.)

@@ -21,7 +21,7 @@ export function setAiSupport(supported: boolean) {
 }
 export const hasAiSupport = () => aiSupport;
 
-export type CatalogCategory = "photo" | "photo-tools" | "office" | "data" | "video" | "music" | "nav";
+export type CatalogCategory = "photo" | "photo-tools" | "office" | "data" | "video" | "music" | "speech" | "nav";
 
 export type CatalogEntry = Item & {
   title: string;
@@ -36,6 +36,7 @@ export const CATALOG_CATEGORIES: { id: "all" | CatalogCategory; label: string }[
   { id: "data", label: "Data & Sheets" },
   { id: "video", label: "Video" },
   { id: "music", label: "Music" },
+  { id: "speech", label: "Transcribe" },
   { id: "nav", label: "Sub-Rings" },
 ];
 
@@ -52,6 +53,8 @@ export const EDITABLE_RINGS: { id: RingId; label: string; group: string }[] = [
   { id: "video-tools", label: "Video Tools", group: "Video" },
   { id: "music", label: "Music Main", group: "Music" },
   { id: "music-more", label: "Music More", group: "Music" },
+  { id: "music-transcribe", label: "Music Transcribe", group: "Music" },
+  { id: "video-transcribe", label: "Video Subtitles", group: "Video" },
 ];
 
 export const CATALOG: CatalogEntry[] = [
@@ -144,6 +147,13 @@ export const CATALOG: CatalogEntry[] = [
   { id: "alac", label: "ALAC", sub: "lossless", title: "Apple Lossless (.m4a)", category: "music" },
   { id: "wma", label: "WMA", title: "Windows Media Audio (.wma)", category: "music" },
 
+  // ─── Transcribe (speech to text, on this computer) ───────────────────────
+  { id: "tr-srt", label: "SRT", sub: "subtitles", title: "Transcribe → Subtitles (.srt)", category: "speech" },
+  { id: "tr-vtt", label: "VTT", sub: "web subs", title: "Transcribe → Web Subtitles (.vtt)", category: "speech" },
+  { id: "tr-txt", label: "TXT", sub: "transcript", title: "Transcribe → Plain Text (.txt)", category: "speech" },
+  { id: "tr-docx", label: "WORD", sub: "transcript", title: "Transcribe → Word Document (.docx)", category: "speech" },
+  { id: "tr-md", label: "MD", sub: "notes", title: "Transcribe → Markdown Notes (.md)", category: "speech" },
+
   // ─── Room & Sub-Ring Navigation Shortcuts ─────────────────────────────────
   { id: "cat-photo", label: "Photo", nav: "photo", title: "Open Photo Room", category: "nav" },
   { id: "cat-office", label: "Office", nav: "office", title: "Open Office Room", category: "nav" },
@@ -158,6 +168,8 @@ export const CATALOG: CatalogEntry[] = [
   { id: "office-data-nav", label: "Data", sub: "•••", nav: "office-data", title: "Open Office Data Ring", category: "nav" },
   { id: "video-tools-nav", label: "Tools", sub: "✦", nav: "video-tools", title: "Open Video Tools Ring", category: "nav" },
   { id: "music-more-nav", label: "More", sub: "•••", nav: "music-more", title: "Open More Audio Ring", category: "nav" },
+  { id: "music-transcribe-nav", label: "Transcribe", sub: "✦", nav: "music-transcribe", title: "Open Transcribe Ring", category: "nav" },
+  { id: "video-transcribe-nav", label: "Subtitles", sub: "✦", nav: "video-transcribe", title: "Open Video Subtitles Ring", category: "nav" },
 ];
 
 const CATALOG_MAP = new Map<string, CatalogEntry>(CATALOG.map((item) => [item.id, item]));
@@ -181,9 +193,11 @@ export const DEFAULT_ROOM_SLOTS: Record<RingId, string[]> = {
   "office-docs": ["md", "txt", "html", "rtf", "epub", "odt"],
   "office-data": ["json", "tsv", "yaml", "xml", "sql", "md-table"],
   video: ["mp4", "mov", "webm", "mkv", "avi", "vid-gif", "video-tools-nav"],
-  "video-tools": ["vid-compress", "vid-mute", "vid-mp3", "vid-1080p", "vid-720p", "flv"],
-  music: ["mp3", "wav", "m4a", "flac", "ogg", "music-more-nav"],
+  "video-tools": ["vid-compress", "vid-mute", "vid-mp3", "vid-1080p", "vid-720p", "flv", "video-transcribe-nav"],
+  music: ["mp3", "wav", "m4a", "flac", "ogg", "music-more-nav", "music-transcribe-nav"],
   "music-more": ["aiff", "opus", "aac", "caf", "alac", "wma"],
+  "music-transcribe": ["tr-srt", "tr-vtt", "tr-txt", "tr-docx", "tr-md"],
+  "video-transcribe": ["tr-srt", "tr-vtt", "tr-txt", "tr-docx", "tr-md"],
   size: [],
 };
 
@@ -251,7 +265,7 @@ export const DEFAULT_WORKSPACES: WorkspaceConfig[] = [
     id: "creator-media",
     name: "Creator & Media",
     mode: "direct",
-    customSlots: ["mp4", "vid-gif", "vid-compress", "vid-1080p", "mp3", "wav", "webp", "nobg"],
+    customSlots: ["mp4", "vid-gif", "vid-compress", "vid-1080p", "tr-srt", "mp3", "webp", "nobg"],
     roomSlots: {},
     builtin: true,
   },
@@ -377,6 +391,8 @@ export function buildWorkspaceRings(ws: WorkspaceConfig): BuiltWorkspaceRings {
   const officeData = makeSub("office-data", office, "office");
   const videoTools = makeSub("video-tools", video, "video");
   const musicMore = makeSub("music-more", music, "music");
+  const musicTranscribe = makeSub("music-transcribe", music, "music");
+  const videoTranscribe = makeSub("video-transcribe", videoTools, "video-tools");
 
   const rings: Record<RingId, Ring> = {
     category,
@@ -394,6 +410,8 @@ export function buildWorkspaceRings(ws: WorkspaceConfig): BuiltWorkspaceRings {
     "video-tools": videoTools,
     music,
     "music-more": musicMore,
+    "music-transcribe": musicTranscribe,
+    "video-transcribe": videoTranscribe,
     size: BASE_RINGS.size,
   };
 

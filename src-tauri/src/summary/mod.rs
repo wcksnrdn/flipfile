@@ -40,8 +40,9 @@ pub enum Event {
     Start { files: Vec<String> },
     /// One file is summarised again: in another language (translated), or after a failure
     Restart { file: usize, language: Option<String> },
-    /// Reading the file's text; `pages` is known for PDFs and scans
-    Reading { file: usize, page: usize, pages: usize },
+    /// Reading the file's text; `pages` is known for PDFs and scans. `listening`: a
+    /// recording is being transcribed, `page` of `pages` is then percent of 100
+    Reading { file: usize, page: usize, pages: usize, listening: bool },
     /// The text is read
     Read { file: usize, kind: &'static str, pages: usize, words: usize, ocr: bool },
     /// A few telling sentences of the text, picked without the model: something to read
@@ -211,7 +212,8 @@ impl<'a> Sender<'a> {
         match event {
             Event::Restart { language: Some(_), .. } => busy("Translating", "Apple Intelligence".into(), None),
             Event::Start { .. } | Event::Restart { .. } => busy("Reading", "Apple Intelligence".into(), None),
-            Event::Reading { file, page, pages } if *pages > 1 => {
+            Event::Reading { file, page, listening: true, .. } => busy("Listening", of(*file, format!("{page}%")), Some(*page as f64 / 100.0)),
+            Event::Reading { file, page, pages, .. } if *pages > 1 => {
                 busy("Reading", of(*file, format!("Page {}/{pages}", (page + 1).min(*pages))), Some(*page as f64 / *pages as f64))
             }
             Event::Part { file, part, parts } => {
@@ -386,8 +388,9 @@ fn summarize_file(app: &AppHandle, send: &Sender, file: usize, language: Option<
     let text = match cached {
         Some(text) => text,
         None => {
-            send.send(Event::Reading { file, page: 0, pages: 0 });
-            let on_page = |page: usize, pages: usize| send.send(Event::Reading { file, page, pages });
+            let listening = crate::convert::transcribe::is_recording(&path);
+            send.send(Event::Reading { file, page: 0, pages: 0, listening });
+            let on_page = |page: usize, pages: usize| send.send(Event::Reading { file, page, pages, listening });
             // Reading runs third-party decoders: a bug there fails this file, not the app
             let read = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| text::extract(&path, &on_page)))
                 .unwrap_or_else(|_| Err(format!("\"{name}\" could not be read (internal error)")));

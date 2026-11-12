@@ -61,6 +61,11 @@ impl Drop for Share<'_> {
 /// image plus the encoder's own working memory (AVIF's encoder needs the most).
 pub(super) fn cost(path: &str, format: &str) -> u64 {
     let path = Path::new(path);
+    // The speech model, its working memory and the recording's samples (an hour of
+    // 16 kHz mono is 230 MB); one transcription runs at a time anyway
+    if format.starts_with("tr-") {
+        return 1536 * MB;
+    }
     let head = header(path);
     if pdf_render::is_pdf(&head) {
         // Pages are rendered a few at a time, within `pdf::PAGE_MEMORY`

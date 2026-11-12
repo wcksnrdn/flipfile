@@ -234,6 +234,10 @@ function Working({ doc }: { doc: Doc }) {
         ? `A long one: reading its ${Math.max(1, Math.round(doc.kept * 100))}% most telling passages`
         : "A long one: reading it part by part";
     progress = ((doc.part ?? 1) - 1) / doc.parts;
+  } else if (doc.listening) {
+    status = doc.page ? `Listening · ${doc.page}%` : "Listening";
+    detail = "Writing down what is said, right here on this Mac";
+    progress = doc.page ? doc.page / 100 : undefined;
   } else if (doc.readPages && doc.readPages > 1) {
     status = `Reading page ${Math.min((doc.page ?? 0) + 1, doc.readPages)} of ${doc.readPages}`;
     detail = doc.ocr ? "Recognizing the scanned text" : "Getting the text out";
@@ -468,7 +472,7 @@ function Empty() {
         <span />
       </div>
       <h2>Drop a document here</h2>
-      <p>PDF, Word, PowerPoint, Excel, web pages, e-books or a photo of text. Apple Intelligence explains it right here, on this Mac.</p>
+      <p>PDF, Word, PowerPoint, Excel, web pages, e-books, a photo of text, or a recording or video. Apple Intelligence explains it right here, on this Mac.</p>
     </div>
   );
 }
