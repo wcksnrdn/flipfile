@@ -58,9 +58,25 @@ fast_image_resize = { version = "6.1.0", features = ["image"] }
 # Colour management (embedded ICC profiles -> sRGB, src/convert/input.rs); already part of
 # the build through `image`
 moxcms = "0.8"
+# Speech to text (Transcribe): whisper.cpp with the bundled Whisper model
+# (src/platform/whisper.rs); on Apple silicon on the GPU through Metal
+whisper-rs = { version = "0.16", default-features = false }
+# Decoding the audio of every common file and video container to plain samples for
+# transcription (src/convert/transcribe/audio.rs), without ffmpeg
+symphonia = { version = "0.6", default-features = false, features = [
+  "opt-simd", "aac", "alac", "flac", "mp3", "pcm", "vorbis", "adpcm", "isomp4", "mkv", "ogg", "aiff", "wav", "caf",
+] }
+# Opus (WhatsApp voice notes, OGG/WebM), which symphonia demuxes but doesn't decode
+opus1 = { version = "0.3", default-features = false, features = ["std"] }
+# Resampling to the 16 kHz Whisper hears
+rubato = { version = "5", default-features = false, features = ["fft_resampler"] }
 
 # Native glass view (src/glass.rs) and HEIC/AVIF decoding via ImageIO (src/system_codec.rs).
 # Mostly already compiled as part of Tauri/wry on macOS; these enable a few extra bindings.
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+# Transcription on the GPU of Apple silicon
+whisper-rs = { version = "0.16", default-features = false, features = ["metal"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
@@ -143,6 +159,8 @@ ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "
 [dev-dependencies]
 # Builds sample Word files for the tests
 docx-rs = "0.4"
+# Builds Ogg Opus files (WhatsApp voice notes) for the transcription tests
+ogg = "0.9"
 
 # The Windows/Linux AI upscaling engine, tested on a Mac too (FLIPFILE_ONNX=1 npm run fetch-onnxruntime)
 [target.'cfg(target_os = "macos")'.dev-dependencies]

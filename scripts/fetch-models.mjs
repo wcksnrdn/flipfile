@@ -1,9 +1,13 @@
-// Downloads the models behind AI upscaling into src-tauri/models/, where the platform's
-// tauri.*.conf.json bundles them as resources (src-tauri/src/platform/upscale.rs):
-// - macOS: Core ML models, built by scripts/upscale-model/convert.py;
-// - Windows and Linux: the same models as ONNX, built by scripts/upscale-model/export_onnx.py,
-//   with YuNet, the face detector.
-// They are published once as release assets of this repository, so builds don't need Python.
+// Downloads the AI models into src-tauri/models/, where the platform's tauri.*.conf.json
+// bundles them as resources:
+// - AI upscaling (src-tauri/src/platform/upscale.rs):
+//   - macOS: Core ML models, built by scripts/upscale-model/convert.py;
+//   - Windows and Linux: the same models as ONNX, built by scripts/upscale-model/export_onnx.py,
+//     with YuNet, the face detector.
+//   They are published once as release assets of this repository, so builds don't need Python.
+// - Transcribe (src-tauri/src/platform/whisper.rs): OpenAI's Whisper `small` model in
+//   whisper.cpp's GGML format (5-bit weights), as published by the whisper.cpp project on
+//   Hugging Face, unchanged; the same file on every system.
 //
 // Supply-chain protection, as for PDFium (fetch-pdfium.mjs): the models end up inside
 // every installer, so they are verified against SHA-256 hashes pinned below, twice:
@@ -55,6 +59,14 @@ const SETS = {
       "faces-upscale.mlmodelc/weights/weight.bin": "163b35b5ed44e505371b2e962be6d9daf648f9da7d078ce8b0910a3aa510f36d",
     },
   },
+  whisper: {
+    // One plain file, not an archive (no `entries`); ~190 MB
+    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin",
+    archive: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+    file: "whisper-small.bin",
+    size: 200 * 1024 * 1024,
+    files: { "whisper-small.bin": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb" },
+  },
   onnx: {
     url: `${RELEASE}/flipfile-models-onnx-2.tar.gz`,
     archive: "e74e913e3048851ff3d6e84a749902d2c2bf2d50d9e455708bf984385eb69cdb",
@@ -69,7 +81,7 @@ const SETS = {
   },
 };
 
-// Each archive is ~115 MB; anything far larger is not what we asked for.
+// Each upscaling archive is ~115 MB; anything far larger is not what we asked for.
 const MAX_DOWNLOAD_BYTES = 160 * 1024 * 1024;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -101,7 +113,8 @@ async function fetchSet(name, set) {
     console.warn(`AI models: ${bad.map(([p]) => p).join(", ")} missing or changed; downloading them again.`);
   }
 
-  console.log(`Downloading the AI upscaling models (${VERSION}, ${name}, ~115 MB)…`);
+  const limit = set.size ?? MAX_DOWNLOAD_BYTES;
+  console.log(set.file ? `Downloading the Whisper speech model (${name}, ~190 MB)…` : `Downloading the AI upscaling models (${VERSION}, ${name}, ~115 MB)…`);
   let res;
   try {
     res = await fetch(set.url, { redirect: "follow" });
@@ -112,9 +125,9 @@ async function fetchSet(name, set) {
   // Redirects must stay on HTTPS (GitHub serves release files from its CDN)
   if (!res.url.startsWith("https://")) fail(`download was redirected to a non-HTTPS URL: ${res.url}`);
   const declared = Number(res.headers.get("content-length") || 0);
-  if (declared > MAX_DOWNLOAD_BYTES) fail(`download is unexpectedly large (${declared} bytes)`);
+  if (declared > limit) fail(`download is unexpectedly large (${declared} bytes)`);
   const archive = Buffer.from(await res.arrayBuffer());
-  if (archive.length > MAX_DOWNLOAD_BYTES) fail(`download is unexpectedly large (${archive.length} bytes)`);
+  if (archive.length > limit) fail(`download is unexpectedly large (${archive.length} bytes)`);
 
   const archiveHash = sha256(archive);
   if (archiveHash !== set.archive) {
@@ -123,6 +136,16 @@ async function fetchSet(name, set) {
         `  expected ${set.archive}\n  got      ${archiveHash}\n` +
         `This can mean the release was replaced or the download was tampered with.`,
     );
+  }
+
+  // A single model file: verified above, written through a temporary name
+  if (set.file) {
+    mkdirSync(OUT_DIR, { recursive: true });
+    const partial = join(OUT_DIR, `${set.file}.partial`);
+    writeFileSync(partial, archive);
+    renameSync(partial, join(OUT_DIR, set.file));
+    console.log(`Whisper model ready and verified (sha256 ${archiveHash.slice(0, 16)}…): ${OUT_DIR}`);
+    return;
   }
 
   const work = mkdtempSync(join(tmpdir(), "flipfile-models-"));
@@ -159,6 +182,7 @@ async function main() {
   } else {
     await fetchSet("ONNX", SETS.onnx);
   }
+  await fetchSet("GGML", SETS.whisper);
 }
 
 try {
