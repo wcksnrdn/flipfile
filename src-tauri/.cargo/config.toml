@@ -1,0 +1,13 @@
+# Build settings for whisper.cpp, the speech-to-text engine behind Transcribe, which
+# whisper-rs-sys compiles with CMake (src/platform/whisper.rs).
+[env]
+# The crate's pre-generated bindings: no libclang needed on the building computer
+WHISPER_DONT_GENERATE_BINDINGS = "1"
+# Not tuned to the computer that builds it: the installers are built on GitHub's runners
+# and run on everyone's. x86-64 builds assume AVX2, FMA and F16C (processors from 2013
+# on), which is checked at run time before the engine is used.
+GGML_NATIVE = "OFF"
+GGML_AVX = "ON"
+GGML_AVX2 = "ON"
+GGML_FMA = "ON"
+GGML_F16C = "ON"
