@@ -4,6 +4,7 @@ fn main() {
     // to exist before tauri-build looks for it.
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         build_intelligence_helper();
+        link_compiler_runtime();
     }
 
     // Declaring the app's own commands makes them subject to capabilities like plugin
@@ -32,6 +33,28 @@ fn main() {
         ]),
     ))
     .expect("failed to run tauri-build");
+}
+
+/// whisper.cpp's Metal code checks the macOS version at run time (`@available`), which
+/// calls `__isPlatformVersionAtLeast` from clang's runtime library. Rust links without
+/// it (`-nodefaultlibs`), and Xcode's clang doesn't add it then: without this, linking
+/// for an older macOS than the SDK's fails with an undefined symbol. A static library
+/// only gives what is still missing, so this changes nothing where it is already there.
+fn link_compiler_runtime() {
+    use std::process::Command;
+    let dir = Command::new("xcrun")
+        .args(["--sdk", "macosx", "clang", "--print-resource-dir"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()).join("lib/darwin"));
+    match dir {
+        Some(dir) if dir.join("libclang_rt.osx.a").is_file() => {
+            println!("cargo:rustc-link-search=native={}", dir.display());
+            println!("cargo:rustc-link-lib=static=clang_rt.osx");
+        }
+        _ => println!("cargo:warning=clang's runtime library (libclang_rt.osx.a) was not found; linking may fail"),
+    }
 }
 
 /// Compiles flipfile-ai with the Swift compiler of the Xcode (Command Line) Tools. It
