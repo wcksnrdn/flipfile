@@ -1,6 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
     "externalBin": [
       "binaries/flipfile-ai"
     ],
