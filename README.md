@@ -36,7 +36,7 @@ No uploads. No accounts. No waiting.
 
 | **Private by design** | **Instant** | **Does the boring stuff** |
 |---|---|---|
-| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone HEIC ⇄ JPG/PNG/WEBP/AVIF, remove background, compress to exact KB/MB, PDF ⇄ Word, Excel → PDF, PowerPoint ⇄ PDF/Word/images/docs, CSV/JSON/YAML/SQL/Excel, video & audio, scans → editable text, multi-size ICO/ICNS, animated GIF. |
+| Every conversion runs on your computer. Files never leave it, and flipfile keeps working with the Wi-Fi off. | No upload, no queue, no "your download will start in 30 seconds". Drop, point, done. | iPhone HEIC ⇄ JPG/PNG/WEBP/AVIF, remove background, compress to exact KB/MB, PDF ⇄ Word, Excel → PDF, PowerPoint ⇄ PDF/Word/images/docs, CSV/JSON/YAML/SQL/Excel, video & audio, recordings → subtitles & transcripts, scans → editable text, multi-size ICO/ICNS, animated GIF. |
 
 <br>
 
@@ -115,7 +115,7 @@ Excel or LibreOffice are used when installed; otherwise flipfile's own engine do
 
 No time to read a 40-page report? Drop it on **AI ✦** in the lobby. A glass panel opens beside the circle and **Apple Intelligence** explains the document while you watch: what kind of document it is, a headline, the one thing to know, the key points, the key figures (amounts, dates and deadlines stand out), the to-dos with who and when, and its topics.
 
-- **Any document**: PDF, Word, PowerPoint, Excel, Markdown, web pages, e-books, and scans or photos of text (read with text recognition first).
+- **Any document**: PDF, Word, PowerPoint, Excel, Markdown, web pages, e-books, and scans or photos of text (read with text recognition first). Recordings and videos too: they are transcribed first, on the Mac (see *Transcribe*).
 - **Long ones too**: a long document is read part by part, and you see the notes it takes as it goes; a book is condensed to its most telling passages first, so even that takes about a minute.
 - **Ask it anything**: type a question about the document, or tap one of the questions it suggests, and get an answer from the document itself (or a plain "the document doesn't say").
 - **Your language**: the summary is written in the document's own language (Indonesian included), and one click translates it into your Mac's language and back.
@@ -137,6 +137,20 @@ Drop a small, blurry or old photo on **Upscale 2×** or **Upscale 4×** (*Photo 
 - It draws plausible detail rather than recovering what the camera never captured. Results are limited to 64 megapixels.
 
 macOS 13 Ventura or later, Windows 10 or later, Linux.
+
+### Transcribe: recordings and videos, written down
+
+Drop a lecture, a meeting, a WhatsApp voice note or a video on **Music → Transcribe** (or **Video → Tools → Subtitles**) and flipfile writes down what is said, in the language it was said in.
+
+- **Subtitles**: **SRT** or **VTT**, named after the video (`lecture.mp4` → `lecture.srt`) so players pick them up straight away. Each sentence gets a cue of its own, long ones are cut after a comma, never more than two lines and seven seconds.
+- **Transcripts**: **TXT**, **Word** or **Markdown** notes, in paragraphs where the speaker paused, with a timestamp at each one (`meeting_transcript.docx`).
+- **Any recording**: MP3, M4A, WAV, FLAC, OGG and Opus voice notes, AIFF, CAF, and the sound of MP4, MOV, MKV and WebM videos, all read by flipfile itself; other formats through the system or `ffmpeg` when installed.
+- **Then the gist**: on a Mac with Apple Intelligence, drop the recording on **AI ✦** to have it transcribed and summarised in one go: decisions, to-dos and deadlines from an hour-long meeting.
+- **99 languages**, detected by themselves (Indonesian, English, Javanese, Malay, Japanese, ...). It writes what it hears, so names and jargon can come out spelled by ear.
+- **Private and offline**: OpenAI's [Whisper](https://github.com/openai/whisper) `small` model (about 190 MB, part of flipfile) runs on your computer through [whisper.cpp](https://github.com/ggml-org/whisper.cpp). Nothing is uploaded and nothing extra is downloaded.
+- **Quick**: on a Mac with Apple silicon it runs on the GPU, about 15× faster than real time (an hour-long lecture in about 4 minutes on an M1 Pro); on other computers on the processor, more slowly (about 6× faster than real time on an M1 Pro's processor); the circle shows how far it has got.
+
+macOS 13 Ventura or later, Windows 10 or later, Linux (a processor with AVX2, from 2013 or later, on Intel and AMD).
 
 <br>
 
@@ -221,9 +235,10 @@ Details in [SECURITY.md](SECURITY.md#verify-your-download).
 | **Office → Docs** | MD *(markdown)* · TXT *(plain)* · HTML *(web)* · RTF *(rich text)* · EPUB *(e-book)* · ODT *(open doc)* · **Back ‹** |
 | **Office → Data** | JSON · TSV *(tabs)* · YAML · XML · SQL *(insert)* · MD *(table)* · **Back ‹** |
 | **Video** | MP4 · MOV · WEBM · MKV · AVI · **GIF** *(clip)* · **Tools ✦** · **Back ‹** |
-| **Video → Tools** | **Compress** *(smaller)* · **Mute** *(no audio)* · **Audio** *(extract)* · **1080p** *(Full HD)* · **720p** *(HD)* · FLV · **Back ‹** |
-| **Music** | MP3 · WAV · M4A *(AAC)* · FLAC · OGG · **More •••** · **Back ‹** |
+| **Video → Tools** | **Compress** *(smaller)* · **Mute** *(no audio)* · **Audio** *(extract)* · **1080p** *(Full HD)* · **720p** *(HD)* · FLV · **Subtitles ✦** · **Back ‹** |
+| **Music** | MP3 · WAV · M4A *(AAC)* · FLAC · OGG · **More •••** · **Transcribe ✦** · **Back ‹** |
 | **Music → More** | AIFF *(studio)* · OPUS · AAC · CAF *(Apple)* · ALAC *(lossless)* · WMA · **Back ‹** |
+| **Music → Transcribe**, **Video → Tools → Subtitles** | SRT *(subtitles)* · VTT *(web subs)* · TXT *(transcript)* · WORD *(transcript)* · MD *(notes)* · **Back ‹** |
 
 Also handy: **⌘, / Ctrl+,** opens the **Ring Workshop** to customise your rings and workspace profiles, **⌘V / Ctrl+V** pastes an image or copied files, **⌘⇧K / Ctrl+Shift+K** shows or hides flipfile from anywhere, and the menu bar / tray icon keeps your recent conversions with **Undo**.
 
@@ -351,8 +366,10 @@ Old binary `.ppt` / `.pps` / `.pot` and `.odp` files need PowerPoint or LibreOff
   - **Mute**: strips the audio track (`clip_muted.mp4`; on macOS and with `ffmpeg` a MOV stays a MOV, `clip_muted.mov`). Built in without `ffmpeg`: on macOS through AVFoundation, without re-encoding the video and keeping portrait videos portrait; on Windows through Media Foundation, as MP4.
   - **Audio extract**: extracts the audio track to `.mp3` (with `ffmpeg`) or `.m4a` (built-in on macOS).
   - **1080p / 720p**: downscales video to Full HD or HD while preserving aspect ratio.
+  - **Subtitles**: the speech as SRT or VTT subtitles, or as a transcript (see *Transcribe* below).
 - **Music / Audio (`Music` & `Music → More`)**: convert between **MP3**, **WAV**, **M4A (AAC)**, **FLAC**, **OGG Vorbis**, **AIFF**, **OPUS**, **AAC**, **CAF** (Apple CoreAudio), **ALAC** (Apple Lossless `.m4a`) and **WMA**—or drop a video file onto any audio format to extract its soundtrack.
 - **Engines**: uses `ffmpeg` when installed on your computer (supports every format and tool); on macOS, `/usr/bin/afconvert` and `/usr/bin/avconvert` are used automatically when `ffmpeg` is not installed, so **WAV, M4A, AAC, ALAC, FLAC, AIFF, CAF, MP4, MOV, Mute, 1080p, 720p and Compress** work out of the box with zero installs.
+- **Transcribe (`Music → Transcribe`, `Video → Tools → Subtitles`)**: Whisper `small` (OpenAI, MIT; 5-bit GGML weights) run by whisper.cpp, on the GPU through Metal on Apple silicon (beam search of 5) and on the CPU elsewhere (greedy decoding, AVX2). The sound is decoded built-in by Symphonia (WAV, AIFF, CAF, FLAC, MP3, Vorbis, AAC, ALAC; MP4/MOV/MKV/WebM containers) and opus1 (Opus in Ogg and WebM), downmixed and resampled to 16 kHz with a windowed-sinc filter; anything else goes through `ffmpeg` when installed, else `afconvert`/`avconvert` on macOS or Media Foundation on Windows. Whisper's phrases are split into words timed by their length, gathered into sentences, then into subtitle cues (a cue per sentence, at most 2 × 42 characters and 7 s, split after a comma or evenly) and paragraphs (at pauses of 1.5 s). Recordings up to 5 hours.
 
 </details>
 
@@ -501,6 +518,7 @@ flipfile natively supports over **75 formats, smart tools, and conversions** acr
 |---|---|---|
 | **AI Remove Background** | `Remove BG` | Automatically separates foreground subjects using macOS Vision AI (lossless `.png` output) |
 | **AI Upscale** | `Upscale 2×`, `Upscale 4×` | Redraws small, blurry or old photos 2× or 4× larger and restores every face (Real-ESRGAN, 4xFaceUpSharpLDAT and RestoreFormer++ on your computer, same format, up to 64 MP) |
+| **Transcribe** | `Music → Transcribe`, `Video → Tools → Subtitles` | Writes down what is said in a recording or video as SRT/VTT subtitles or a TXT, Word or Markdown transcript (Whisper on your computer, 99 languages) |
 | **Clean Metadata & EXIF** | `Clean EXIF` | Losslessly removes EXIF, GPS locations, camera serials, and comments from JPG/PNG without re-encoding |
 | **Square 1:1 Framing** | `Square 1:1` | Pads photo into a perfect 1:1 square aspect ratio with smart blurred backdrop (max 16,384 px) |
 | **Combine → Animated GIF** | `GIF anim` | Combines multiple selected photos into a smooth, looping animated GIF |
@@ -609,6 +627,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Square 1:1 pad | `photo_square.jpg` |
 | Several images → Animated GIF | `firstimage_animated.gif` |
 | Video → GIF clip / Compress / Mute / 1080p | `clip_animated.gif` / `clip_compressed.mp4` / `clip_muted.mp4` / `clip_1080p.mp4` |
+| Transcribe → SRT / VTT / TXT / Word / MD | `clip.srt` / `clip.vtt` / `clip_transcript.txt` / `clip_transcript.docx` / `clip_transcript.md` |
 | Preset dropped in the same format | `photo_compressed.jpg` / `photo_resized.jpg` |
 | Pasted clipboard image | `~/Downloads/Clipboard 2026-10-20 at 14.03.12.png` |
 

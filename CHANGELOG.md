@@ -6,6 +6,32 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Transcribe: recordings and videos to subtitles and transcripts (macOS, Windows, Linux)**:
+  drop a recording or a video on **Music → Transcribe** or **Video → Tools → Subtitles** and
+  pick **SRT**, **VTT**, **TXT**, **Word** or **MD**. Whisper `small` (OpenAI, MIT) writes
+  down what is said in the language it hears (99 languages, Indonesian included), on the
+  computer.
+  - Engine: whisper.cpp (MIT) through `whisper-rs`; on Apple silicon on the GPU through
+    Metal with a beam search of 5 (109 s of speech in 6.5 s on an M1 Pro), elsewhere on the
+    CPU with greedy decoding (19 s on the same Mac's CPU). x86-64 builds need AVX2, checked
+    before the engine runs. Flash attention is used on the GPU only (it made the CPU 1.7×
+    slower); ggml's Metal residency sets are off, so quitting during a transcription
+    can't abort the app.
+  - Audio is read without ffmpeg: Symphonia (MPL-2.0) for WAV, AIFF, CAF, FLAC, MP3, Vorbis,
+    AAC and ALAC in their files and in MP4/MOV/MKV/WebM, opus1 (BSD-3-Clause) for Opus
+    (WhatsApp voice notes); then downmixed and resampled to 16 kHz by a windowed-sinc
+    polyphase filter. Other formats go through ffmpeg when installed, else afconvert and
+    avconvert (macOS) or Media Foundation (Windows).
+  - Subtitles: a cue per sentence, long sentences cut after a comma or evenly (at most two
+    lines of 42 characters and 7 s), named after the video (`clip.srt`). Transcripts: in
+    paragraphs at the speaker's pauses, with timestamps in Word and Markdown.
+  - AI Summary (macOS) reads recordings and videos too: transcribed first ("Listening ·
+    37%"), then summarised.
+  - The model (`ggml-small-q5_1.bin`, 190 MB) is fetched by `npm run fetch-models` from the
+    whisper.cpp project on Hugging Face, pinned by SHA-256, and bundled on every system.
+
 ## [0.7.1] - 2026-11-10
 
 ### Changed
