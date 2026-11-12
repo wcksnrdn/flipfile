@@ -36,7 +36,7 @@ pub(super) fn is_video_target(format: &str) -> bool {
     )
 }
 
-fn find_ffmpeg() -> Option<PathBuf> {
+pub(super) fn find_ffmpeg() -> Option<PathBuf> {
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut candidates: Vec<PathBuf> = vec![
         "/opt/homebrew/bin/ffmpeg".into(),
@@ -70,7 +70,7 @@ fn find_ffmpeg() -> Option<PathBuf> {
     }
 }
 
-fn is_video_file(path: &Path) -> bool {
+pub(super) fn is_video_file(path: &Path) -> bool {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -528,6 +528,45 @@ fn windows_mute(input: &Path, output: &Path, name: &str) -> Result<(), String> {
     windows_transcode_internal(input, output, None, true, name)
 }
 
+/// Writes the sound of any file Windows' Media Foundation engine reads (MP3, WMA, AAC,
+/// MP4, MOV, WMV, AVI, ...) as an M4A (AAC), for transcription (src/convert/transcribe/audio.rs)
+#[cfg(windows)]
+pub(super) fn windows_extract_audio(input: &Path, output: &Path, name: &str) -> Result<(), String> {
+    use windows::Media::MediaProperties::{AudioEncodingQuality, MediaEncodingProfile};
+    use windows::Media::Transcoding::{MediaTranscoder, TranscodeFailureReason};
+    use windows::Storage::{CreationCollisionOption, StorageFile, StorageFolder};
+    use windows::core::HSTRING;
+
+    let absolute = |p: &Path| std::path::absolute(p).map_err(|e| format!("\"{name}\": {e}"));
+    let source_path = HSTRING::from(absolute(input)?.as_os_str());
+    let output = absolute(output)?;
+    let (Some(dir), Some(file_name)) = (output.parent(), output.file_name()) else {
+        return Err(save_err("invalid output path"));
+    };
+    let (dir, file_name) = (HSTRING::from(dir.as_os_str()), HSTRING::from(file_name));
+    let run = || -> windows::core::Result<TranscodeFailureReason> {
+        let source = StorageFile::GetFileFromPathAsync(&source_path)?.join()?;
+        let profile = MediaEncodingProfile::CreateM4a(AudioEncodingQuality::Medium)?;
+        let folder = StorageFolder::GetFolderFromPathAsync(&dir)?.join()?;
+        let target = folder.CreateFileAsync(&file_name, CreationCollisionOption::ReplaceExisting)?.join()?;
+        let prepared = MediaTranscoder::new()?.PrepareFileTranscodeAsync(&source, &target, &profile)?.join()?;
+        if !prepared.CanTranscode()? {
+            return prepared.FailureReason();
+        }
+        prepared.TranscodeAsync()?.join()?;
+        Ok(TranscodeFailureReason::None)
+    };
+    let result = match run() {
+        Ok(TranscodeFailureReason::None) => Ok(()),
+        Ok(_) => Err(format!("\"{name}\": this audio format isn't readable here; install ffmpeg (`winget install ffmpeg`) for every format")),
+        Err(e) => Err(format!("\"{name}\": {}", e.message())),
+    };
+    if result.is_err() {
+        let _ = fs::remove_file(&output);
+    }
+    result
+}
+
 /// Converts a video to MP4 (H.264 + AAC) with Windows' own Media Foundation engine, which
 /// reads MP4, MOV, M4V, WMV and AVI. `short_side` caps the shorter side of the picture
 /// (1080p, 720p, Compress); `None` keeps the source size.
@@ -649,7 +688,7 @@ mod tests {
     }
 }
 
-fn run_cmd(mut cmd: Command, name: &str) -> Result<(), String> {
+pub(super) fn run_cmd(mut cmd: Command, name: &str) -> Result<(), String> {
     let out = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::null())

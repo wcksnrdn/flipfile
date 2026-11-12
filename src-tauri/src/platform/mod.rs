@@ -14,5 +14,7 @@ pub mod onnx;
 pub mod system_codec;
 pub mod tray;
 pub mod upscale;
+// Speech to text (Transcribe) with whisper.cpp
+pub mod whisper;
 #[cfg(any(not(target_os = "macos"), test))]
 pub mod yunet;

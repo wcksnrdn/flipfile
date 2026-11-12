@@ -19,6 +19,8 @@ export type RingId =
   | "video-tools"
   | "music"
   | "music-more"
+  | "music-transcribe"
+  | "video-transcribe"
   | "size";
 
 export type Item = {
@@ -253,6 +255,7 @@ const VIDEO_TOOLS = alignedSubRing(
     { id: "vid-1080p", label: "1080p", sub: "Full HD" },
     { id: "vid-720p", label: "720p", sub: "HD" },
     { id: "flv", label: "FLV" },
+    { id: "video-transcribe-nav", label: "Subtitles", sub: "✦", nav: "video-transcribe" },
     { id: "back", label: "Back", sub: "‹", nav: "video" },
   ],
   VIDEO,
@@ -270,6 +273,7 @@ const MUSIC = ring(
     { id: "flac", label: "FLAC" },
     { id: "ogg", label: "OGG" },
     { id: "music-more-nav", label: "More", sub: "•••", nav: "music-more" },
+    { id: "music-transcribe-nav", label: "Transcribe", sub: "✦", nav: "music-transcribe" },
     { id: "back", label: "Back", sub: "‹", nav: "category" },
   ],
   -Math.PI / 2
@@ -290,6 +294,31 @@ const MUSIC_MORE = alignedSubRing(
   MUSIC,
   "music-more",
   "music"
+);
+
+// ─── Music > Transcribe, Video > Tools > Subtitles (speech to text) ─────
+const TRANSCRIBE_ITEMS: Item[] = [
+  { id: "tr-srt", label: "SRT", sub: "subtitles" },
+  { id: "tr-vtt", label: "VTT", sub: "web subs" },
+  { id: "tr-txt", label: "TXT", sub: "transcript" },
+  { id: "tr-docx", label: "WORD", sub: "transcript" },
+  { id: "tr-md", label: "MD", sub: "notes" },
+];
+
+const MUSIC_TRANSCRIBE = alignedSubRing(
+  "music-transcribe",
+  [...TRANSCRIBE_ITEMS, { id: "back", label: "Back", sub: "‹", nav: "music" }],
+  MUSIC,
+  "music-transcribe",
+  "music"
+);
+
+const VIDEO_TRANSCRIBE = alignedSubRing(
+  "video-transcribe",
+  [...TRANSCRIBE_ITEMS, { id: "back", label: "Back", sub: "‹", nav: "video-tools" }],
+  VIDEO_TOOLS,
+  "video-transcribe",
+  "video-tools"
 );
 
 // ─── Size / quality presets (Option/Alt ring, unchanged) ────────────────
@@ -323,6 +352,8 @@ export const RINGS: Record<RingId, Ring> = {
   "video-tools": VIDEO_TOOLS,
   music: MUSIC,
   "music-more": MUSIC_MORE,
+  "music-transcribe": MUSIC_TRANSCRIBE,
+  "video-transcribe": VIDEO_TRANSCRIBE,
   size: SIZE,
 };
 
@@ -356,6 +387,11 @@ const CUSTOM_LABELS: Record<string, string> = {
   "vid-1080p": "1080p Video",
   "vid-720p": "720p Video",
   "ai-summary": "AI Summary",
+  "tr-srt": "Subtitles (SRT)",
+  "tr-vtt": "Subtitles (VTT)",
+  "tr-txt": "Transcript",
+  "tr-docx": "Transcript (Word)",
+  "tr-md": "Transcript (MD)",
 };
 
 export function labelOf(id: string): string | undefined {

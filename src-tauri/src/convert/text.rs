@@ -1,7 +1,8 @@
 // The readable text of a dropped file, for AI summaries (src/summary): what a person
 // would read, as Markdown (headings, list items, table rows) that the model follows well.
 // Documents are read by the same engines as the conversions; scanned pages and photos go
-// through the system's text recognition (office/ocr.rs).
+// through the system's text recognition (office/ocr.rs), recordings and videos through
+// speech recognition (convert/transcribe).
 
 use std::fs;
 use std::path::Path;
@@ -73,13 +74,17 @@ pub fn extract(path: &Path, on_page: OnPage) -> Result<Text, String> {
     } else if matches!(ext_lower(path).as_str(), "text" | "log") {
         let bytes = fs::read(path).map_err(|e| format!("\"{name}\" could not be read: {e}"))?;
         (String::from_utf8_lossy(&bytes).into_owned(), 0, "Text document", false)
+    } else if super::transcribe::is_recording(path) {
+        // Spoken, not written: Whisper writes it down first (progress in percent)
+        let (text, _language) = super::transcribe::transcript_text(path, on_page)?;
+        (text, 0, "Recording", false)
     } else if let Ok((image, _)) = open_oriented(path) {
         on_page(0, 1);
         let text = recognize(&image.to_rgba8()).map_err(|e| format!("\"{name}\": {e}"))?;
         on_page(1, 1);
         (text, 1, "Image", true)
     } else {
-        return Err(format!("\"{name}\": summaries read documents, PDFs and images"));
+        return Err(format!("\"{name}\": summaries read documents, PDFs, images and recordings"));
     };
 
     let mut text = text.trim().to_string();
@@ -264,9 +269,15 @@ mod tests {
         fs::write(&empty, "  \n\n ").unwrap();
         assert!(extract(&empty, &|_, _| {}).unwrap_err().contains("no text"));
 
+        // A recording is transcribed first: a broken one fails as a recording
         let audio = dir.join("song.mp3");
         fs::write(&audio, b"ID3\x04\x00\x00\x00\x00\x00\x00").unwrap();
-        assert!(extract(&audio, &|_, _| {}).unwrap_err().contains("summaries read"));
+        let err = extract(&audio, &|_, _| {}).unwrap_err();
+        assert!(err.contains("song.mp3") && !err.contains("summaries read"), "{err}");
+        // Neither a document, an image nor a recording
+        let other = dir.join("data.bin");
+        fs::write(&other, [0u8, 1, 2, 3, 4, 5, 6, 7]).unwrap();
+        assert!(extract(&other, &|_, _| {}).unwrap_err().contains("summaries read"));
         let _ = fs::remove_dir_all(&dir);
     }
 }

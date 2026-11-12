@@ -9,6 +9,7 @@
 // - clean:  lossless metadata removal (with strip)
 // - text:   the readable text of any document, for AI summaries (src/summary)
 // - tools:  background removal, transforms, square pad, target-size compress, animated GIF
+// - transcribe: the speech in a recording or video as subtitles or a transcript
 // - output: unique output paths
 // - memory: the memory budget that decides how many files convert at once
 
@@ -29,6 +30,7 @@ mod stress;
 mod strip;
 pub mod text;
 mod tools;
+pub mod transcribe;
 mod upscale;
 mod word;
 #[cfg(test)]
@@ -56,6 +58,7 @@ use output::{save_err, Reservations};
 pub(crate) use output::unique_output_path;
 use pdf::{merge_to_pdf, pdf_to_images};
 use tools::{is_tool, is_upscale, merge_to_gif, run_tool};
+use transcribe::{is_transcribe_target, transcribe_file};
 use word::{from_sheet, from_word, ocr_to_word};
 
 #[derive(Clone, Serialize)]
@@ -133,6 +136,7 @@ pub async fn convert_batch(
         // An idle flipfile should not hold on to what the last document needed
         office::typeset::release_caches();
         crate::platform::upscale::release();
+        crate::platform::whisper::release();
         result
     })
     .await
@@ -193,9 +197,9 @@ fn run_batch(
         return slides::merge_to_pptx(paths, on_progress, out_dir, options);
     }
     // A single PDF can take a while: report its pages instead of the one file
-    // (or for an upscale, its steps).
+    // (or for an upscale or a transcription, its steps).
     let single = paths.len() == 1;
-    let unit = if is_upscale(format) { "step" } else { "page" };
+    let unit = if is_upscale(format) || is_transcribe_target(format) { "step" } else { "page" };
     let on_page = |done: usize, total: usize| {
         if single {
             let _ = on_progress.send(Progress { done, total, unit });
@@ -288,6 +292,9 @@ fn convert(
 ) -> Result<Converted, String> {
     let input = Path::new(path);
     let name = file_name(input);
+    if is_transcribe_target(format) {
+        return transcribe_file(input, format, out_dir, on_page);
+    }
     if is_media_target(format) {
         return convert_media(input, format, out_dir);
     }
