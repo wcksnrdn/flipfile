@@ -22,6 +22,9 @@ pub struct Segment {
     /// As the model writes it, with the space in front (" Good morning,"); a language
     /// written without spaces between words has none
     pub text: String,
+    /// It ends one of the model's phrases: where the speaker paused or a thought ended,
+    /// a natural place for a break when the model wrote no punctuation
+    pub phrase_end: bool,
 }
 
 pub struct Transcript {
@@ -140,6 +143,7 @@ pub fn transcribe(pcm: &[f32], on_progress: &(dyn Fn(usize, usize) + Sync)) -> R
                 start: segment.start_timestamp() as f64 / 100.0,
                 end: segment.end_timestamp() as f64 / 100.0,
                 text: text.trim_end().to_string(),
+                phrase_end: true,
             })
         })
         .collect();

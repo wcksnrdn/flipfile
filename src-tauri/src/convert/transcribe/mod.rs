@@ -94,6 +94,13 @@ const CUE_CHARS: usize = 2 * LINE;
 const CUE_SECONDS: f64 = 7.0;
 /// A pause this long ends a sentence even without a full stop (seconds)
 const SENTENCE_PAUSE: f64 = 1.2;
+/// Without a full stop, a sentence ends at the end of the model's phrase once it is this
+/// long (seconds): speech the model wrote without any punctuation (voice-overs over music
+/// often come out that way) would otherwise be one endless sentence
+const LONG_SENTENCE: f64 = 6.0;
+/// A paragraph of the transcript spans at most this long (seconds), so that its
+/// timestamps keep pointing at the right place in the recording
+const PARAGRAPH_SECONDS: f64 = 20.0;
 
 /// The words of the model's phrases, each with the time it most likely takes: the
 /// phrase's time shared out by the words' lengths (speech runs at a fairly even number
@@ -113,12 +120,14 @@ pub fn words(segments: &[Segment]) -> Vec<Segment> {
         let total: usize = pieces.iter().map(|p| p.trim().chars().count() + 1).sum();
         let span = (segment.end - segment.start).max(0.0);
         let mut at = 0usize;
-        for piece in pieces {
+        let count = pieces.len();
+        for (i, piece) in pieces.into_iter().enumerate() {
             let length = piece.trim().chars().count() + 1;
             let start = segment.start + span * at as f64 / total as f64;
             at += length;
-            let end = segment.start + span * at as f64 / total as f64;
-            words.push(Segment { start, end, text: piece });
+            let last = i + 1 == count;
+            let end = if last { segment.end } else { segment.start + span * at as f64 / total as f64 };
+            words.push(Segment { start, end, text: piece, phrase_end: last && segment.phrase_end });
         }
     }
     words
@@ -138,18 +147,25 @@ fn join(words: &[Segment]) -> Segment {
         start: words.first().map_or(0.0, |w| w.start),
         end: words.last().map_or(0.0, |w| w.end),
         text: words.iter().map(|w| w.text.as_str()).collect::<String>().trim().to_string(),
+        phrase_end: words.last().is_some_and(|w| w.phrase_end),
     }
 }
 
-/// Where the sentences end: after a full stop, a question or exclamation mark, or a
-/// long pause. As indices into `words`, each the end of a sentence (exclusive).
+/// Where the sentences end: after a full stop, a question or exclamation mark, a long
+/// pause, or (without punctuation) the end of a long enough phrase of the model's. As
+/// indices into `words`, each the end of a sentence (exclusive).
 fn sentence_ends(words: &[Segment]) -> Vec<usize> {
     let mut ends = vec![];
+    let mut start = words.first().map_or(0.0, |w| w.start);
     for i in 0..words.len() {
         let last = i + 1 == words.len();
         let pause = !last && words[i + 1].start - words[i].end >= SENTENCE_PAUSE;
-        if last || pause || ends_sentence(&words[i].text) {
+        let long = words[i].phrase_end && words[i].end - start >= LONG_SENTENCE;
+        if last || pause || long || ends_sentence(&words[i].text) {
             ends.push(i + 1);
+            if !last {
+                start = words[i + 1].start;
+            }
         }
     }
     ends
@@ -169,8 +185,8 @@ pub fn sentences(words: &[Segment]) -> Vec<Segment> {
 }
 
 /// Subtitle cues: every sentence in a cue of its own, a sentence too long for one
-/// (two lines, seven seconds) cut into as few as needed, preferably after a comma, else
-/// where the pieces come out even. Never shorter than a moment, never overlapping.
+/// (two lines, seven seconds) cut into as few as needed, preferably after a comma or at
+/// the end of one of the model's phrases, else where the pieces come out even. Never shorter than a moment, never overlapping.
 pub fn cues(words: &[Segment]) -> Vec<Segment> {
     let mut cues = vec![];
     let mut from = 0;
@@ -208,7 +224,8 @@ fn split_cue(words: &[Segment], out: &mut Vec<Segment>) {
         .map(|at| {
             let left = join(&words[..at]).text.chars().count() as f64;
             let uneven = (2.0 * left - total).abs() / total;
-            let clause = if ends_clause(words[at - 1].text.trim_end()) { 0.0 } else { 0.35 };
+            let natural = ends_clause(words[at - 1].text.trim_end()) || words[at - 1].phrase_end;
+            let clause = if natural { 0.0 } else { 0.35 };
             (at, uneven + clause)
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -278,15 +295,19 @@ fn wrap(text: &str) -> String {
     format!("{}\n{}", words[..best.1].join(" "), words[best.1..].join(" "))
 }
 
-/// Sentences gathered into paragraphs: a new one starts after a pause, or when a
-/// paragraph has grown long enough
+/// Sentences gathered into paragraphs: a new one starts after a pause, or when the
+/// paragraph would grow longer than `PARAGRAPH_SECONDS` or too long to read
 fn paragraphs(sentences: &[Segment]) -> Vec<Segment> {
     const PAUSE: f64 = 1.5;
     const FULL: usize = 700;
     let mut out: Vec<Segment> = Vec::new();
     for sentence in sentences {
         match out.last_mut() {
-            Some(last) if sentence.start - last.end < PAUSE && last.text.len() < FULL => {
+            Some(last)
+                if sentence.start - last.end < PAUSE
+                    && sentence.end - last.start <= PARAGRAPH_SECONDS
+                    && last.text.len() < FULL =>
+            {
                 last.text.push(' ');
                 last.text.push_str(&sentence.text);
                 last.end = sentence.end;
@@ -332,7 +353,12 @@ mod tests {
         let step = (end - start) / list.len() as f64;
         list.iter()
             .enumerate()
-            .map(|(i, w)| Segment { start: start + i as f64 * step, end: start + (i + 1) as f64 * step, text: format!(" {w}") })
+            .map(|(i, w)| Segment {
+                start: start + i as f64 * step,
+                end: start + (i + 1) as f64 * step,
+                text: format!(" {w}"),
+                phrase_end: i + 1 == list.len(),
+            })
             .collect()
     }
 
@@ -398,7 +424,7 @@ mod tests {
     /// A phrase's time is shared out by its words' lengths
     #[test]
     fn words_share_their_phrase_time() {
-        let phrase = Segment { start: 10.0, end: 12.0, text: " Ya, betul sekali.".into() };
+        let phrase = Segment { start: 10.0, end: 12.0, text: " Ya, betul sekali.".into(), phrase_end: true };
         let words = words(&[phrase]);
         let texts: Vec<&str> = words.iter().map(|w| w.text.as_str()).collect();
         assert_eq!(texts, [" Ya,", " betul", " sekali."]);
@@ -408,12 +434,49 @@ mod tests {
         assert_eq!(sentences(&words)[0].text, "Ya, betul sekali.");
     }
 
+    /// Speech the model wrote without any punctuation (a voice-over over music): the
+    /// model's own phrases, exactly as it returned them for a 47 s promo video, still
+    /// give sentences, subtitles cut at phrase ends and paragraphs with their own
+    /// timestamps, instead of one paragraph at 0:00
+    #[test]
+    fn unpunctuated_speech_breaks_at_phrases() {
+        let phrase = |start: f64, end: f64, text: &str| Segment { start, end, text: text.into(), phrase_end: true };
+        let segments = [
+            phrase(0.00, 8.56, " need subtitles for your video 10 free minutes then a cue then a paywall so"),
+            phrase(8.56, 18.76, " annoying enough this is flip-file drop your video pick subtitles it listens and"),
+            phrase(18.76, 24.10, " writes down every word in 99 languages"),
+            phrase(24.10, 34.64, " meetings lectures voice notes straight to text no upload no cue no paywall all on"),
+            phrase(34.64, 42.52, " your computer on Mac Windows and Linux transcribe now in flip-file try it for"),
+            phrase(42.52, 44.68, " free"),
+        ];
+        let words = words(&segments);
+        assert!(words.last().unwrap().phrase_end && !words[0].phrase_end);
+        let sentences = sentences(&words);
+        assert!(sentences.len() >= 4, "{sentences:?}");
+        for s in &sentences {
+            assert!(s.end - s.start <= 16.0, "a sentence of {:.1} s: {}", s.end - s.start, s.text);
+        }
+
+        let md = markdown("promo", Some("English"), &sentences, 47.1);
+        let stamps: Vec<&str> = md.lines().filter_map(|l| l.strip_prefix("**[")?.split(']').next()).collect();
+        assert_eq!(stamps, ["0:00", "0:19", "0:35"], "{md}");
+        assert!(md.contains("**[0:19]** writes down every word"), "{md}");
+
+        // Every cue ends where one of the model's phrases ends, within the limits
+        let cues = cues(&words);
+        let ends: Vec<f64> = segments.iter().map(|s| s.end).collect();
+        for cue in &cues {
+            assert!(cue.text.chars().count() <= CUE_CHARS && cue.end - cue.start <= CUE_SECONDS + 1e-9, "{cue:?}");
+        }
+        assert!(cues.iter().filter(|c| ends.iter().any(|e| (e - c.end).abs() < 1e-6)).count() >= 5, "{cues:#?}");
+    }
+
     /// Languages written without spaces keep none
     #[test]
     fn joins_words_as_written() {
         let words = vec![
-            Segment { start: 0.0, end: 0.5, text: "今日は".into() },
-            Segment { start: 0.5, end: 1.0, text: "晴れです。".into() },
+            Segment { start: 0.0, end: 0.5, text: "今日は".into(), phrase_end: false },
+            Segment { start: 0.5, end: 1.0, text: "晴れです。".into(), phrase_end: true },
         ];
         assert_eq!(sentences(&words)[0].text, "今日は晴れです。");
     }
