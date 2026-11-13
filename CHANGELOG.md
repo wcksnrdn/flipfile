@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Transcribe: transcripts without punctuation came out as one paragraph at 0:00**: when
+  Whisper writes no punctuation at all (voice-overs over music often come out that way), a
+  whole recording became one sentence, so the Word, Markdown and TXT transcripts had a single
+  paragraph stamped 0:00. Sentences without a full stop now also end where one of Whisper's
+  phrases ends (once 6 s long), paragraphs span at most 20 s, and subtitles prefer to cut at
+  the end of a phrase.
+
 ### Changed
 
 - **AI Upscale: a higher size limit**: the result (the photo's pixels × 2² or 4²) could be at
