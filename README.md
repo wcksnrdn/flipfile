@@ -25,7 +25,7 @@ No uploads. No accounts. No waiting.
 
 <br>
 
-<img src="docs/media/hero.webp" width="100%" alt="flipfile on a Mac desktop: a photo is dragged onto the glass circle, the ring of formats opens, JPG is picked and the converted file appears next to the original">
+<img src="docs/media/hero.webp" width="100%" alt="flipfile intro: a HEIC photo is dragged onto the glass circle, the ring opens, Photo then JPG is picked, Done; then glass cards for HEIC to JPG, PDF to Word, Excel to PDF, Compress, Upscale 4×, Transcribe, AI Summary and Scan to Word; 75+ formats, 100% offline, no uploads; the flipfile logo">
 
 <br>
 
