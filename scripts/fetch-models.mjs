@@ -7,7 +7,8 @@
 //   They are published once as release assets of this repository, so builds don't need Python.
 // - Transcribe (src-tauri/src/platform/whisper.rs): OpenAI's Whisper `small` model in
 //   whisper.cpp's GGML format (5-bit weights), as published by the whisper.cpp project on
-//   Hugging Face, unchanged; the same file on every system.
+//   Hugging Face, unchanged; the same file on every system. With it Silero VAD (~1 MB),
+//   which finds the speech in a recording first, also as published there.
 //
 // Supply-chain protection, as for PDFium (fetch-pdfium.mjs): the models end up inside
 // every installer, so they are verified against SHA-256 hashes pinned below, twice:
@@ -67,6 +68,13 @@ const SETS = {
     size: 200 * 1024 * 1024,
     files: { "whisper-small.bin": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb" },
   },
+  vad: {
+    url: "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin",
+    archive: "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
+    file: "whisper-vad.bin",
+    size: 2 * 1024 * 1024,
+    files: { "whisper-vad.bin": "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987" },
+  },
   onnx: {
     url: `${RELEASE}/flipfile-models-onnx-2.tar.gz`,
     archive: "e74e913e3048851ff3d6e84a749902d2c2bf2d50d9e455708bf984385eb69cdb",
@@ -114,7 +122,7 @@ async function fetchSet(name, set) {
   }
 
   const limit = set.size ?? MAX_DOWNLOAD_BYTES;
-  console.log(set.file ? `Downloading the Whisper speech model (${name}, ~190 MB)…` : `Downloading the AI upscaling models (${VERSION}, ${name}, ~115 MB)…`);
+  console.log(set.file ? `Downloading ${set.file} (${name}, ~${Math.ceil(set.size / 1024 / 1024)} MB at most)…` : `Downloading the AI upscaling models (${VERSION}, ${name}, ~115 MB)…`);
   let res;
   try {
     res = await fetch(set.url, { redirect: "follow" });
@@ -144,7 +152,7 @@ async function fetchSet(name, set) {
     const partial = join(OUT_DIR, `${set.file}.partial`);
     writeFileSync(partial, archive);
     renameSync(partial, join(OUT_DIR, set.file));
-    console.log(`Whisper model ready and verified (sha256 ${archiveHash.slice(0, 16)}…): ${OUT_DIR}`);
+    console.log(`${set.file} ready and verified (sha256 ${archiveHash.slice(0, 16)}…): ${OUT_DIR}`);
     return;
   }
 
@@ -183,6 +191,7 @@ async function main() {
     await fetchSet("ONNX", SETS.onnx);
   }
   await fetchSet("GGML", SETS.whisper);
+  await fetchSet("Silero VAD", SETS.vad);
 }
 
 try {

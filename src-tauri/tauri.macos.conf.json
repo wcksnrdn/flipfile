@@ -13,11 +13,13 @@
       "models/faces.mlmodelc/": "models/faces.mlmodelc/",
       "models/faces-upscale.mlmodelc/": "models/faces-upscale.mlmodelc/",
       "models/whisper-small.bin": "models/whisper-small.bin",
+      "models/whisper-vad.bin": "models/whisper-vad.bin",
       "models/LICENSES.md": "models/LICENSES.md",
       "models/LICENSE-Real-ESRGAN.txt": "models/LICENSE-Real-ESRGAN.txt",
       "models/LICENSE-RestoreFormerPlusPlus.txt": "models/LICENSE-RestoreFormerPlusPlus.txt",
       "models/LICENSE-FaceUp.txt": "models/LICENSE-FaceUp.txt",
       "models/LICENSE-Whisper.txt": "models/LICENSE-Whisper.txt",
+      "models/LICENSE-Silero-VAD.txt": "models/LICENSE-Silero-VAD.txt",
       "models/LICENSE-whisper.cpp.txt": "models/LICENSE-whisper.cpp.txt"
     }
   }

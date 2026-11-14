@@ -44,6 +44,21 @@ and the project uses [Semantic Versioning](https://semver.org/).
   encoder quality in the file's own format, so PDFs and videos failed with an error and PNGs
   didn't get smaller. It is replaced by the compress levels above. The 4K preset left the
   ring (it stays in the tray menu).
+- **Transcribe's timestamps were seconds off, and far apart**: a Word or Markdown transcript of
+  a 47 s video had three timestamps, each in the middle of a sentence, and subtitles started
+  seconds early after a pause. Now:
+  - Every word is placed where it is heard (whisper.cpp's dynamic time warping), within a
+    third of a second of the sound; Whisper's own timestamps put words up to five seconds
+    early after a pause. It takes about a fifth longer on a CPU and half as long again on
+    Apple silicon's GPU (226 s of speech in 17 s instead of 11 s on an M1 Pro).
+  - Silence, music and noise are cut out first (Silero VAD, MIT, ~1 MB, bundled): Whisper no
+    longer writes "Thank you for watching." over a quiet room or repeats a sentence over a
+    song, and a recording with nobody speaking says so.
+  - Whisper is nudged to punctuate: voice-overs over music came out as one lowercase run
+    without a full stop, cut mid-sentence. They now come out in sentences, and every subtitle
+    and paragraph begins with one.
+  - A paragraph spans at most 12 s instead of 20 s (two or three sentences, each with its
+    timestamp), and timestamps round down, so seeking to one starts just before its words.
 
 ## [0.8.1] - 2026-11-13
 

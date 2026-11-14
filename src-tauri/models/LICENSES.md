@@ -51,11 +51,14 @@ down what is said with OpenAI's Whisper, on every system.
 | Model file | Model | Authors | Licence |
 |---|---|---|---|
 | `whisper-small.bin` | Whisper `small` (multilingual, 244 M parameters), in whisper.cpp's GGML format with 5-bit weights (`ggml-small-q5_1.bin`, unchanged) | Alec Radford, Jong Wook Kim, Tao Xu, Greg Brockman, Christine McLeavey, Ilya Sutskever (OpenAI) | MIT, [`LICENSE-Whisper.txt`](LICENSE-Whisper.txt) |
+| `whisper-vad.bin` | Silero VAD v6.2.0, the voice activity detector that finds the speech in a recording first, in whisper.cpp's GGML format (`ggml-silero-v6.2.0.bin`, unchanged) | Silero Team | MIT, [`LICENSE-Silero-VAD.txt`](LICENSE-Silero-VAD.txt) |
 
 - Whisper: https://github.com/openai/whisper (A. Radford et al., "Robust Speech
   Recognition via Large-Scale Weak Supervision", ICML 2023)
 - The GGML file: https://huggingface.co/ggerganov/whisper.cpp, verified by SHA-256
   (`scripts/fetch-models.mjs`)
+- Silero VAD: https://github.com/snakers4/silero-vad; the GGML file:
+  https://huggingface.co/ggml-org/whisper-vad, verified by SHA-256 the same way
 
 The engine is whisper.cpp with ggml (The ggml authors, MIT licence,
 [`LICENSE-whisper.cpp.txt`](LICENSE-whisper.cpp.txt)), compiled into flipfile through the
