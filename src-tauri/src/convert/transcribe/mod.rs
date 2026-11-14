@@ -98,13 +98,14 @@ const SENTENCE_PAUSE: f64 = 1.2;
 /// long (seconds): speech the model wrote without any punctuation (voice-overs over music
 /// often come out that way) would otherwise be one endless sentence
 const LONG_SENTENCE: f64 = 6.0;
-/// A paragraph of the transcript spans at most this long (seconds), so that its
-/// timestamps keep pointing at the right place in the recording
-const PARAGRAPH_SECONDS: f64 = 20.0;
+/// A paragraph of the transcript spans at most this long (seconds): two or three
+/// sentences, so that a timestamp is never far from what it points at
+const PARAGRAPH_SECONDS: f64 = 12.0;
 
-/// The words of the model's phrases, each with the time it most likely takes: the
-/// phrase's time shared out by the words' lengths (speech runs at a fairly even number
-/// of syllables a second). A language written without spaces keeps each phrase whole.
+/// The words of the model's phrases, each with its time. The model times its words
+/// itself; a phrase that comes whole has its time shared out by its words' lengths
+/// (speech runs at a fairly even number of syllables a second). A language written
+/// without spaces keeps each phrase whole.
 pub fn words(segments: &[Segment]) -> Vec<Segment> {
     let mut words = vec![];
     for segment in segments {
@@ -256,9 +257,10 @@ fn stamp(seconds: f64, separator: char) -> String {
     format!("{:02}:{:02}:{:02}{separator}{:03}", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000)
 }
 
-/// `M:SS` or `H:MM:SS`, for people
+/// `M:SS` or `H:MM:SS`, for people: rounded down, so that seeking to a paragraph's
+/// timestamp starts just before its first word
 fn clock(seconds: f64) -> String {
-    let s = seconds.round() as u64;
+    let s = seconds.max(0.0) as u64;
     if s >= 3600 {
         format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
     } else {
@@ -459,8 +461,8 @@ mod tests {
 
         let md = markdown("promo", Some("English"), &sentences, 47.1);
         let stamps: Vec<&str> = md.lines().filter_map(|l| l.strip_prefix("**[")?.split(']').next()).collect();
-        assert_eq!(stamps, ["0:00", "0:19", "0:35"], "{md}");
-        assert!(md.contains("**[0:19]** writes down every word"), "{md}");
+        assert_eq!(stamps, ["0:00", "0:08", "0:18", "0:34"], "{md}");
+        assert!(md.contains("**[0:18]** writes down every word"), "{md}");
 
         // Every cue ends where one of the model's phrases ends, within the limits
         let cues = cues(&words);
@@ -469,6 +471,31 @@ mod tests {
             assert!(cue.text.chars().count() <= CUE_CHARS && cue.end - cue.start <= CUE_SECONDS + 1e-9, "{cue:?}");
         }
         assert!(cues.iter().filter(|c| ends.iter().any(|e| (e - c.end).abs() < 1e-6)).count() >= 5, "{cues:#?}");
+    }
+
+    /// The same promo as the model writes it with its prompt: a timestamp every two or
+    /// three sentences, each paragraph starting with a sentence
+    #[test]
+    fn punctuated_speech_gets_a_stamp_every_few_sentences() {
+        let phrase = |start: f64, end: f64, text: &str| Segment { start, end, text: text.into(), phrase_end: true };
+        let segments = [
+            phrase(0.00, 7.64, " Need subtitles for your video? Ten free minutes, then a cue, then a paywall."),
+            phrase(7.64, 13.44, " So annoying. Enough, this is FlipFile."),
+            phrase(13.44, 21.60, " Drop your video, pick subtitles. It listens and writes down every word."),
+            phrase(21.60, 29.44, " In 99 languages. Meetings, lectures, voice notes, straight to text."),
+            phrase(30.48, 34.24, " No upload, no cue, no paywall."),
+            phrase(34.24, 38.48, " All on your computer, on Mac, Windows, and Linux."),
+            phrase(38.48, 46.24, " Transcribe, now in FlipFile. Try it for free."),
+        ];
+        let sentences = sentences(&words(&segments));
+        assert_eq!(sentences.len(), 12, "{sentences:#?}");
+        let md = markdown("promo", Some("English"), &sentences, 47.1);
+        let paragraphs: Vec<&str> = md.lines().filter(|l| l.starts_with("**[")).collect();
+        assert!(paragraphs.len() >= 4, "{md}");
+        for paragraph in &paragraphs {
+            let text = paragraph.split("** ").nth(1).unwrap();
+            assert!(text.starts_with(char::is_uppercase) && ends_sentence(text), "{md}");
+        }
     }
 
     /// Languages written without spaces keep none
@@ -544,7 +571,7 @@ mod tests {
     }
 
     /// `FLIPFILE_TRANSCRIBE=a.m4a:b.mp4 cargo test --profile bench --lib transcribes_files -- --ignored --nocapture`:
-    /// the subtitles of each file and how long they took
+    /// the subtitles and transcript of each file, and how long they took
     #[test]
     #[ignore]
     fn transcribes_files() {
@@ -561,6 +588,8 @@ mod tests {
                 transcript.language,
                 srt(&cues(&words(&transcript.segments)))
             );
+            let seconds = pcm.len() as f64 / whisper::SAMPLE_RATE as f64;
+            eprintln!("{}", markdown(path, transcript.language.as_deref(), &sentences(&words(&transcript.segments)), seconds));
         }
     }
 
