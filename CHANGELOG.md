@@ -6,6 +6,45 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Compress levels with a live size estimate (Option/Alt ring)**: holding ⌥ Option (Alt on
+  Windows) while dragging now shows **Light · Balanced · Strong · Extreme** for photos, PDFs,
+  videos and recordings, beside the size presets (50% · 1080p · 720p · Original). Pointing at
+  a level shows what it will make of the files before the drop (`4.2 MB → 610 KB`,
+  `−85% · Fine detail softens · max 1920 px`), and every level's slice shows its estimated
+  size.
+  - Photos: JPG/WebP/AVIF/HEIC keep their format at the level's quality (82/72/58/40) and
+    longest side (3200/1920/1280 px from Balanced); PNG/TIFF stay lossless at Light and
+    become JPG, or WebP when transparent, from Balanced on.
+  - PDFs (lopdf, MIT): the pictures inside are scaled to 200/150/110/72 dpi of the largest
+    page and re-encoded as JPEG, every stream is compressed and objects are packed into
+    object streams; text, fonts, vectors and layout are untouched. Masks, CMYK, JPEG 2000,
+    JBIG2 and fax pictures are kept. The result must open in PDFium with the same pages.
+  - Videos (MP4, H.264 + AAC): a bitrate under both the level's ceiling and a share of the
+    video's own, the shorter side capped at 1080/1080/720/480. ffmpeg when installed, else
+    AVFoundation on macOS (hardware encoder; a 47 s 1080p video in 2–8 s, estimates within
+    5%) and Media Foundation on Windows. Portrait videos stay portrait.
+  - Recordings (M4A AAC, or MP3 with ffmpeg): 160/128/96/48 kbps, mono at Extreme.
+  - Never larger than the original: a file that can't get smaller is copied and marked
+    "Already compact".
+  - Files being dragged over the window may now be read to measure them (never converted or
+    written next to before they are dropped).
+- **Notification bubbles beside the circle**: a bubble up and to the right of the circle (the
+  other way round at a screen's edge, following the circle when it moves) says what failed
+  and why, file by file, and what a compression gained and cost: `4.4 MB → 610 KB −86%`,
+  **Gains** (3.8 MB saved, fits 1 MB upload limits) and **Costs** (now a JPG, fine detail
+  softens, max 1920 px), with **Show in Finder/Explorer**. It never takes the focus, sizes
+  its window to itself, stays while the pointer rests on it and goes after 7 s (9 s for
+  failures).
+
+### Fixed
+
+- **The Option/Alt ring's Compress failed for anything but photos**: it only lowered the
+  encoder quality in the file's own format, so PDFs and videos failed with an error and PNGs
+  didn't get smaller. It is replaced by the compress levels above. The 4K preset left the
+  ring (it stays in the tray menu).
+
 ## [0.8.1] - 2026-11-13
 
 ### Fixed

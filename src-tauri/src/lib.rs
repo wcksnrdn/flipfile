@@ -4,6 +4,7 @@ mod pdf; // low-level PDF writing and PDFium rendering
 mod platform; // OS integration: clipboard, glass, keys, codecs, tray
 mod state; // app state: grants, history, settings
 mod summary; // AI summaries with the on-device model (Apple Intelligence)
+mod toast; // notification bubbles beside the circle
 
 use std::sync::Mutex;
 
@@ -56,16 +57,24 @@ pub fn run() {
         )
         .manage(grants::Grants::default())
         .manage(summary::Summaries::default())
+        .manage(toast::Toasts::default())
         // Record dropped files before the UI is told about the drop (see grants.rs).
         // Tauri runs these handlers synchronously right after emitting the event, so
         // the grant is always in place before the UI can call convert_batch.
         .on_window_event(|window, event| match event {
+            // Files dragged over the window may be measured for the compress ring's
+            // estimates before they are dropped (see grants.rs)
+            tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Enter { paths, .. }) => {
+                window.state::<grants::Grants>().hover(paths.iter().cloned());
+            }
             tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
                 window.state::<grants::Grants>().replace(paths.iter().cloned());
                 convert::warm_up(paths);
             }
             // The system switched between light and dark: swap the app icon to match
             tauri::WindowEvent::ThemeChanged(theme) => appearance::apply(window.app_handle(), *theme),
+            // The notification bubble stays by the circle
+            tauri::WindowEvent::Moved(_) if window.label() == "main" => toast::follow(window.app_handle()),
             _ => {}
         })
         .setup(|app| {
@@ -92,6 +101,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             convert::convert_batch,
+            convert::compress::estimate::compress_estimate,
             clipboard::read_clipboard,
             keys::option_key_down,
             tray::settings_summary,
@@ -108,7 +118,11 @@ pub fn run() {
             summary::summary_close,
             summary::summary_copy,
             summary::summary_save,
-            summary::summary_settings
+            summary::summary_settings,
+            toast::toast_show,
+            toast::toast_current,
+            toast::toast_fit,
+            toast::toast_close
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

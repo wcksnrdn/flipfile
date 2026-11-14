@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-toast-close"
+description = "Enables the toast_close command without any pre-configured scope."
+commands.allow = ["toast_close"]
+
+[[permission]]
+identifier = "deny-toast-close"
+description = "Denies the toast_close command without any pre-configured scope."
+commands.deny = ["toast_close"]

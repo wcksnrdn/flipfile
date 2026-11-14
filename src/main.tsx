@@ -11,12 +11,19 @@ import "@fontsource/poppins/latin-600.css";
 // its code only loads there
 const SummaryPanel = lazy(() => import("./SummaryPanel"));
 const isSummaryPanel = getCurrentWindow().label === "summary";
+// The notification bubble likewise (src-tauri/src/toast.rs)
+const ToastBubble = lazy(() => import("./ToastBubble"));
+const isToast = getCurrentWindow().label === "toast";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     {isSummaryPanel ? (
       <Suspense fallback={null}>
         <SummaryPanel />
+      </Suspense>
+    ) : isToast ? (
+      <Suspense fallback={null}>
+        <ToastBubble />
       </Suspense>
     ) : (
       <App />

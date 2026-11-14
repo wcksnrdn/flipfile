@@ -15,6 +15,7 @@
     "core:window:allow-set-resizable",
     "opener:allow-reveal-item-in-dir",
     "allow-convert-batch",
+    "allow-compress-estimate",
     "allow-read-clipboard",
     "allow-option-key-down",
     "allow-settings-summary",
@@ -25,6 +26,7 @@
     "allow-summary-warm",
     "allow-summarize",
     "allow-summary-show",
+    "allow-toast-show",
     "updater:default",
     "process:default"
   ]
