@@ -321,17 +321,22 @@ const VIDEO_TRANSCRIBE = alignedSubRing(
   "video-tools"
 );
 
-// ─── Size / quality presets (Option/Alt ring, unchanged) ────────────────
-// Shown while Option/Alt is held during a drag. Ids match the presets in settings.rs.
+// ─── Option/Alt ring: compress levels and size presets ───────────────────
+// Shown while Option/Alt is held during a drag. The levels compress any photo, PDF, video
+// or recording (src-tauri/src/convert/compress); their slices show the estimated result
+// once it is known. The size presets keep the photo's format; ids match settings.rs.
+export const COMPRESS_LEVELS = ["cmp-light", "cmp-balanced", "cmp-strong", "cmp-extreme"];
 const SIZE = ring(
   "size",
   [
-    { id: "original", label: "Original", sub: "size", preset: true },
-    { id: "half", label: "50%", preset: true },
-    { id: "4k", label: "4K", sub: "3840 px", preset: true },
+    { id: "cmp-light", label: "Light", sub: "subtle" },
+    { id: "cmp-balanced", label: "Balanced", sub: "smaller" },
+    { id: "cmp-strong", label: "Strong", sub: "much smaller" },
+    { id: "cmp-extreme", label: "Extreme", sub: "tiny" },
+    { id: "half", label: "50%", sub: "size", preset: true },
     { id: "1080p", label: "1080p", sub: "1920 px", preset: true },
     { id: "720p", label: "720p", sub: "1280 px", preset: true },
-    { id: "compress", label: "Compress", sub: "smaller", preset: true },
+    { id: "original", label: "Original", sub: "size", preset: true },
   ],
   -Math.PI / 2
 );
@@ -367,6 +372,10 @@ const CUSTOM_LABELS: Record<string, string> = {
   "up-4x": "Upscale 4×",
   "gif-anim": "Animated GIF",
   "cmp-auto": "Auto Compress",
+  "cmp-light": "Compress · Light",
+  "cmp-balanced": "Compress · Balanced",
+  "cmp-strong": "Compress · Strong",
+  "cmp-extreme": "Compress · Extreme",
   "cmp-1m": "Max 1 MB",
   "cmp-500k": "Max 500 KB",
   "cmp-200k": "Max 200 KB",

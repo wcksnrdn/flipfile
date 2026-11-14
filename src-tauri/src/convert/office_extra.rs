@@ -2009,7 +2009,7 @@ pub(super) fn blocks_to_docx(blocks: &[DocBlock]) -> Result<Vec<u8>, String> {
     Ok(buf.into_inner())
 }
 
-fn blocks_to_pdf(blocks: &[DocBlock]) -> Result<Vec<u8>, String> {
+pub(super) fn blocks_to_pdf(blocks: &[DocBlock]) -> Result<Vec<u8>, String> {
     let mut markup = String::from(
         r#"#set page(paper: "a4", margin: 2cm)
 #set text(size: 11pt)

@@ -34,6 +34,7 @@ pub fn toggle_window(app: &AppHandle) {
     let Some(w) = app.get_webview_window("main") else { return };
     if w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false) {
         let _ = w.hide();
+        crate::toast::hide(app);
     } else {
         let _ = w.show();
         let _ = w.set_focus();

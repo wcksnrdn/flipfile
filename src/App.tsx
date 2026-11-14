@@ -5,12 +5,14 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { compressToast, failureToast, formatBytes, type ToastData } from "./toast";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { checkForUpdate, type UpdateState } from "./updater";
 import UpdateDialog from "./UpdateDialog";
 import { DEBUG_DROP, DebugOverlay, type DropDebugInfo } from "./DebugOverlay";
 import WorkshopPanel, { MAX_RING_SLOTS } from "./WorkshopPanel";
 import {
+  COMPRESS_LEVELS,
   CORE_OPEN_SCALE,
   CORE_SIZE,
   HOVER_POP,
@@ -66,6 +68,16 @@ type Picking = {
 
 type Pasted = { kind: "files"; paths: string[] } | { kind: "image"; path: string } | { kind: "empty" };
 
+/** One compress level's live estimate (src-tauri/src/convert/compress/estimate.rs) */
+type Estimate = {
+  token: number;
+  id: string;
+  before: number;
+  after: number | null;
+  note: string;
+  approximate: boolean;
+};
+
 type BatchResult = {
   outputs: string[];
   errors: string[];
@@ -102,8 +114,6 @@ const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 /
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-const formatBytes = (n: number) =>
-  n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : n >= 1e3 ? `${Math.round(n / 1e3)} KB` : `${n} B`;
 
 // Option/Alt presets: macOS and Windows only (see src-tauri/src/keys.rs)
 const IS_MAC = /Mac/i.test(navigator.userAgent);
@@ -200,6 +210,11 @@ export default function App() {
   const [preset, setPreset] = useState<string | null>(null);
   const presetRef = useRef<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  // The compress levels' estimates for the files in hand, and which files they are for
+  const [estimates, setEstimates] = useState<Record<string, Estimate>>({});
+  const estimateToken = useRef(0);
+  const estimateKey = useRef("");
+  const handPaths = useRef<string[]>([]);
   const altRef = useRef(false);
   const ringBeforeAlt = useRef<RingId>(built.entryRing);
   const lastPoint = useRef<Point | null>(null);
@@ -242,6 +257,21 @@ export default function App() {
   const choosePreset = (id: string | null) => {
     presetRef.current = id;
     setPreset(id);
+  };
+
+  // Works out what each compress level makes of the files in hand, once per set of files
+  const requestEstimates = () => {
+    const paths = handPaths.current;
+    const key = paths.join("\n");
+    if (paths.length === 0 || key === estimateKey.current) return;
+    estimateKey.current = key;
+    const token = ++estimateToken.current;
+    setEstimates({});
+    const onEstimate = new Channel<Estimate>();
+    onEstimate.onmessage = (e) => {
+      if (e.token === estimateToken.current) setEstimates((prev) => ({ ...prev, [e.id]: e }));
+    };
+    invoke("compress_estimate", { paths, token, onEstimate }).catch(() => {});
   };
 
   const switchRing = (id: RingId) => {
@@ -508,6 +538,7 @@ export default function App() {
     setStatus({ title: "Reading", hint: "Apple Intelligence", tone: "busy", ai: true });
     invoke("summarize", { paths, toDownloads }).catch((e) => {
       setStatus({ title: "Failed", hint: String(e), tone: "err" });
+      showBubble(failureToast([String(e)], paths.length, []));
       resetTimer.current = window.setTimeout(() => setStatus(null), 3500);
     });
   };
@@ -519,7 +550,15 @@ export default function App() {
     const label = same ? (labelOf(preset ?? "") ?? "Done") : (labelOf(format) ?? format.toUpperCase()) + presetLabel;
     const many = paths.length > 1;
     setStatus({
-      title: many ? `0/${paths.length}` : format.startsWith("up-") ? "Upscaling" : format.startsWith("tr-") ? "Listening" : "Converting",
+      title: many
+        ? `0/${paths.length}`
+        : format.startsWith("up-")
+          ? "Upscaling"
+          : format.startsWith("tr-")
+            ? "Listening"
+            : COMPRESS_LEVELS.includes(format)
+              ? "Compressing"
+              : "Converting",
       hint: `→ ${label}`,
       tone: "busy",
       progress: many ? 0 : undefined,
@@ -558,7 +597,14 @@ export default function App() {
     const sizes =
       (same || preset === "compress" || format.startsWith("cmp-") || format === "vid-compress") &&
       bytes_before > 0;
-    const done = sizes
+    // A compress level: the sizes and the saving, and a format change if there was one
+    const level = COMPRESS_LEVELS.includes(format) && bytes_before > 0;
+    const formatChange = note?.match(/^[A-Z0-9]+ → [A-Z0-9]+/)?.[0];
+    const done = level
+      ? bytes_after >= bytes_before
+        ? `Already compact · ${formatBytes(bytes_before)}`
+        : `${formatBytes(bytes_before)} → ${formatBytes(bytes_after)} · −${Math.round((1 - bytes_after / bytes_before) * 100)}%${formatChange ? ` · ${formatChange}` : ""}`
+      : sizes
       ? `${note ? `${note} · ` : bytes_after >= bytes_before ? "Already compact · " : ""}${formatBytes(bytes_before)} → ${formatBytes(bytes_after)}`
       : merged
       ? `${plural(paths.length - errors.length, "image")} → 1 PDF${presetLabel}`
@@ -584,7 +630,26 @@ export default function App() {
     }
 
     resetTimer.current = window.setTimeout(() => setStatus(null), outputs.length > 0 ? 6000 : 3500);
+
+    // The bubble beside the circle: what failed and why, or what a compression gained and cost
+    const compressing =
+      COMPRESS_LEVELS.includes(format) ||
+      format.startsWith("cmp-") ||
+      format === "vid-compress" ||
+      (same && (preset === "compress" || !!preset));
+    if (errors.length > 0) {
+      showBubble(failureToast(errors, paths.length, outputs));
+    } else if (compressing && bytes_before > 0) {
+      const title = COMPRESS_LEVELS.includes(format)
+        ? `Compressed · ${labelOf(format)?.replace("Compress · ", "")}`
+        : same
+          ? (labelOf(preset ?? "") ?? "Resized")
+          : (labelOf(format) ?? "Compressed");
+      showBubble(compressToast({ title, format, before: bytes_before, after: bytes_after, note, files: outputs.length, outputs }));
+    }
   };
+
+  const showBubble = (toast: ToastData) => invoke("toast_show", { toast }).catch(() => {});
 
   // Drag & drop file
   useEffect(() => {
@@ -612,6 +677,7 @@ export default function App() {
           refreshScale();
           closeRing(); // a drag replaces any pending paste
           setDragging(true);
+          handPaths.current = p.paths;
           setFileCount(p.paths.length);
           setMergeable(p.paths.length > 1 && p.paths.every((path) => !OFFICE_FILE.test(path)));
           // It may be headed for Summary: the model loads while the user aims
@@ -651,6 +717,7 @@ export default function App() {
       altRef.current = down;
       if (down) ringBeforeAlt.current = ringRef.current === "size" ? entryRingRef.current : ringRef.current;
       switchRing(down ? "size" : ringBeforeAlt.current);
+      if (down) requestEstimates();
       lastIndex.current = null;
       // Re-evaluate where the cursor already is, so nothing waits for the next mouse move
       setHover(lastPoint.current ? resolve("over", lastPoint.current) : null);
@@ -797,9 +864,11 @@ export default function App() {
     if (pasted.kind === "files") {
       setFileCount(pasted.paths.length);
       setMergeable(pasted.paths.length > 1 && pasted.paths.every((path) => !OFFICE_FILE.test(path)));
+      handPaths.current = pasted.paths;
       setPicking({ paths: pasted.paths, image: false });
     } else {
       setFileCount(1);
+      handPaths.current = [pasted.path];
       setPicking({ paths: [pasted.path], image: true });
     }
   };
@@ -904,6 +973,13 @@ export default function App() {
     else runBatch(paths, format, image, chosen);
   };
 
+  // A compress level's slice shows its estimated result once known
+  const subOf = (item: { id: string; sub?: string }) => {
+    const e = estimates[item.id];
+    if (!e || e.after === null || !COMPRESS_LEVELS.includes(item.id)) return item.sub;
+    return e.after >= e.before ? "compact" : `${e.approximate ? "≈" : ""}${formatBytes(e.after)}`;
+  };
+
   const hoveredLabel = hovered ? labelOf(hovered) : undefined;
   // The lobby names its rooms; an action placed in it (AI Summary) speaks for itself
   const hoveredAction = !!hovered && !built.rings[ringId].items.find((i) => i.id === hovered)?.nav;
@@ -933,11 +1009,25 @@ export default function App() {
       hint = "Drop on a slice";
       badge = "Workshop";
     }
+  } else if (open && ringId === "size" && hovered && COMPRESS_LEVELS.includes(hovered)) {
+    // A compress level: what it makes of the files, and what that costs
+    const level = labelOf(hovered)?.replace("Compress · ", "") ?? "";
+    const e = estimates[hovered];
+    if (e && e.after !== null && e.before > 0) {
+      const saved = Math.round((1 - e.after / e.before) * 100);
+      const approx = e.approximate ? "≈ " : "";
+      title = saved > 0 ? `${formatBytes(e.before)} → ${approx}${formatBytes(e.after)}` : formatBytes(e.before);
+      hint = saved > 0 ? `−${saved}% · ${e.note}` : "Already compact";
+    } else {
+      title = level;
+      hint = e ? e.note : "Working out the size…";
+    }
+    badge = `Compress: ${level}`;
   } else if (open && ringId === "size") {
-    title = presetLabel ?? "Size";
+    title = presetLabel ?? "Compress or resize";
     hint = presetLabel
       ? `${dragging ? "Drop" : "Click"}: same format, or release ${ALT_KEY}`
-      : "Point to a size";
+      : "Point to a level or a size";
     badge = null;
   } else if (open) {
     const verb = dragging ? "Release" : "Click";
@@ -1099,7 +1189,7 @@ export default function App() {
                       </text>
                       {item.sub && (
                         <text className="segment-sub" x={lx} y={ly + 8}>
-                          {item.sub}
+                          {subOf(item)}
                         </text>
                       )}
                     </g>

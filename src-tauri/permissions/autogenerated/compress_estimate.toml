@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-compress-estimate"
+description = "Enables the compress_estimate command without any pre-configured scope."
+commands.allow = ["compress_estimate"]
+
+[[permission]]
+identifier = "deny-compress-estimate"
+description = "Denies the compress_estimate command without any pre-configured scope."
+commands.deny = ["compress_estimate"]

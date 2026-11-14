@@ -21,7 +21,7 @@ export function setAiSupport(supported: boolean) {
 }
 export const hasAiSupport = () => aiSupport;
 
-export type CatalogCategory = "photo" | "photo-tools" | "office" | "data" | "video" | "music" | "speech" | "nav";
+export type CatalogCategory = "photo" | "photo-tools" | "compress" | "office" | "data" | "video" | "music" | "speech" | "nav";
 
 export type CatalogEntry = Item & {
   title: string;
@@ -32,6 +32,7 @@ export const CATALOG_CATEGORIES: { id: "all" | CatalogCategory; label: string }[
   { id: "all", label: "All" },
   { id: "photo", label: "Photo" },
   { id: "photo-tools", label: "Photo Tools" },
+  { id: "compress", label: "Compress" },
   { id: "office", label: "Office & Docs" },
   { id: "data", label: "Data & Sheets" },
   { id: "video", label: "Video" },
@@ -96,6 +97,12 @@ export const CATALOG: CatalogEntry[] = [
   { id: "flip-h", label: "Flip", sub: "horiz", title: "Flip Horizontal", category: "photo-tools" },
   { id: "flip-v", label: "Flip", sub: "vert", title: "Flip Vertical", category: "photo-tools" },
   { id: "grayscale", label: "B&W", sub: "gray", title: "Convert to Grayscale (B&W)", category: "photo-tools" },
+
+  // ─── Compress levels (any photo, PDF, video or recording) ──────────────────
+  { id: "cmp-light", label: "Light", sub: "compress", title: "Compress · Light (looks the same)", category: "compress" },
+  { id: "cmp-balanced", label: "Balanced", sub: "compress", title: "Compress · Balanced", category: "compress" },
+  { id: "cmp-strong", label: "Strong", sub: "compress", title: "Compress · Strong", category: "compress" },
+  { id: "cmp-extreme", label: "Extreme", sub: "compress", title: "Compress · Extreme (smallest)", category: "compress" },
 
   // ─── Office & Documents ───────────────────────────────────────────────────
   { id: "pdf", label: "PDF", title: "PDF Document (or Merge Photos)", category: "office" },

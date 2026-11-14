@@ -13,6 +13,7 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "convert_batch",
+            "compress_estimate",
             "read_clipboard",
             "option_key_down",
             "settings_summary",
@@ -30,6 +31,10 @@ fn main() {
             "summary_copy",
             "summary_save",
             "summary_settings",
+            "toast_show",
+            "toast_current",
+            "toast_fit",
+            "toast_close",
         ]),
     ))
     .expect("failed to run tauri-build");

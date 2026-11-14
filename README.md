@@ -91,7 +91,7 @@ No uploads. No accounts. No waiting.
 <td width="50%" valign="top">
 
 **Resize and compress**<br>
-<sub>Hold ⌥ Option (Alt on Windows) while dragging for 4K, 1080p, 720p, 50% or a smaller file.</sub>
+<sub>Hold ⌥ Option (Alt on Windows) while dragging: pick how hard to compress any photo, PDF, video or recording, and see the size it will be before you let go.</sub>
 
 <img src="docs/media/compress.webp" width="100%" alt="Holding Option shows the size ring; Compress makes the photo 85% smaller">
 
@@ -419,12 +419,22 @@ When the defaults are changed, the circle shows a small badge such as `1080p · 
 |---|---|---|---|
 | Key | **⌥ Option** | **Alt** | *not available* (use the tray menu) |
 
-While the key is held, the ring shows **Original · 50% · 4K · 1080p · 720p · Compress**. Then either:
+While the key is held, the ring shows four compress levels, **Light · Balanced · Strong · Extreme**, and the size presets **50% · 1080p · 720p · Original**.
 
-- **Drop right on a preset** to keep each file's own format: `photo.jpg` → `photo_compressed.jpg` or `photo_resized.jpg`; or
-- **Point at a preset, release the key, then drop on a format** to resize/compress *and* convert (for example, 1080p + WEBP).
+**Compress levels** work on photos, PDFs, videos and recordings. Point at a level and the circle shows what it will make of your files before you drop, for example `4.2 MB → 610 KB` and `−85% · Fine detail softens · max 1920 px`; each level's slice shows its estimated size too. Photos and PDFs are measured by really compressing them in memory; videos and recordings are worked out from their length (`≈`).
 
-When resizing or compressing in the same format, the result shows the size change, for example `2.4 MB → 640 KB`. **Compress** lowers JPG/AVIF quality to 65%, uses maximum (still lossless) compression for PNG and lossless Deflate compression for TIFF. BMP has no real compression, so it stays as small as BMP gets (24-bit) and flipfile says so.
+| Level | Photos | PDFs (pictures inside; text stays sharp and selectable) | Videos (MP4) | Recordings (M4A) |
+|---|---|---|---|---|
+| **Light** | Looks the same | Pictures at 200 dpi | Looks the same, up to 1080p | 160 kbps |
+| **Balanced** | Hard to tell apart | Pictures at 150 dpi | Slightly softer, up to 1080p | 128 kbps |
+| **Strong** | Fine detail softens, max 1920 px | Pictures at 110 dpi | Softer, 720p | 96 kbps |
+| **Extreme** | Visibly soft, max 1280 px | Pictures at 72 dpi | Blocky in motion, 480p | 48 kbps mono |
+
+JPG, WebP, AVIF and HEIC photos keep their format; PNG and TIFF stay lossless at Light and become JPG (WebP when transparent) from Balanced on, and flipfile says so (`PNG → JPG`). A result is never larger than the original: if a file is already as compact as it gets, you get a copy and "Already compact". Results are saved next to the original as `name_compressed.ext`.
+
+After the drop, a bubble beside the circle sums it up: the sizes, the saving, the **gains** (space saved, and which upload or attachment limit it now fits) and the **costs** (format change, softer detail, smaller picture), with a button to show the result. Failed files get a bubble too, saying why each one failed.
+
+**Size presets** resize photos in their own format: drop right on one (`photo.jpg` → `photo_resized.jpg`), or point at it, release the key, then drop on a format to resize *and* convert (for example, 1080p + WEBP).
 
 > **Windows note:** holding Alt while dragging from File Explorer normally means "create shortcut". flipfile always reads the dragged files and never moves, links or changes the originals.
 
@@ -476,7 +486,7 @@ On macOS the icon adapts to light and dark menu bars and clicking it opens the m
 | **⌘⇧K** / **Ctrl+Shift+K** | Show / hide flipfile from anywhere (global) |
 | **⌘,** / **Ctrl+,** | Open / close the Ring Workshop |
 | **⌘V** / **Ctrl+V** | Paste an image or copied files |
-| **⌥ Option** / **Alt** *(hold while dragging)* | Resize & compress presets |
+| **⌥ Option** / **Alt** *(hold while dragging)* | Compress levels (with the size they'll give) & resize presets |
 | **Esc** | Cancel a paste or close the Ring Workshop |
 | **⌘Q** / **Ctrl+Q** | Quit |
 
@@ -640,7 +650,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 |---|---|---|---|
 | HEIC / AVIF input | Built in (ImageIO) | Needs the free **HEIF Image Extensions** (and **AV1 Video Extension** for AVIF) from the Microsoft Store; flipfile tells you if they're missing | Not supported yet |
 | AVIF output | macOS's encoder (ImageIO), rav1e before macOS 14 | rav1e (built in) | rav1e (built in) |
-| ⌥ / Alt presets | ✓ | ✓ | Tray menu only |
+| ⌥ / Alt compress ring | ✓ (videos and recordings built in) | ✓ (videos and recordings built in) | Tray menu only |
 | Glass effect | Native Liquid Glass (macOS 26+), blur on older versions | CSS glass | CSS glass |
 | Tray click | Opens menu | Left: show/hide · Right: menu | Menu only |
 | Dock / taskbar icon | ✓ | ✓ | ✓ |

@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "toast",
+  "description": "The notification bubble: shows what the circle sent, sizes itself to it, reveals the result in the file manager and closes.",
+  "windows": ["toast"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "opener:allow-reveal-item-in-dir",
+    "allow-toast-current",
+    "allow-toast-fit",
+    "allow-toast-close"
+  ]
+}
