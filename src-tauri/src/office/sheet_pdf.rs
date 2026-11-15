@@ -316,10 +316,26 @@ fn used_range(sheet: &Sheet, styles: &[Style]) -> Option<Range> {
             grow(m.2, m.3);
         }
     }
-    for p in &sheet.pictures {
-        grow(p.from.0, p.from.1);
-        if let Some(to) = p.to {
-            grow(to.0, to.1.saturating_sub(if to.3 == 0.0 { 1 } else { 0 }));
+    let anchors = sheet.pictures.iter().map(|p| (p.from, p.to, p.size)).chain(sheet.drawn.iter().map(|d| (d.anchor().from, d.anchor().to, d.anchor().size)));
+    for (from, to, size) in anchors {
+        grow(from.0, from.1);
+        match to {
+            Some(to) => grow(to.0.saturating_sub(if to.2 == 0.0 { 1 } else { 0 }), to.1.saturating_sub(if to.3 == 0.0 { 1 } else { 0 })),
+            None => {
+                // anchored by its size: the cell its bottom-right corner reaches
+                let (mut c, mut x) = (from.1, size.0 + from.3);
+                while x > sheet.col_width(c) && c < from.1 + 500 {
+                    x -= sheet.col_width(c).max(1.0);
+                    c += 1;
+                }
+                let (mut r, mut y) = (from.0, size.1 + from.2);
+                let row_h = |r: u32| sheet.row_heights.get(&r).copied().unwrap_or(sheet.default_row_height).max(1.0);
+                while y > row_h(r) && r < from.0 + 2000 {
+                    y -= row_h(r);
+                    r += 1;
+                }
+                grow(r, c);
+            }
         }
     }
     drop(grow);
@@ -437,6 +453,25 @@ fn heading_rows(sheet: &Sheet, styles: &[Style], range: Range) -> Option<(u32, u
 
 // ---------------------------------------------------------------------------
 // Pages
+
+/// Whether anything prints on a page: a cell with a value, fill or border, or a picture,
+/// chart or shape starting on it
+fn has_content(sheet: &Sheet, styles: &[Style], page: &Page) -> bool {
+    let (r1, r2, c1, c2) = (page.rows.0, page.rows.1, page.cols.0, page.cols.1);
+    let inside = |r: u32, c: u32| r >= r1 && r <= r2 && c >= c1 && c <= c2;
+    let cells = sheet.cells.range((r1, 0)..=(r2, u32::MAX)).any(|(&(_, c), cell)| {
+        if c < c1 || c > c2 {
+            return false;
+        }
+        let st = &styles[cell.style];
+        let b = &st.borders;
+        cell.value.is_some() || st.fill.is_some() || b.left.is_some() || b.right.is_some() || b.top.is_some() || b.bottom.is_some()
+    });
+    cells
+        || sheet.merges.iter().any(|m| inside(m.0, m.1))
+        || sheet.pictures.iter().any(|p| inside(p.from.0, p.from.1))
+        || sheet.drawn.iter().any(|d| inside(d.anchor().from.0, d.anchor().from.1))
+}
 
 struct Page {
     rows: (u32, u32),
@@ -613,6 +648,11 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                     pages.push(Page { rows: *rb, cols: *cb });
                 }
             }
+        }
+        // a page with nothing on it (rows a drawing's size only seemed to reach) is left out
+        let mut pages: Vec<Page> = pages.into_iter().filter(|pg| has_content(sheet, &wb.styles, pg)).collect();
+        if pages.is_empty() {
+            pages.push(Page { rows: (range.0, range.2), cols: (range.1, range.3) });
         }
         plans.push(Planned { sheet, grid, pages, scale, page_size, titles, merged });
     }
@@ -884,6 +924,48 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                 let offset_rows: f32 = rows.iter().take_while(|&&r| r < page.rows.0).map(|&r| grid.h(r)).sum();
                 let y_on_page = offset_rows + (sy - page_y.0);
                 let _ = writeln!(out, "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, image({}, width: {:.2}pt, height: {:.2}pt, fit: \"stretch\"))", px(sx), py(y_on_page), typst_str(name), w * s, h * s);
+            }
+            // 5b. charts and shapes, placed like pictures
+            for d in &sheet.drawn {
+                let a = d.anchor();
+                let (fr, fc, froff, fcoff) = a.from;
+                if fr < grid.range.0 || fc < grid.range.1 || fr > grid.range.2 + 1 || fc > grid.range.3 + 1 {
+                    continue;
+                }
+                let sx = grid.xs.get((fc - grid.range.1) as usize).copied().unwrap_or(0.0) + fcoff;
+                let sy = grid.ys.get((fr - grid.range.0) as usize).copied().unwrap_or(0.0) + froff;
+                let (w, h) = match a.to {
+                    Some((tr, tc, troff, tcoff)) => {
+                        let ex = grid.xs.get((tc.max(grid.range.1) - grid.range.1) as usize).copied().unwrap_or(*grid.xs.last().unwrap()) + tcoff;
+                        let ey = grid.ys.get((tr.max(grid.range.0) - grid.range.0) as usize).copied().unwrap_or(*grid.ys.last().unwrap()) + troff;
+                        ((ex - sx).max(1.0), (ey - sy).max(1.0))
+                    }
+                    None => a.size,
+                };
+                let page_x = (grid.x(page.cols.0), grid.x(page.cols.1 + 1));
+                let page_y = (grid.y(page.rows.0), grid.y(page.rows.1 + 1));
+                if sx < page_x.0 - 0.5 || sx >= page_x.1 || sy < page_y.0 - 0.5 || sy >= page_y.1 {
+                    continue;
+                }
+                let offset_rows: f32 = rows.iter().take_while(|&&r| r < page.rows.0).map(|&r| grid.h(r)).sum();
+                let (x, y) = (px(sx), py(offset_rows + (sy - page_y.0)));
+                match d {
+                    super::xlsx::Drawn::Chart(_, chart) => {
+                        let body = super::chart::markup(chart, w, h, sep);
+                        let _ = writeln!(
+                            out,
+                            "#place(top + left, dx: {x:.2}pt, dy: {y:.2}pt, scale(x: {pc:.3}%, y: {pc:.3}%, origin: top + left, reflow: true, box(width: {w:.2}pt, height: {h:.2}pt, clip: true)[\n{body}]))",
+                            pc = s * 100.0
+                        );
+                    }
+                    super::xlsx::Drawn::Shapes(_, shapes) => {
+                        for sh in shapes {
+                            let [fx, fy, fw, fh] = sh.frac;
+                            let markup = super::drawing::shape_markup(sh, fw * w * s, fh * h * s, s);
+                            let _ = writeln!(out, "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, {markup})", x + fx * w * s, y + fy * h * s);
+                        }
+                    }
+                }
             }
             // 6. header and footer
             let number = first_page + pi;
@@ -1179,6 +1261,22 @@ fn picture_bytes(data: &[u8], ext: &str) -> (Vec<u8>, &'static str) {
 
 /// Workbook -> PDF bytes with the built-in engine
 pub fn to_pdf(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Vec<u8>, String> {
+    match typeset_workbook(wb, sep, file_name) {
+        Ok(pdf) => Ok(pdf),
+        // a chart or shape this engine draws wrongly must not cost the whole workbook
+        Err(e) if wb.sheets.iter().any(|s| !s.drawn.is_empty()) => {
+            eprintln!("[flipfile] Excel -> PDF: retrying without charts and shapes ({e})");
+            let mut plain = Workbook { sheets: wb.sheets.clone(), styles: wb.styles.clone(), date1904: wb.date1904 };
+            for s in &mut plain.sheets {
+                s.drawn.clear();
+            }
+            typeset_workbook(&plain, sep, file_name)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn typeset_workbook(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Vec<u8>, String> {
     let printed = print(wb, sep, file_name)?;
     // Typeset in runs of 4 pages, side by side, into one PDF: measured best (8 pages per
     // run is slower, and a whole workbook at once needs twice the memory and time)

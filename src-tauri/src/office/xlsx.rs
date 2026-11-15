@@ -164,6 +164,30 @@ pub struct Picture {
     pub ext: String,
 }
 
+/// Where a drawing object sits: top-left (row, col, row offset pt, col offset pt), the
+/// same for its bottom-right corner (two-cell anchors), and its size in points
+#[derive(Clone, Debug)]
+pub struct Anchor {
+    pub from: (u32, u32, f32, f32),
+    pub to: Option<(u32, u32, f32, f32)>,
+    pub size: (f32, f32),
+}
+
+/// A chart or shapes of the drawing layer
+#[derive(Clone, Debug)]
+pub enum Drawn {
+    Chart(Anchor, Box<super::chart::Chart>),
+    Shapes(Anchor, Vec<super::drawing::Shape>),
+}
+
+impl Drawn {
+    pub fn anchor(&self) -> &Anchor {
+        match self {
+            Drawn::Chart(a, _) | Drawn::Shapes(a, _) => a,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Print {
     /// paper size in points, before orientation
@@ -222,6 +246,11 @@ pub struct Sheet {
     pub auto_rows: bool,
     pub merges: Vec<Range>,
     pub pictures: Vec<Picture>,
+    /// charts and shapes
+    pub drawn: Vec<Drawn>,
+    /// charts waiting for the cells they plot to be worked out, with their place among
+    /// `drawn` (what is drawn later covers what came before)
+    pub chart_parts: Vec<(usize, Anchor, String)>,
     pub print: Print,
     pub print_area: Option<Range>,
     pub title_rows: Option<(u32, u32)>,
@@ -759,7 +788,7 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
             let Some(xml) = pkg.text(&path) else { continue };
             let mut sheet = read_sheet(&xml, &strings, &styles, mdw, &colors).map_err(|e| format!("sheet \"{name}\": {e}"))?;
             sheet.name = name.clone();
-            sheet.pictures = read_pictures(&mut pkg, &path, &xml);
+            (sheet.pictures, sheet.chart_parts, sheet.drawn) = read_drawing(&mut pkg, &path, &xml, &colors.theme);
             sheet.tables = read_tables(&mut pkg, &path, &xml);
             for (n, local, text) in &names {
                 let mine = local.map(|l| l == index).unwrap_or_else(|| refers_to_sheet(text, &name));
@@ -792,12 +821,61 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
     let conds: Vec<Vec<CondFormat>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.conds)).collect();
     let defs = super::sheet_style::Defs { dxfs: &dxfs, table_styles: &table_styles, theme: &colors.theme };
     super::sheet_style::apply(&mut sheets, &mut styles, &defs, &tables, &conds, date1904);
+    read_charts(&mut sheets, &styles, &colors.theme, date1904);
     let mut hidden = hidden.into_iter();
     sheets.retain(|_| !hidden.next().unwrap_or(false));
     if sheets.is_empty() {
         return Err("the workbook has no sheets to print".into());
     }
     Ok(Workbook { sheets, styles, date1904 })
+}
+
+/// Charts, once the cells they plot hold their values
+fn read_charts(sheets: &mut [Sheet], styles: &[Style], theme: &[Rgb], date1904: bool) {
+    let parts: Vec<Vec<(usize, Anchor, String)>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.chart_parts)).collect();
+    if parts.iter().all(|p| p.is_empty()) {
+        return;
+    }
+    let sep = numfmt::Separators::system();
+    for (si, list) in parts.into_iter().enumerate() {
+        let mut added = 0;
+        for (at, anchor, xml) in list {
+            let data = |f: &str| -> Vec<(Option<f64>, String)> {
+                let super::formula::Expr::Area(a) = super::formula::parse(f) else { return vec![] };
+                let target = match &a.sheet {
+                    Some(name) => sheets.iter().position(|s| s.name.eq_ignore_ascii_case(name)),
+                    None => Some(si),
+                };
+                let Some(sheet) = target.map(|t| &sheets[t]) else { return vec![] };
+                let last = sheet.cells.keys().next_back().map(|k| k.0).unwrap_or(0);
+                let (r2, c2) = (a.r2.min(last), a.c2.min(a.c1 + 16_383));
+                let mut out = vec![];
+                for r in a.r1..=r2 {
+                    for c in a.c1..=c2 {
+                        let cell = sheet.cells.get(&(r, c));
+                        let value = cell.and_then(|c| c.value.as_ref());
+                        let n = match value {
+                            Some(Value::Number(n)) => Some(*n),
+                            _ => None,
+                        };
+                        let code = cell.map(|c| styles[c.style].num_fmt.as_str()).unwrap_or("General");
+                        let shown = value.map(|v| numfmt::format(v, code, date1904, sep).text).unwrap_or_default();
+                        let shown: String = shown.chars().filter(|c| *c != numfmt::HIDE_ON && *c != numfmt::HIDE_OFF).collect();
+                        out.push((n, shown.trim().to_string()));
+                        if out.len() > 100_000 {
+                            return out;
+                        }
+                    }
+                }
+                out
+            };
+            if let Some(chart) = super::chart::parse(&xml, theme, &data) {
+                let at = (at + added).min(sheets[si].drawn.len());
+                sheets[si].drawn.insert(at, Drawn::Chart(anchor, Box::new(chart)));
+                added += 1;
+            }
+        }
+    }
 }
 
 /// Fills in the results of formulas stored without one, top to bottom
@@ -1177,30 +1255,24 @@ fn paper(code: u32) -> Option<(f32, f32)> {
 // ---------------------------------------------------------------------------
 // Pictures
 
-fn read_pictures(pkg: &mut Package, sheet_path: &str, sheet_xml: &str) -> Vec<Picture> {
-    let Ok(doc) = Document::parse(sheet_xml) else { return vec![] };
-    let Some(drawing) = doc.root_element().children().find(|n| n.tag_name().name() == "drawing") else { return vec![] };
-    let Some(rid) = drawing.attribute((REL, "id")) else { return vec![] };
+/// A sheet's drawing layer: pictures, charts (their XML, read once the cells are worked
+/// out) and shapes
+fn read_drawing(pkg: &mut Package, sheet_path: &str, sheet_xml: &str, theme: &[Rgb]) -> (Vec<Picture>, Vec<(usize, Anchor, String)>, Vec<Drawn>) {
+    let none = || (vec![], vec![], vec![]);
+    let Ok(doc) = Document::parse(sheet_xml) else { return none() };
+    let Some(drawing) = doc.root_element().children().find(|n| n.tag_name().name() == "drawing") else { return none() };
+    let Some(rid) = drawing.attribute((REL, "id")) else { return none() };
     let rels = pkg.rels(sheet_path);
-    let Some(dpath) = rels.get(rid).cloned() else { return vec![] };
-    let Some(dxml) = pkg.text(&dpath) else { return vec![] };
+    let Some(dpath) = rels.get(rid).cloned() else { return none() };
+    let Some(dxml) = pkg.text(&dpath) else { return none() };
     let drels = pkg.rels(&dpath);
-    let Ok(ddoc) = Document::parse(&dxml) else { return vec![] };
-    let mut out = vec![];
+    let Ok(ddoc) = Document::parse(&dxml) else { return none() };
+    let (mut pictures, mut charts, mut drawn) = (vec![], vec![], vec![]);
     for anchor in ddoc.root_element().children().filter(|n| n.is_element()) {
         let kind = anchor.tag_name().name();
         if !matches!(kind, "twoCellAnchor" | "oneCellAnchor" | "absoluteAnchor") {
             continue;
         }
-        // pictures only (charts and shapes are not printed by this engine)
-        let Some(pic) = anchor.descendants().find(|n| n.has_tag_name((XDR, "pic"))) else { continue };
-        let Some(embed) = pic.descendants().find(|n| n.has_tag_name((DRAW, "blip"))).and_then(|b| b.attribute((REL, "embed"))) else { continue };
-        let Some(media) = drels.get(embed).cloned() else { continue };
-        let ext = media.rsplit('.').next().unwrap_or("png").to_lowercase();
-        if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
-            continue;
-        }
-        let Some(data) = pkg.read(&media) else { continue };
         let marker = |name: &str| -> Option<(u32, u32, f32, f32)> {
             let m = child(anchor, name)?;
             let num = |n: &str| child(m, n).and_then(|x| x.text()).and_then(|t| t.trim().parse::<f64>().ok());
@@ -1211,21 +1283,44 @@ fn read_pictures(pkg: &mut Package, sheet_path: &str, sheet_xml: &str) -> Vec<Pi
             .find(|n| n.has_tag_name((DRAW, "ext")) || n.has_tag_name((XDR, "ext")))
             .and_then(|e| Some((attr_f32(e, "cx")? * EMU, attr_f32(e, "cy")? * EMU)))
             .unwrap_or((0.0, 0.0));
-        match kind {
-            "twoCellAnchor" => {
-                if let (Some(from), Some(to)) = (marker("from"), marker("to")) {
-                    out.push(Picture { from, to: Some(to), size: ext_size, data, ext });
-                }
+        let place = match kind {
+            "twoCellAnchor" => match (marker("from"), marker("to")) {
+                (Some(from), Some(to)) => Anchor { from, to: Some(to), size: ext_size },
+                _ => continue,
+            },
+            "oneCellAnchor" => match marker("from") {
+                Some(from) => Anchor { from, to: None, size: ext_size },
+                None => continue,
+            },
+            _ => continue,
+        };
+        // a picture
+        if let Some(pic) = anchor.children().find(|n| n.has_tag_name((XDR, "pic"))) {
+            let Some(embed) = pic.descendants().find(|n| n.has_tag_name((DRAW, "blip"))).and_then(|b| b.attribute((REL, "embed"))) else { continue };
+            let Some(media) = drels.get(embed).cloned() else { continue };
+            let ext = media.rsplit('.').next().unwrap_or("png").to_lowercase();
+            if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
+                continue;
             }
-            "oneCellAnchor" => {
-                if let Some(from) = marker("from") {
-                    out.push(Picture { from, to: None, size: ext_size, data, ext });
-                }
+            let Some(data) = pkg.read(&media) else { continue };
+            pictures.push(Picture { from: place.from, to: place.to, size: place.size, data, ext });
+            continue;
+        }
+        // a chart
+        if let Some(frame) = anchor.children().find(|n| n.has_tag_name((XDR, "graphicFrame"))) {
+            let chart_rel = frame.descendants().find(|n| n.tag_name().name() == "chart").and_then(|c| c.attribute((REL, "id")));
+            if let Some(xml) = chart_rel.and_then(|id| drels.get(id).cloned()).and_then(|p| pkg.text(&p)) {
+                charts.push((drawn.len(), place, xml));
             }
-            _ => {}
+            continue;
+        }
+        // shapes, text boxes, lines and groups of them
+        let shapes = super::drawing::shapes(anchor, theme, place.size);
+        if !shapes.is_empty() {
+            drawn.push(Drawn::Shapes(place, shapes));
         }
     }
-    out
+    (pictures, charts, drawn)
 }
 
 // ---------------------------------------------------------------------------

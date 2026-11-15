@@ -9,6 +9,8 @@ pub mod pptx;
 pub mod pptx_writer;
 pub mod ocr;
 pub mod shapes;
+pub mod chart;
+pub mod drawing;
 pub mod formula;
 pub mod sheet_pdf;
 pub mod sheet_style;
