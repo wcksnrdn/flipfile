@@ -1446,6 +1446,11 @@ fn date_serial(y: i64, m: i64, d: i64, date1904: bool) -> Option<f64> {
     (serial >= 0).then_some(serial as f64)
 }
 
+/// The serial number of a date (1900 date system)
+pub fn serial(y: i64, m: i64, d: i64) -> Option<f64> {
+    date_serial(y, m, d, false)
+}
+
 fn serial_date(serial: f64, date1904: bool) -> Option<(i64, i64, i64)> {
     if !(0.0..3e6).contains(&serial) {
         return None;

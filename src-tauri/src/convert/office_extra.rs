@@ -102,7 +102,25 @@ pub(super) fn convert_office(
         return Err(format!("\"{name}\" is already in {} format", format.to_uppercase()));
     }
 
-    // 1. Any tabular/data target (xlsx, csv, tsv, json, yaml, xml, sql, md-table)
+    // 1a. PDF -> Excel: tables rebuilt from the page layout, with their formatting
+    if is_tabular_target(format) && (in_ext == "pdf" || pdf_render::is_pdf(&super::input::header(input))) {
+        let data = fs::read(input).map_err(|e| format!("\"{name}\" could not be read: {e}"))?;
+        let pdfium = pdf_render::pdfium()?;
+        let out_ext = if format == "md-table" { "md" } else { format };
+        let output = unique_output_path(input, out_dir, "converted", out_ext);
+        let bytes = if format == "xlsx" {
+            let sheet = input.file_stem().and_then(|s| s.to_str()).unwrap_or("Sheet1");
+            crate::office::pdf_xlsx::pdf_to_xlsx(pdfium, &data, sheet, on_page).map_err(|e| format!("\"{name}\": {e}"))?
+        } else {
+            let rows = crate::office::pdf_xlsx::pdf_to_rows(pdfium, &data, on_page).map_err(|e| format!("\"{name}\": {e}"))?;
+            let sheet = input.file_stem().and_then(|s| s.to_str()).unwrap_or("Sheet1").to_string();
+            write_tabular(&[TableSheet { name: sheet, rows }], format, input)?
+        };
+        fs::write(&output, bytes).map_err(save_err)?;
+        return Ok(Converted::file(input, &output));
+    }
+
+    // 1b. Any tabular/data target (xlsx, csv, tsv, json, yaml, xml, sql, md-table)
     if is_tabular_target(format) {
         let sheets = read_any_tables(input)?;
         let out_ext = if format == "md-table" { "md" } else { format };

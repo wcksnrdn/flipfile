@@ -12,6 +12,7 @@ pub mod shapes;
 pub mod chart;
 pub mod drawing;
 pub mod formula;
+pub mod pdf_xlsx;
 pub mod sheet_pdf;
 pub mod sheet_style;
 pub mod slides_pdf;
@@ -19,6 +20,7 @@ mod pdf_docx_writer;
 pub mod to_typst;
 pub mod typeset;
 pub mod xlsx;
+pub mod xlsx_writer;
 
 /// Excel (.xlsx) or CSV -> PDF with flipfile's built-in engine (reader + Typst layout).
 pub fn sheet_to_pdf_builtin(bytes: &[u8], file_name: &str, csv: bool) -> Result<Vec<u8>, String> {
@@ -477,5 +479,48 @@ mod tests {
         assert!(!xml_too_deep(&nest(3000, "<a/><!-- <b> --><![CDATA[<c>]]>", "")));
         // A quoted "/>" or ">" does not end the tag early
         assert!(xml_too_deep(&nest(3000, "<a v=\"/>\" w='>'>", "</a>")));
+    }
+}
+
+#[cfg(test)]
+mod pdf_xlsx_review {
+    /// Visual check of PDF -> Excel during development:
+    /// `FLIPFILE_PDF=in.pdf FLIPFILE_OUT=dir cargo test review_pdf_xlsx -- --ignored --nocapture`
+    /// writes `out.xlsx` and prints the cells (type, format, text) of the first rows.
+    #[test]
+    #[ignore]
+    fn review_pdf_xlsx() {
+        let input = std::env::var("FLIPFILE_PDF").expect("set FLIPFILE_PDF");
+        let out = std::path::PathBuf::from(std::env::var("FLIPFILE_OUT").expect("set FLIPFILE_OUT"));
+        let bytes = std::fs::read(&input).unwrap();
+        let pdfium = crate::pdf::render::pdfium().unwrap();
+        let xlsx = super::pdf_xlsx::pdf_to_xlsx(pdfium, &bytes, "review", &|_, _| {}).unwrap();
+        std::fs::write(out.join("out.xlsx"), &xlsx).unwrap();
+        let wb = super::xlsx::read(&xlsx).unwrap();
+        let sheet = &wb.sheets[0];
+        let rows: usize = std::env::var("FLIPFILE_ROWS").ok().and_then(|v| v.parse().ok()).unwrap_or(40);
+        let widths: Vec<String> = sheet.col_widths.iter().map(|(c, w)| format!("{c}:{w:.0}")).collect();
+        println!("cells {} merges {} cols [{}] frozen {:?}", sheet.cells.len(), sheet.merges.len(), widths.join(" "), sheet.frozen);
+        let mut last = u32::MAX;
+        for (&(r, c), cell) in &sheet.cells {
+            if r as usize >= rows {
+                break;
+            }
+            if r != last {
+                println!();
+                print!("{:>3}|", r + 1);
+                last = r;
+            }
+            let st = &wb.styles[cell.style];
+            let v = match &cell.value {
+                Some(super::numfmt::Value::Number(n)) => format!("#{n}{}", if st.num_fmt != "General" { format!("[{}]", st.num_fmt) } else { String::new() }),
+                Some(super::numfmt::Value::Text(t)) => format!("\"{}\"", t.replace('\n', "⏎")),
+                Some(v) => format!("{v:?}"),
+                None => "·".into(),
+            };
+            let mark = if st.font.bold { "*" } else { "" };
+            print!(" {}{mark}{v} |", super::xlsx_writer::col_name(c));
+        }
+        println!();
     }
 }

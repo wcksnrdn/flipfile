@@ -20,6 +20,20 @@ use std::collections::HashMap;
 
 /// Gaps wider than this many font sizes inside a line become a tab (column layouts).
 const TAB_GAP: f32 = 2.0;
+
+thread_local! {
+    /// `TAB_GAP` while a page is read for a spreadsheet (see `with_tab_gap`)
+    static TAB_GAP_NOW: std::cell::Cell<f32> = const { std::cell::Cell::new(TAB_GAP) };
+}
+
+/// Reads pages with gaps wider than `gap` font sizes splitting lines: spreadsheets want
+/// columns that Word would keep on one line (amounts a few spaces apart)
+pub(super) fn with_tab_gap<T>(gap: f32, f: impl FnOnce() -> T) -> T {
+    let before = TAB_GAP_NOW.with(|g| g.replace(gap));
+    let out = f();
+    TAB_GAP_NOW.with(|g| g.set(before));
+    out
+}
 /// Gaps wider than this many font sizes get a space if the PDF has none.
 const SPACE_GAP: f32 = 0.22;
 /// Resolution of drawings that are turned into pictures.
@@ -117,6 +131,8 @@ pub(super) struct TabMark {
     pub right: f32,
     /// The gap was filled with dots (table of contents)
     pub leader: bool,
+    /// Where the text before the tab ends
+    pub before: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -134,6 +150,9 @@ pub(super) struct Line {
     /// Vector art sits inside the line (formulas drawn as shapes): the line keeps its
     /// layout exactly, the text around the art on tab stops
     pub art: bool,
+    /// Each space between words: its place in `text()` (in characters) and where the
+    /// text before it ends and after it starts (spreadsheets find narrow columns by them)
+    pub gaps: Vec<(usize, f32, f32)>,
 }
 
 impl Line {
@@ -253,6 +272,8 @@ pub(super) struct PageModel {
     pub underline_rules: Vec<Rect>,
     /// The number printed on the page (journals often start at e.g. 2348)
     pub number: usize,
+    /// Filled shapes on the page (bands and boxes behind text) and their colour
+    pub fills: Vec<(Rect, [u8; 3])>,
 }
 
 // ---------------------------------------------------------------------------
@@ -881,7 +902,7 @@ fn lines(glyphs: &[&Glyph], art: &[Rect]) -> Vec<Line> {
             b.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
             b[b.len() / 2]
         };
-        let mut line = Line { runs: vec![], tabs: vec![], left: first.left, right: first.right, baseline, size: line_size, pitch_hint: 0.0, art: false };
+        let mut line = Line { runs: vec![], tabs: vec![], left: first.left, right: first.right, baseline, size: line_size, pitch_hint: 0.0, art: false, gaps: vec![] };
         let band = (baseline - line_size * 0.9, baseline + line_size * 0.3);
         let art_in_gap = |from: f32, to: f32| art.iter().any(|r| r.l < to && r.r > from && r.t < band.1 && r.b > band.0 && r.h() < line_size * 4.0);
         let mut last_right = first.left;
@@ -917,7 +938,8 @@ fn lines(glyphs: &[&Glyph], art: &[Rect]) -> Vec<Line> {
             let rise = baseline - g.baseline;
             // Only attached to the text before it (x², a citation¹²): not the first thing
             // on the line, nor after a tab (a badge number beside a heading)
-            let attached = !line.runs.is_empty() && g.left - last_right - tracking < g.style.size * TAB_GAP;
+            let tab_gap = TAB_GAP_NOW.with(|t| t.get());
+            let attached = !line.runs.is_empty() && g.left - last_right - tracking < g.style.size * tab_gap;
             if attached && g.style.size < line_size * 0.85 {
                 if rise > line_size * 0.2 {
                     style.vert = 1;
@@ -933,10 +955,12 @@ fn lines(glyphs: &[&Glyph], art: &[Rect]) -> Vec<Line> {
                     line.art = true;
                 }
                 if !ends_with_tab {
-                    if gap > g.style.size * TAB_GAP || around_art {
+                    if gap > g.style.size * tab_gap || around_art {
                         push_char(&mut line, '\t', &style);
-                        line.tabs.push(TabMark { left: g.left, right: g.right, leader: false });
+                        line.tabs.push(TabMark { left: g.left, right: g.right, leader: false, before: last_right });
                     } else if real_space || gap > g.style.size * SPACE_GAP || (hinted_space && gap > g.style.size * 0.12) {
+                        let at: usize = line.runs.iter().map(|(t, _)| t.chars().count()).sum();
+                        line.gaps.push((at, last_right, g.left));
                         push_char(&mut line, ' ', &style);
                     }
                 }
@@ -955,7 +979,7 @@ fn lines(glyphs: &[&Glyph], art: &[Rect]) -> Vec<Line> {
             if is_dot(g.ch) && trailing_dots(&line) >= 4 {
                 remove_trailing_dots(&mut line);
                 push_char(&mut line, '\t', &style);
-                line.tabs.push(TabMark { left: g.right, right: g.right, leader: true });
+                line.tabs.push(TabMark { left: g.right, right: g.right, leader: true, before: g.right });
                 in_leader = true;
             }
         }
@@ -1467,7 +1491,7 @@ fn encode_image(img: &image::DynamicImage, shown: Option<Rect>, media: &mut Medi
     Some(media.add(png, "png"))
 }
 
-fn page_model(page: &PdfPage, document: &PdfDocument, media: &mut MediaStore) -> PageModel {
+pub(super) fn page_model(page: &PdfPage, document: &PdfDocument, media: &mut MediaStore) -> PageModel {
     let (page_w, page_h) = (page.width().value, page.height().value);
     let g = graphics(page, page_h);
     let segs = merge_segments(g.segs);
@@ -1809,7 +1833,7 @@ fn page_model(page: &PdfPage, document: &PdfDocument, media: &mut MediaStore) ->
         .filter(|s| underlined.iter().any(|g| s.pos > g.baseline - 0.5 && s.pos < g.baseline + g.style.size * 0.35 && s.a <= g.right && s.b >= g.left))
         .map(|s| s.rect())
         .collect();
-    PageModel { width: page_w, height: page_h, header: vec![], body: blocks, footer: vec![], decor, background: None, number: 0, underline_rules }
+    PageModel { width: page_w, height: page_h, header: vec![], body: blocks, footer: vec![], decor, background: None, number: 0, underline_rules, fills: g.fills }
 }
 
 // ---------------------------------------------------------------------------
@@ -1888,7 +1912,7 @@ fn number_placeholders(text: &str, page: usize, total: usize) -> String {
 
 /// The printed page numbers: the PDF's page index plus the offset that most pages'
 /// top/bottom numbers agree on (0 when there is none)
-fn number_pages(pages: &mut [PageModel]) {
+pub(super) fn number_pages(pages: &mut [PageModel]) {
     let total = pages.len();
     let mut votes: HashMap<i64, usize> = HashMap::new();
     for (i, p) in pages.iter().enumerate() {
@@ -1921,7 +1945,7 @@ fn number_pages(pages: &mut [PageModel]) {
 }
 
 /// Moves blocks that repeat near the top/bottom of several pages into the header/footer
-fn split_running_content(pages: &mut [PageModel]) {
+pub(super) fn split_running_content(pages: &mut [PageModel]) {
     let total = pages.len();
     if total < 2 {
         return;
@@ -2203,6 +2227,7 @@ pub fn ocr_to_docx(pages: Vec<OcrPage>) -> Result<Vec<u8>, String> {
             background,
             number: 0,
             underline_rules: vec![],
+            fills: vec![],
         });
     }
     number_pages(&mut models);
