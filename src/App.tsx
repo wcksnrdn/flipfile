@@ -717,13 +717,20 @@ export default function App() {
       altRef.current = down;
       if (down) ringBeforeAlt.current = ringRef.current === "size" ? entryRingRef.current : ringRef.current;
       switchRing(down ? "size" : ringBeforeAlt.current);
-      if (down) requestEstimates();
       lastIndex.current = null;
       // Re-evaluate where the cursor already is, so nothing waits for the next mouse move
       setHover(lastPoint.current ? resolve("over", lastPoint.current) : null);
     }, ALT_POLL_MS);
     return () => window.clearInterval(timer);
   }, [open, workshopOpen]);
+
+  // A ring holding compress levels (the Option/Alt ring, or any ring given them in the
+  // Workshop, the only way on Linux) works out their sizes as soon as it opens, so each
+  // level's slice and the centre show what it will make of the files before the drop
+  useEffect(() => {
+    if (!open || workshopOpen) return;
+    if (built.rings[ringId]?.items.some((item) => COMPRESS_LEVELS.includes(item.id))) requestEstimates();
+  }, [open, workshopOpen, ringId, built]);
 
   // "Ring Workshop..." from the tray menu
   useEffect(() => {
@@ -1009,7 +1016,7 @@ export default function App() {
       hint = "Drop on a slice";
       badge = "Workshop";
     }
-  } else if (open && ringId === "size" && hovered && COMPRESS_LEVELS.includes(hovered)) {
+  } else if (open && hovered && COMPRESS_LEVELS.includes(hovered)) {
     // A compress level: what it makes of the files, and what that costs
     const level = labelOf(hovered)?.replace("Compress · ", "") ?? "";
     const e = estimates[hovered];

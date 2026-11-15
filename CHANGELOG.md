@@ -6,6 +6,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Compress levels show their size on any ring**: levels added to a ring in the Ring
+  Workshop now show the size they will give, on their slice and in the centre, as in the
+  Option/Alt ring. On Linux, which has no Option/Alt ring, that is how to get them.
+
 ## [0.9.0] - 2026-11-14
 
 ### Added
