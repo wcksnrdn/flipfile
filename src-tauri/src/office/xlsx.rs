@@ -230,6 +230,8 @@ pub struct Sheet {
     pub col_breaks: Vec<u32>,
     /// cells whose text mixes fonts, by position
     pub rich: HashMap<(u32, u32), Rich>,
+    /// formulas the file stores no result for, worked out once the workbook is read
+    pub formulas: HashMap<(u32, u32), super::formula::Pending>,
     /// rows and columns frozen on screen (Freeze Panes): usually a table's headings
     pub frozen: (u32, u32),
 }
@@ -732,11 +734,11 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
     }
 
     let mut sheets = vec![];
+    // hidden sheets don't print, but formulas may read them
+    let mut hidden = vec![];
     if let Some(list) = child(wb, "sheets") {
         for (index, s) in children(list, "sheet").enumerate() {
-            if matches!(s.attribute("state"), Some("hidden") | Some("veryHidden")) {
-                continue;
-            }
+            let is_hidden = matches!(s.attribute("state"), Some("hidden") | Some("veryHidden"));
             let name = s.attribute("name").unwrap_or("Sheet").to_string();
             let Some(rid) = s.attribute((REL, "id")) else { continue };
             let Some(path) = wb_rels.get(rid).cloned() else { continue };
@@ -771,12 +773,46 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
                 }
             }
             sheets.push(sheet);
+            hidden.push(is_hidden);
         }
     }
+    work_out_formulas(&mut sheets, date1904);
+    let mut hidden = hidden.into_iter();
+    sheets.retain(|_| !hidden.next().unwrap_or(false));
     if sheets.is_empty() {
         return Err("the workbook has no sheets to print".into());
     }
     Ok(Workbook { sheets, styles, date1904 })
+}
+
+/// Fills in the results of formulas stored without one, top to bottom
+fn work_out_formulas(sheets: &mut [Sheet], date1904: bool) {
+    if sheets.iter().all(|s| s.formulas.is_empty()) {
+        return;
+    }
+    let results: Vec<(usize, (u32, u32), Option<Value>)> = {
+        let book = super::formula::Book::new(
+            sheets.iter().map(|s| s.name.clone()).collect(),
+            sheets.iter().map(|s| &s.cells).collect(),
+            sheets.iter().map(|s| &s.formulas).collect(),
+            date1904,
+        );
+        let mut out = vec![];
+        for (si, s) in sheets.iter().enumerate() {
+            let mut keys: Vec<(u32, u32)> = s.formulas.keys().copied().collect();
+            keys.sort_unstable();
+            out.extend(keys.into_iter().map(|(r, c)| (si, (r, c), book.result(si, r, c).into_value())));
+        }
+        out
+    };
+    for (si, pos, value) in results {
+        if let Some(value) = value.filter(|v| !matches!(v, Value::Text(t) if t.is_empty())) {
+            sheets[si].cells.entry(pos).or_insert(Cell { value: None, style: 0 }).value = Some(value);
+        }
+    }
+    for s in sheets {
+        s.formulas = HashMap::new();
+    }
 }
 
 fn strip_sheet(r: &str) -> &str {
@@ -845,6 +881,8 @@ fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], m
         }
     }
 
+    // shared formulas: index -> (text, the cell it was written for)
+    let mut shared: HashMap<String, (Arc<str>, u32, u32)> = HashMap::new();
     if let Some(data) = child(root, "sheetData") {
         for (ri, row) in children(data, "row").enumerate() {
             let r = attr_u32(row, "r").map(|r| r - 1).unwrap_or(ri as u32);
@@ -881,7 +919,28 @@ fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], m
                     _ => v.and_then(|s| s.trim().parse::<f64>().ok()).map(Value::Number),
                 };
                 let value = value.filter(|v| !matches!(v, Value::Text(t) if t.is_empty()));
-                if value.is_none() && style == 0 {
+                // a formula: kept to work out when the file has no result for it
+                let mut formula = false;
+                if let Some(f) = child(c, "f") {
+                    let text = f.text().map(str::trim).filter(|t| !t.is_empty());
+                    let si = f.attribute("si").filter(|_| f.attribute("t") == Some("shared"));
+                    let pending = match (text, si) {
+                        (Some(t), si) => {
+                            let text: Arc<str> = Arc::from(t);
+                            if let Some(si) = si {
+                                shared.insert(si.to_string(), (text.clone(), cr, cc));
+                            }
+                            Some(super::formula::Pending { text, shift: (0, 0) })
+                        }
+                        (None, Some(si)) => shared.get(si).map(|(text, r0, c0)| super::formula::Pending { text: text.clone(), shift: (cr as i64 - *r0 as i64, cc as i64 - *c0 as i64) }),
+                        _ => None,
+                    };
+                    if let (Some(p), None) = (pending, &value) {
+                        sheet.formulas.insert((cr, cc), p);
+                        formula = true;
+                    }
+                }
+                if value.is_none() && style == 0 && !formula {
                     continue;
                 }
                 sheet.cells.insert((cr, cc), Cell { value, style });
