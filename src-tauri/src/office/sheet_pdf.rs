@@ -15,6 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use super::numfmt::{self, Separators, Shown, Value, HIDE_OFF, HIDE_ON};
+use super::sheet_style::Mark;
 use super::xlsx::{Edge, Font, HAlign, Line, Range, Sheet, Style, VAlign, Workbook};
 
 /// Space between a cell's edge and its text (Excel leaves ~2 px)
@@ -708,6 +709,39 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                     let _ = writeln!(out, "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, rect(width: {:.2}pt, height: {:.2}pt, fill: {}, stroke: none))", px(grid.x(c)), py(ry[&r]), w * s, h * s, rgb(fill));
                 }
             }
+            // data bars and icons of conditional formats
+            let mut marks: Vec<_> = sheet.marks.iter().filter(|((r, c), _)| row_set.contains(r) && *c >= page.cols.0 && *c <= page.cols.1).collect();
+            marks.sort_by_key(|(pos, _)| **pos);
+            for (&(r, c), mark) in marks {
+                let (x, y, w, h) = (px(grid.x(c)), py(ry[&r]), grid.w(c) * s, grid.h(r) * s);
+                if w <= 0.0 || h <= 0.0 {
+                    continue;
+                }
+                let inset = (1.5 * s).min(h / 4.0);
+                match mark {
+                    Mark::Bar { frac, color } => {
+                        let bw = (w - 2.0 * inset) * frac;
+                        let _ = writeln!(
+                            out,
+                            "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, rect(width: {bw:.2}pt, height: {:.2}pt, fill: gradient.linear({c}, {c}.lighten(85%)), stroke: 0.4pt + {c}))",
+                            x + inset,
+                            y + inset,
+                            h - 2.0 * inset,
+                            c = rgb(*color)
+                        );
+                    }
+                    Mark::Icon { set, index, of, .. } => {
+                        let size = (12.0 * s).min(h - 2.0 * inset).max(2.0);
+                        let style = sheet.cells.get(&(r, c)).map(|cell| &wb.styles[cell.style]);
+                        let dy = match style.map(|st| st.v) {
+                            Some(VAlign::Top) => inset,
+                            Some(VAlign::Center) => (h - size) / 2.0,
+                            _ => h - size - inset,
+                        };
+                        let _ = writeln!(out, "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, {})", x + inset, y + dy, icon(set, *index, *of, size));
+                    }
+                }
+            }
             // 2. gridlines
             if p.gridlines {
                 let stroke = "(paint: rgb(160, 160, 160), thickness: 0.4pt)";
@@ -732,6 +766,9 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                     let Some(src) = anchor(r, c) else { continue };
                     let Some(cell) = sheet.cells.get(&src) else { continue };
                     let Some(value) = &cell.value else { continue };
+                    if matches!(sheet.marks.get(&src), Some(Mark::Icon { show_value: false, .. })) {
+                        continue;
+                    }
                     let style = &wb.styles[cell.style];
                     let (cw, ch) = cell_box(grid, &plan.merged, r, c, &row_set, col_set);
                     if cw <= 0.0 || ch <= 0.0 {
@@ -983,6 +1020,112 @@ fn cell_text(shown: &Shown, pieces: Vec<Piece>, style: &Style, h: HAlign, is_num
         // a box as wide as the text never wraps; what doesn't fit is clipped at the cell edge
         let tw = pieces_width(&pieces) * shrink;
         block(format!("box(width: {:.2}pt, {t})", (tw + 1.0) * s), align)
+    }
+}
+
+/// An icon of a conditional format's icon set, `size` points square; `index` 0 stands for
+/// the lowest values
+fn icon(set: &str, index: usize, of: usize, size: f32) -> String {
+    const RED: &str = "rgb(229, 57, 53)";
+    const YELLOW: &str = "rgb(255, 192, 0)";
+    const GREEN: &str = "rgb(0, 166, 81)";
+    const GRAY: &str = "rgb(128, 128, 128)";
+    const BLACK: &str = "rgb(64, 64, 64)";
+    let k = size;
+    let poly = |pts: &[(f32, f32)], fill: &str| {
+        let pts: Vec<String> = pts.iter().map(|(x, y)| format!("({:.2}pt, {:.2}pt)", x * k, y * k)).collect();
+        format!("polygon(fill: {fill}, {})", pts.join(", "))
+    };
+    let boxed = |inner: String| format!("box(width: {k:.2}pt, height: {k:.2}pt, {inner})");
+    let circle = |fill: &str| boxed(format!("align(center + horizon, circle(radius: {:.2}pt, fill: {fill}))", k * 0.42));
+    let up = [(0.5, 0.05), (0.95, 0.5), (0.68, 0.5), (0.68, 0.95), (0.32, 0.95), (0.32, 0.5), (0.05, 0.5)];
+    let arrow = |deg: i32, fill: &str| boxed(format!("rotate({deg}deg, {})", poly(&up, fill)));
+    // the position of `index` among `of` icons, 0.0 (lowest) to 1.0 (highest)
+    let level = if of > 1 { index as f32 / (of - 1) as f32 } else { 1.0 };
+    let traffic = |i: usize| match (of, i) {
+        (4, 0) => BLACK,
+        (_, i) if i == 0 => RED,
+        (n, i) if i + 1 == n => GREEN,
+        _ => YELLOW,
+    };
+    let base = set.trim_start_matches(|c: char| c.is_ascii_digit());
+    match base {
+        "Arrows" | "ArrowsGray" => {
+            let gray = base == "ArrowsGray";
+            let deg = (180.0 - 180.0 * level).round() as i32;
+            let fill = if gray { GRAY } else if index == 0 { RED } else if index + 1 == of { GREEN } else { YELLOW };
+            arrow(deg, fill)
+        }
+        "Triangles" => match index {
+            0 => boxed(poly(&[(0.1, 0.25), (0.9, 0.25), (0.5, 0.85)], RED)),
+            i if i + 1 == of => boxed(poly(&[(0.5, 0.15), (0.9, 0.75), (0.1, 0.75)], GREEN)),
+            _ => boxed(poly(&[(0.15, 0.4), (0.85, 0.4), (0.85, 0.6), (0.15, 0.6)], YELLOW)),
+        },
+        "Signs" => match index {
+            0 => boxed(poly(&[(0.5, 0.05), (0.95, 0.5), (0.5, 0.95), (0.05, 0.5)], RED)),
+            1 if of == 3 => boxed(poly(&[(0.5, 0.08), (0.95, 0.9), (0.05, 0.9)], YELLOW)),
+            _ => circle(GREEN),
+        },
+        "Symbols" | "Symbols2" => {
+            let (fill, mark) = match index {
+                0 => (RED, "✕"),
+                i if i + 1 == of => (GREEN, "✓"),
+                _ => (YELLOW, "!"),
+            };
+            boxed(format!(
+                "align(center + horizon, circle(radius: {:.2}pt, fill: {fill}, inset: 0pt, align(center + horizon, text(size: {:.2}pt, fill: white, weight: \"bold\", \"{mark}\"))))",
+                k * 0.45,
+                k * 0.62
+            ))
+        }
+        "Flags" => {
+            let fill = traffic(index);
+            boxed(format!("{} + place(top + left, {})", poly(&[(0.2, 0.05), (0.28, 0.05), (0.28, 0.95), (0.2, 0.95)], BLACK), poly(&[(0.28, 0.08), (0.9, 0.3), (0.28, 0.52)], fill)))
+        }
+        "Stars" => {
+            let star: Vec<(f32, f32)> = (0..10)
+                .map(|i| {
+                    let a = std::f32::consts::PI * (i as f32 / 5.0) - std::f32::consts::FRAC_PI_2;
+                    let r = if i % 2 == 0 { 0.48 } else { 0.2 };
+                    (0.5 + r * a.cos(), 0.52 + r * a.sin())
+                })
+                .collect();
+            let fill = match index {
+                0 => "rgb(255, 255, 255)",
+                i if i + 1 == of => YELLOW,
+                _ => "rgb(255, 224, 140)",
+            };
+            let pts: Vec<String> = star.iter().map(|(x, y)| format!("({:.2}pt, {:.2}pt)", x * k, y * k)).collect();
+            boxed(format!("polygon(fill: {fill}, stroke: 0.5pt + rgb(214, 160, 0), {})", pts.join(", ")))
+        }
+        "Rating" | "Boxes" => {
+            // bars (or boxes) lit up to the level
+            let n = if base == "Boxes" { 4 } else { of - 1 };
+            let lit = (level * n as f32).round() as usize;
+            let mut parts = vec![];
+            for i in 0..n {
+                let fill = if i < lit { "rgb(31, 78, 121)" } else { "rgb(200, 200, 200)" };
+                let (x, w, top) = if base == "Boxes" {
+                    (0.05 + (i % 2) as f32 * 0.47, 0.42, 0.05 + (i / 2) as f32 * 0.47)
+                } else {
+                    let w = 0.8 / n as f32;
+                    (0.1 + i as f32 * w, w * 0.8, 0.9 - 0.8 * (i + 1) as f32 / n as f32)
+                };
+                let bottom = if base == "Boxes" { top + 0.42 } else { 0.9 };
+                parts.push(format!("place(top + left, {})", poly(&[(x, top), (x + w, top), (x + w, bottom), (x, bottom)], fill)));
+            }
+            boxed(parts.join(" + "))
+        }
+        "Quarters" => {
+            let shade = (255.0 - 200.0 * level) as u8;
+            boxed(format!("align(center + horizon, circle(radius: {:.2}pt, fill: rgb({shade}, {shade}, {shade}), stroke: 0.6pt + {BLACK}))", k * 0.4))
+        }
+        "RedToBlack" => {
+            let fill = ["rgb(64, 64, 64)", "rgb(160, 160, 160)", "rgb(255, 150, 150)", "rgb(229, 57, 53)"];
+            circle(fill[index.min(3)])
+        }
+        // TrafficLights1/2 and anything unknown: coloured circles
+        _ => circle(traffic(index)),
     }
 }
 

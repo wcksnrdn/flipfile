@@ -11,6 +11,7 @@ pub mod ocr;
 pub mod shapes;
 pub mod formula;
 pub mod sheet_pdf;
+pub mod sheet_style;
 pub mod slides_pdf;
 mod pdf_docx_writer;
 pub mod to_typst;

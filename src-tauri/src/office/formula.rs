@@ -1303,6 +1303,11 @@ fn compare(a: &V, b: &V) -> std::cmp::Ordering {
     }
 }
 
+/// Excel's ordering of two values (conditional formats compare with it)
+pub fn compare_values(a: &V, b: &V) -> std::cmp::Ordering {
+    compare(a, b)
+}
+
 fn equal(a: &V, b: &V) -> bool {
     compare(a, b) == std::cmp::Ordering::Equal
 }
@@ -1451,6 +1456,20 @@ fn serial_date(serial: f64, date1904: bool) -> Option<(i64, i64, i64)> {
 fn days_in_month(y: i64, m: i64) -> i64 {
     let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
     days_from_civil(ny, nm, 1) - days_from_civil(y, m, 1)
+}
+
+pub fn today_serial(date1904: bool) -> Option<f64> {
+    Some(today(date1904))
+}
+
+/// (year, month) of a serial date
+pub fn year_month(serial: f64, date1904: bool) -> Option<(i64, i64)> {
+    serial_date(serial, date1904).map(|(y, m, _)| (y, m))
+}
+
+/// Day of the week of a serial date, 0 = Sunday
+pub fn weekday0(serial: f64, date1904: bool) -> i64 {
+    (serial.floor() as i64 + if date1904 { 1462 } else { 0 } - 1).rem_euclid(7)
 }
 
 fn today(date1904: bool) -> f64 {

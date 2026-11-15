@@ -13,6 +13,7 @@ use std::sync::Arc;
 use roxmltree::{Document, Node};
 
 use super::numfmt::{self, Value};
+use super::sheet_style::{Cfvo, CfKind, CfRule, CondFormat, Dxf, Mark, TableDef};
 
 const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -232,6 +233,13 @@ pub struct Sheet {
     pub rich: HashMap<(u32, u32), Rich>,
     /// formulas the file stores no result for, worked out once the workbook is read
     pub formulas: HashMap<(u32, u32), super::formula::Pending>,
+    /// the style of empty cells in a column (cells of a table that hold nothing)
+    pub col_styles: HashMap<u32, usize>,
+    /// Format as Table and conditional formats, folded into the cells once read
+    pub tables: Vec<TableDef>,
+    pub conds: Vec<CondFormat>,
+    /// data bars and icons drawn by conditional formats
+    pub marks: HashMap<(u32, u32), Mark>,
     /// rows and columns frozen on screen (Freeze Panes): usually a table's headings
     pub frozen: (u32, u32),
 }
@@ -391,7 +399,7 @@ fn hex(s: &str) -> Option<Rgb> {
 }
 
 /// Lightens (tint > 0) or darkens (tint < 0) like Excel, in HSL
-fn tint(c: Rgb, t: f32) -> Rgb {
+pub fn tint(c: Rgb, t: f32) -> Rgb {
     if t == 0.0 {
         return c;
     }
@@ -719,7 +727,9 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
     let theme = rel_target("/theme").and_then(|p| pkg.text(&p)).map(|x| theme_colors(&x)).unwrap_or_else(default_theme);
     let indexed = rel_target("/styles").and_then(|p| pkg.text(&p)).and_then(|x| custom_palette(&x));
     let colors = Colors { theme: if theme.is_empty() { default_theme() } else { theme }, indexed };
-    let styles = rel_target("/styles").and_then(|p| pkg.text(&p)).map(|x| read_styles(&x, &colors)).unwrap_or_else(|| vec![Style { num_fmt: "General".into(), ..Default::default() }]);
+    let styles_xml = rel_target("/styles").and_then(|p| pkg.text(&p));
+    let mut styles = styles_xml.as_deref().map(|x| read_styles(x, &colors)).unwrap_or_else(|| vec![Style { num_fmt: "General".into(), ..Default::default() }]);
+    let (dxfs, table_styles) = styles_xml.as_deref().map(|x| read_dxfs(x, &colors)).unwrap_or_default();
     let strings = rel_target("/sharedStrings").and_then(|p| pkg.text(&p)).map(|x| shared_strings(&x, &colors)).unwrap_or_default();
     let mdw = max_digit_width(&styles[0].font);
 
@@ -750,6 +760,7 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
             let mut sheet = read_sheet(&xml, &strings, &styles, mdw, &colors).map_err(|e| format!("sheet \"{name}\": {e}"))?;
             sheet.name = name.clone();
             sheet.pictures = read_pictures(&mut pkg, &path, &xml);
+            sheet.tables = read_tables(&mut pkg, &path, &xml);
             for (n, local, text) in &names {
                 let mine = local.map(|l| l == index).unwrap_or_else(|| refers_to_sheet(text, &name));
                 if !mine {
@@ -777,6 +788,10 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
         }
     }
     work_out_formulas(&mut sheets, date1904);
+    let tables: Vec<Vec<TableDef>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.tables)).collect();
+    let conds: Vec<Vec<CondFormat>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.conds)).collect();
+    let defs = super::sheet_style::Defs { dxfs: &dxfs, table_styles: &table_styles, theme: &colors.theme };
+    super::sheet_style::apply(&mut sheets, &mut styles, &defs, &tables, &conds, date1904);
     let mut hidden = hidden.into_iter();
     sheets.retain(|_| !hidden.next().unwrap_or(false));
     if sheets.is_empty() {
@@ -870,6 +885,11 @@ fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], m
             let (Some(min), Some(max)) = (attr_u32(c, "min"), attr_u32(c, "max")) else { continue };
             let hidden = attr_bool(c, "hidden").unwrap_or(false);
             let w = if hidden { 0.0 } else { attr_f32(c, "width").map(|w| col_px(w, mdw) * 0.75).unwrap_or(sheet.default_col_width) };
+            if let Some(st) = attr_u32(c, "style").filter(|&st| st > 0 && (st as usize) < styles.len()) {
+                for i in min.max(1)..=max.min(16384) {
+                    sheet.col_styles.insert(i - 1, st as usize);
+                }
+            }
             // a <col> spanning the rest of the sheet only sets the default
             if max - min > 16000 {
                 sheet.default_col_width = w;
@@ -989,7 +1009,152 @@ fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], m
     // a break "at id" puts row/column `id` (zero-based) first on the next page
     sheet.row_breaks = breaks("rowBreaks");
     sheet.col_breaks = breaks("colBreaks");
+    sheet.conds = children(root, "conditionalFormatting").filter_map(|cf| cond_format(cf, colors)).collect();
     Ok(sheet)
+}
+
+/// A `<conditionalFormatting>`: its ranges and rules
+fn cond_format(cf: Node, colors: &Colors) -> Option<CondFormat> {
+    let ranges: Vec<Range> = cf.attribute("sqref")?.split_whitespace().filter_map(range_ref).collect();
+    if ranges.is_empty() {
+        return None;
+    }
+    let cfvos = |n: Node| -> Vec<Cfvo> {
+        children(n, "cfvo").map(|v| Cfvo { kind: v.attribute("type").unwrap_or("min").to_string(), val: v.attribute("val").map(str::to_string), gte: attr_bool(v, "gte").unwrap_or(true) }).collect()
+    };
+    let rules = children(cf, "cfRule")
+        .map(|r| {
+            let rule = r.attribute("type").unwrap_or("").to_string();
+            let kind = if let Some(n) = child(r, "colorScale") {
+                CfKind::Scale(cfvos(n), children(n, "color").filter_map(|c| colors.get(c)).collect())
+            } else if let Some(n) = child(r, "dataBar") {
+                let v = cfvos(n);
+                let lo = v.first().cloned().unwrap_or(Cfvo { kind: "min".into(), val: None, gte: true });
+                let hi = v.get(1).cloned().unwrap_or(Cfvo { kind: "max".into(), val: None, gte: true });
+                CfKind::Bar(lo, hi, child(n, "color").and_then(|c| colors.get(c)).unwrap_or([0x63, 0x8E, 0xC6]))
+            } else if let Some(n) = child(r, "iconSet") {
+                CfKind::Icons {
+                    set: n.attribute("iconSet").unwrap_or("3TrafficLights1").to_string(),
+                    cfvos: cfvos(n),
+                    reverse: attr_bool(n, "reverse").unwrap_or(false),
+                    show_value: attr_bool(n, "showValue").unwrap_or(true),
+                }
+            } else {
+                CfKind::Rule
+            };
+            CfRule {
+                kind,
+                rule,
+                priority: r.attribute("priority").and_then(|p| p.parse().ok()).unwrap_or(i32::MAX),
+                dxf: attr_u32(r, "dxfId").map(|i| i as usize),
+                operator: r.attribute("operator").map(str::to_string),
+                formulas: children(r, "formula").filter_map(|f| f.text()).map(str::to_string).collect(),
+                text: r.attribute("text").map(str::to_string),
+                stop: attr_bool(r, "stopIfTrue").unwrap_or(false),
+                rank: attr_u32(r, "rank").unwrap_or(10),
+                percent: attr_bool(r, "percent").unwrap_or(false),
+                bottom: attr_bool(r, "bottom").unwrap_or(false),
+                above: attr_bool(r, "aboveAverage").unwrap_or(true),
+                equal_average: attr_bool(r, "equalAverage").unwrap_or(false),
+                time_period: r.attribute("timePeriod").map(str::to_string),
+            }
+        })
+        .collect();
+    Some(CondFormat { ranges, rules })
+}
+
+/// One side of a `<border>` (also in differential formats)
+fn border_edge(b: Node, name: &str, colors: &Colors) -> Option<Edge> {
+    let e = child(b, name)?;
+    let line = match e.attribute("style")? {
+        "hair" => Line::Hair,
+        "thin" => Line::Thin,
+        "medium" => Line::Medium,
+        "thick" => Line::Thick,
+        "double" => Line::Double,
+        "dotted" => Line::Dotted,
+        "dashed" => Line::Dashed,
+        "mediumDashed" => Line::MediumDashed,
+        "dashDot" | "dashDotDot" | "mediumDashDot" | "mediumDashDotDot" | "slantDashDot" => Line::DashDot,
+        _ => return None,
+    };
+    let color = child(e, "color").and_then(|c| colors.get(c)).unwrap_or([0, 0, 0]);
+    Some(Edge { line, color })
+}
+
+/// The differential formats (`<dxfs>`) and custom table styles of styles.xml
+fn read_dxfs(xml: &str, colors: &Colors) -> (Vec<Dxf>, HashMap<String, Vec<(String, usize)>>) {
+    let Ok(doc) = Document::parse(xml) else { return Default::default() };
+    let root = doc.root_element();
+    let dxfs = child(root, "dxfs")
+        .map(|ds| {
+            children(ds, "dxf")
+                .map(|d| {
+                    let mut x = Dxf::default();
+                    if let Some(f) = child(d, "font") {
+                        let on = |name: &str| child(f, name).map(|n| n.attribute("val").map(|v| v != "0" && v != "false").unwrap_or(true));
+                        x.bold = on("b");
+                        x.italic = on("i");
+                        x.strike = on("strike");
+                        x.underline = child(f, "u").map(|n| n.attribute("val") != Some("none"));
+                        x.color = child(f, "color").and_then(|c| colors.get(c));
+                    }
+                    if let Some(p) = child(d, "fill").and_then(|f| child(f, "patternFill")) {
+                        if p.attribute("patternType") != Some("none") {
+                            // a differential fill keeps its solid colour in bgColor
+                            x.fill = child(p, "bgColor").and_then(|c| colors.get(c)).or_else(|| child(p, "fgColor").and_then(|c| colors.get(c)));
+                        }
+                    }
+                    if let Some(n) = child(d, "numFmt") {
+                        x.num_fmt = n.attribute("formatCode").map(str::to_string);
+                    }
+                    if let Some(b) = child(d, "border") {
+                        x.borders = Borders { left: border_edge(b, "left", colors), right: border_edge(b, "right", colors), top: border_edge(b, "top", colors), bottom: border_edge(b, "bottom", colors) };
+                        x.inside_h = border_edge(b, "horizontal", colors);
+                        x.inside_v = border_edge(b, "vertical", colors);
+                    }
+                    x
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut styles = HashMap::new();
+    if let Some(ts) = child(root, "tableStyles") {
+        for t in children(ts, "tableStyle") {
+            let Some(name) = t.attribute("name") else { continue };
+            let parts = children(t, "tableStyleElement").filter_map(|e| Some((e.attribute("type")?.to_string(), attr_u32(e, "dxfId")? as usize))).collect();
+            styles.insert(name.to_string(), parts);
+        }
+    }
+    (dxfs, styles)
+}
+
+/// The tables (Format as Table) of a sheet
+fn read_tables(pkg: &mut Package, sheet_path: &str, sheet_xml: &str) -> Vec<TableDef> {
+    let Ok(doc) = Document::parse(sheet_xml) else { return vec![] };
+    let Some(parts) = child(doc.root_element(), "tableParts") else { return vec![] };
+    let rels = pkg.rels(sheet_path);
+    let mut out = vec![];
+    for part in children(parts, "tablePart") {
+        let Some(path) = part.attribute((REL, "id")).and_then(|id| rels.get(id)).cloned() else { continue };
+        let Some(xml) = pkg.text(&path) else { continue };
+        let Ok(t) = Document::parse(&xml) else { continue };
+        let t = t.root_element();
+        let Some(range) = t.attribute("ref").and_then(range_ref) else { continue };
+        let info = child(t, "tableStyleInfo");
+        let flag = |name: &str| info.and_then(|i| attr_bool(i, name)).unwrap_or(false);
+        out.push(TableDef {
+            range,
+            header_rows: attr_u32(t, "headerRowCount").unwrap_or(1),
+            totals_rows: attr_u32(t, "totalsRowCount").unwrap_or(0),
+            style: info.and_then(|i| i.attribute("name")).map(str::to_string),
+            row_stripes: flag("showRowStripes"),
+            col_stripes: flag("showColumnStripes"),
+            first_col: flag("showFirstColumn"),
+            last_col: flag("showLastColumn"),
+        });
+    }
+    out
 }
 
 /// Paper sizes Excel writes in `paperSize`, in points (portrait)
