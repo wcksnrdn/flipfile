@@ -316,7 +316,7 @@ fn builtin(name: &str, theme: &[Rgb]) -> Option<Elements> {
         }
         "light" if (8..=14).contains(&n) => {
             let c = color(n - 8);
-            let all = Borders { left: line(Thin, c), right: line(Thin, c), top: line(Thin, c), bottom: line(Thin, c) };
+            let all = Borders { left: line(Thin, c), right: line(Thin, c), top: line(Thin, c), bottom: line(Thin, c), ..Default::default() };
             e.whole = Some(Dxf { borders: all.clone(), ..Default::default() });
             e.header = Some(Dxf { bold: Some(true), color: Some(white), fill: Some(c), ..Default::default() });
             e.totals = Some(Dxf { bold: Some(true), borders: Borders { top: line(Double, c), ..Default::default() }, ..Default::default() });
@@ -327,7 +327,7 @@ fn builtin(name: &str, theme: &[Rgb]) -> Option<Elements> {
         }
         "light" if (15..=21).contains(&n) => {
             let c = color(n - 15);
-            let all = Borders { left: line(Thin, c), right: line(Thin, c), top: line(Thin, c), bottom: line(Thin, c) };
+            let all = Borders { left: line(Thin, c), right: line(Thin, c), top: line(Thin, c), bottom: line(Thin, c), ..Default::default() };
             e.whole = Some(Dxf { borders: all, inside_h: line(Thin, c), inside_v: line(Thin, c), ..Default::default() });
             e.header = Some(Dxf { bold: Some(true), borders: Borders { bottom: line(Medium, c), ..Default::default() }, ..Default::default() });
             e.totals = Some(Dxf { bold: Some(true), borders: Borders { top: line(Double, c), ..Default::default() }, ..Default::default() });
@@ -339,7 +339,7 @@ fn builtin(name: &str, theme: &[Rgb]) -> Option<Elements> {
         "medium" if (1..=7).contains(&n) => {
             let c = color(n - 1);
             let rule = if n == 1 { tint(c, 0.35) } else { tint(c, 0.4) };
-            let outer = Borders { left: line(Thin, rule), right: line(Thin, rule), top: line(Thin, rule), bottom: line(Thin, rule) };
+            let outer = Borders { left: line(Thin, rule), right: line(Thin, rule), top: line(Thin, rule), bottom: line(Thin, rule), ..Default::default() };
             e.whole = Some(Dxf { borders: outer, inside_h: line(Thin, rule), ..Default::default() });
             e.header = Some(Dxf { bold: Some(true), color: Some(white), fill: Some(c), ..Default::default() });
             e.totals = Some(Dxf { bold: Some(true), borders: Borders { top: line(Double, c), ..Default::default() }, ..Default::default() });
@@ -361,7 +361,7 @@ fn builtin(name: &str, theme: &[Rgb]) -> Option<Elements> {
         }
         "medium" if (15..=21).contains(&n) => {
             let c = color(n - 15);
-            let outer = Borders { left: None, right: None, top: line(Medium, dark), bottom: line(Medium, dark) };
+            let outer = Borders { left: None, right: None, top: line(Medium, dark), bottom: line(Medium, dark), ..Default::default() };
             e.whole = Some(Dxf { borders: outer, inside_h: line(Thin, dark), ..Default::default() });
             e.header = Some(Dxf { bold: Some(true), color: Some(white), fill: Some(c), borders: Borders { bottom: line(Medium, dark), ..Default::default() }, ..Default::default() });
             e.totals = Some(Dxf { bold: Some(true), borders: Borders { top: line(Double, dark), ..Default::default() }, ..Default::default() });
@@ -373,7 +373,7 @@ fn builtin(name: &str, theme: &[Rgb]) -> Option<Elements> {
         "medium" if (22..=28).contains(&n) => {
             let c = color(n - 22);
             let rule = if n == 22 { tint(c, 0.35) } else { tint(c, 0.4) };
-            let all = Borders { left: line(Thin, rule), right: line(Thin, rule), top: line(Thin, rule), bottom: line(Thin, rule) };
+            let all = Borders { left: line(Thin, rule), right: line(Thin, rule), top: line(Thin, rule), bottom: line(Thin, rule), ..Default::default() };
             e.whole = Some(Dxf { fill: Some(if n == 22 { tint(c, 0.85) } else { tint(c, 0.8) }), borders: all, inside_h: line(Thin, rule), inside_v: line(Thin, rule), ..Default::default() });
             e.header = Some(Dxf { bold: Some(true), ..Default::default() });
             e.totals = Some(Dxf { bold: Some(true), borders: Borders { top: line(Double, c), ..Default::default() }, ..Default::default() });
@@ -422,6 +422,7 @@ fn table_overlay(t: &TableDef, el: &Elements, out: &mut HashMap<(u32, u32), Dxf>
             right: if c == rr { d.borders.right } else { d.inside_v },
             top: if r == rt { d.borders.top } else { d.inside_h },
             bottom: if r == rb { d.borders.bottom } else { d.inside_h },
+            ..Default::default()
         };
         x
     };

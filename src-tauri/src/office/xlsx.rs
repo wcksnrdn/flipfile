@@ -67,6 +67,9 @@ pub struct Borders {
     pub right: Option<Edge>,
     pub top: Option<Edge>,
     pub bottom: Option<Edge>,
+    /// diagonal lines: bottom-left to top-right, top-left to bottom-right
+    pub up: Option<Edge>,
+    pub down: Option<Edge>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -565,6 +568,15 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
         .map(|fs| {
             children(fs, "fill")
                 .map(|f| {
+                    // a gradient prints as the blend of its colours
+                    if let Some(g) = child(f, "gradientFill") {
+                        let stops: Vec<Rgb> = children(g, "stop").filter_map(|s| child(s, "color").and_then(|c| colors.get(c))).collect();
+                        if stops.is_empty() {
+                            return None;
+                        }
+                        let n = stops.len() as u32;
+                        return Some([0, 1, 2].map(|i| (stops.iter().map(|c| c[i] as u32).sum::<u32>() / n) as u8));
+                    }
                     let p = child(f, "patternFill")?;
                     let kind = p.attribute("patternType").unwrap_or("none");
                     if kind == "none" {
@@ -614,7 +626,15 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
                         let color = child(e, "color").and_then(|c| colors.get(c)).unwrap_or([0, 0, 0]);
                         Some(Edge { line, color })
                     };
-                    Borders { left: edge("left"), right: edge("right"), top: edge("top"), bottom: edge("bottom") }
+                    let diagonal = edge("diagonal");
+                    Borders {
+                        left: edge("left"),
+                        right: edge("right"),
+                        top: edge("top"),
+                        bottom: edge("bottom"),
+                        up: diagonal.filter(|_| attr_bool(b, "diagonalUp").unwrap_or(false)),
+                        down: diagonal.filter(|_| attr_bool(b, "diagonalDown").unwrap_or(false)),
+                    }
                 })
                 .collect()
         })
@@ -1187,7 +1207,7 @@ fn read_dxfs(xml: &str, colors: &Colors) -> (Vec<Dxf>, HashMap<String, Vec<(Stri
                         x.num_fmt = n.attribute("formatCode").map(str::to_string);
                     }
                     if let Some(b) = child(d, "border") {
-                        x.borders = Borders { left: border_edge(b, "left", colors), right: border_edge(b, "right", colors), top: border_edge(b, "top", colors), bottom: border_edge(b, "bottom", colors) };
+                        x.borders = Borders { left: border_edge(b, "left", colors), right: border_edge(b, "right", colors), top: border_edge(b, "top", colors), bottom: border_edge(b, "bottom", colors), ..Default::default() };
                         x.inside_h = border_edge(b, "horizontal", colors);
                         x.inside_v = border_edge(b, "vertical", colors);
                     }

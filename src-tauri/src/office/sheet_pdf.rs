@@ -910,7 +910,7 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                     if x2 <= x1 || y2 <= y1 {
                         continue;
                     }
-                    let edges = [(b.top, (x1, y1, x2, y1)), (b.bottom, (x1, y2, x2, y2)), (b.left, (x1, y1, x1, y2)), (b.right, (x2, y1, x2, y2))];
+                    let edges = [(b.top, (x1, y1, x2, y1)), (b.bottom, (x1, y2, x2, y2)), (b.left, (x1, y1, x1, y2)), (b.right, (x2, y1, x2, y2)), (b.up, (x1, y2, x2, y1)), (b.down, (x1, y1, x2, y2))];
                     for (edge, (a, bb, cc, d)) in edges {
                         if let Some(e) = edge {
                             draw_edge(&mut out, e, a, bb, cc, d, s);
