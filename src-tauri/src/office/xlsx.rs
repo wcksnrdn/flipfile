@@ -8,6 +8,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Read};
+use std::sync::Arc;
 
 use roxmltree::{Document, Node};
 
@@ -99,7 +100,49 @@ pub struct Style {
     pub wrap: bool,
     pub indent: u32,
     pub shrink: bool,
+    /// text turned this many degrees anticlockwise (-90..=90)
+    pub rotation: i16,
+    /// letters stacked one under the other ("Vertical Text")
+    pub stacked: bool,
 }
+
+/// What a run of rich text changes from its cell's font
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RunFont {
+    pub name: Option<String>,
+    pub size: Option<f32>,
+    pub bold: Option<bool>,
+    pub italic: Option<bool>,
+    pub underline: Option<bool>,
+    pub strike: Option<bool>,
+    pub color: Option<Rgb>,
+    /// 1 superscript, -1 subscript
+    pub script: i8,
+}
+
+impl RunFont {
+    /// The cell's font with this run's changes
+    pub fn over(&self, base: &Font) -> Font {
+        Font {
+            name: self.name.clone().unwrap_or_else(|| base.name.clone()),
+            size: self.size.unwrap_or(base.size),
+            bold: self.bold.unwrap_or(base.bold),
+            italic: self.italic.unwrap_or(base.italic),
+            underline: self.underline.unwrap_or(base.underline),
+            strike: self.strike.unwrap_or(base.strike),
+            color: self.color.or(base.color),
+        }
+    }
+}
+
+/// A piece of a cell's text in its own font (bold words, a red figure…)
+#[derive(Clone, Debug, PartialEq)]
+pub struct RichRun {
+    pub text: String,
+    pub font: RunFont,
+}
+
+pub type Rich = Arc<Vec<RichRun>>;
 
 #[derive(Clone, Debug)]
 pub struct Cell {
@@ -185,6 +228,8 @@ pub struct Sheet {
     /// page breaks: a new page starts *before* these rows / columns
     pub row_breaks: Vec<u32>,
     pub col_breaks: Vec<u32>,
+    /// cells whose text mixes fonts, by position
+    pub rich: HashMap<(u32, u32), Rich>,
     /// rows and columns frozen on screen (Freeze Panes): usually a table's headings
     pub frozen: (u32, u32),
 }
@@ -565,6 +610,12 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
                 s.wrap = attr_bool(a, "wrapText").unwrap_or(false);
                 s.indent = attr_u32(a, "indent").unwrap_or(0);
                 s.shrink = attr_bool(a, "shrinkToFit").unwrap_or(false);
+                match attr_u32(a, "textRotation").unwrap_or(0) {
+                    255 => s.stacked = true,
+                    r @ 0..=90 => s.rotation = r as i16,
+                    r @ 91..=180 => s.rotation = 90 - r as i16,
+                    _ => {}
+                }
             }
             styles.push(s);
         }
@@ -578,10 +629,44 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
 // ---------------------------------------------------------------------------
 // Workbook
 
-/// Shared strings (rich text flattened to its plain text)
-fn shared_strings(xml: &str) -> Vec<String> {
+/// Shared strings: the plain text, and its runs when it mixes fonts
+fn shared_strings(xml: &str, colors: &Colors) -> Vec<(String, Option<Rich>)> {
     let Ok(doc) = Document::parse(xml) else { return vec![] };
-    doc.root_element().children().filter(|n| n.has_tag_name((MAIN, "si"))).map(rich_text).collect()
+    doc.root_element().children().filter(|n| n.has_tag_name((MAIN, "si"))).map(|si| (rich_text(si), runs(si, colors))).collect()
+}
+
+/// The runs of an `<si>` / `<is>` that sets fonts of its own (None for plain text)
+fn runs(n: Node, colors: &Colors) -> Option<Rich> {
+    let rs: Vec<Node> = children(n, "r").collect();
+    if rs.is_empty() || !rs.iter().any(|r| child(*r, "rPr").is_some()) {
+        return None;
+    }
+    let out: Vec<RichRun> = rs
+        .iter()
+        .map(|r| {
+            let text = child(*r, "t").and_then(|t| t.text()).unwrap_or("").to_string();
+            let font = child(*r, "rPr").map(|p| {
+                let val = |name: &str| child(p, name);
+                let on = |name: &str| val(name).map(|n| n.attribute("val").map(|v| v != "0" && v != "false").unwrap_or(true));
+                RunFont {
+                    name: val("rFont").and_then(|n| n.attribute("val")).map(str::to_string),
+                    size: val("sz").and_then(|n| attr_f32(n, "val")),
+                    bold: on("b"),
+                    italic: on("i"),
+                    underline: val("u").map(|n| n.attribute("val") != Some("none")),
+                    strike: on("strike"),
+                    color: val("color").and_then(|c| colors.get(c)),
+                    script: match val("vertAlign").and_then(|n| n.attribute("val")) {
+                        Some("superscript") => 1,
+                        Some("subscript") => -1,
+                        _ => 0,
+                    },
+                }
+            });
+            RichRun { text, font: font.unwrap_or_default() }
+        })
+        .collect();
+    Some(Arc::new(out))
 }
 
 /// The text of an `<si>` / `<is>`: its `<t>` runs, without phonetic hints
@@ -633,7 +718,7 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
     let indexed = rel_target("/styles").and_then(|p| pkg.text(&p)).and_then(|x| custom_palette(&x));
     let colors = Colors { theme: if theme.is_empty() { default_theme() } else { theme }, indexed };
     let styles = rel_target("/styles").and_then(|p| pkg.text(&p)).map(|x| read_styles(&x, &colors)).unwrap_or_else(|| vec![Style { num_fmt: "General".into(), ..Default::default() }]);
-    let strings = rel_target("/sharedStrings").and_then(|p| pkg.text(&p)).map(|x| shared_strings(&x)).unwrap_or_default();
+    let strings = rel_target("/sharedStrings").and_then(|p| pkg.text(&p)).map(|x| shared_strings(&x, &colors)).unwrap_or_default();
     let mdw = max_digit_width(&styles[0].font);
 
     // print areas and titles, per sheet index
@@ -660,7 +745,7 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
                 continue;
             }
             let Some(xml) = pkg.text(&path) else { continue };
-            let mut sheet = read_sheet(&xml, &strings, &styles, mdw).map_err(|e| format!("sheet \"{name}\": {e}"))?;
+            let mut sheet = read_sheet(&xml, &strings, &styles, mdw, &colors).map_err(|e| format!("sheet \"{name}\": {e}"))?;
             sheet.name = name.clone();
             sheet.pictures = read_pictures(&mut pkg, &path, &xml);
             for (n, local, text) in &names {
@@ -717,7 +802,7 @@ fn custom_palette(styles_xml: &str) -> Option<Vec<Rgb>> {
     Some(children(ic, "rgbColor").filter_map(|c| c.attribute("rgb").and_then(hex)).collect())
 }
 
-fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Result<Sheet, String> {
+fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], mdw: f32, colors: &Colors) -> Result<Sheet, String> {
     let doc = Document::parse(xml).map_err(|_| "damaged sheet".to_string())?;
     let root = doc.root_element();
     let mut sheet = Sheet::default();
@@ -777,9 +862,19 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
                 let style = if style < styles.len() { style } else { 0 };
                 let v = child(c, "v").and_then(|v| v.text());
                 let value = match c.attribute("t").unwrap_or("n") {
-                    "s" => v.and_then(|i| i.trim().parse::<usize>().ok()).and_then(|i| strings.get(i)).map(|s| Value::Text(s.clone())),
+                    "s" => v.and_then(|i| i.trim().parse::<usize>().ok()).and_then(|i| strings.get(i)).map(|(s, rich)| {
+                        if let Some(rich) = rich {
+                            sheet.rich.insert((cr, cc), rich.clone());
+                        }
+                        Value::Text(s.clone())
+                    }),
                     "str" => v.map(|s| Value::Text(s.to_string())),
-                    "inlineStr" => child(c, "is").map(|is| Value::Text(rich_text(is))),
+                    "inlineStr" => child(c, "is").map(|is| {
+                        if let Some(rich) = runs(is, colors) {
+                            sheet.rich.insert((cr, cc), rich);
+                        }
+                        Value::Text(rich_text(is))
+                    }),
                     "b" => v.map(|s| Value::Bool(s.trim() == "1")),
                     "e" => v.map(|s| Value::Error(s.to_string())),
                     "d" => v.map(|s| Value::Text(s.to_string())),

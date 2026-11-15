@@ -119,6 +119,27 @@ pub fn text_width(family: &str, size: f32, bold: bool, italic: bool, text: &str)
     Some(units / upem * size)
 }
 
+/// Width of `text` the way Excel measures it, in points: Windows lays text out at 96 dpi
+/// with each character's advance rounded to whole pixels, which makes Calibri 11 about
+/// 5% narrower than its outlines. Excel decides with these widths whether a number fits
+/// (or shows ####) and where wrapped text breaks.
+pub fn text_width_excel(family: &str, size: f32, bold: bool, italic: bool, text: &str) -> Option<f32> {
+    use typst::text::{FontStretch, FontStyle, FontVariant, FontWeight};
+    let store = fonts();
+    let variant = FontVariant::new(
+        if italic { FontStyle::Italic } else { FontStyle::Normal },
+        if bold { FontWeight::BOLD } else { FontWeight::REGULAR },
+        FontStretch::NORMAL,
+    );
+    let index = store.book().select(&family.to_lowercase(), variant)?;
+    let font = store.font(index)?;
+    let face = ttf_parser::Face::parse(font.data().as_slice(), font.index()).ok()?;
+    let px = size * 96.0 / 72.0 / face.units_per_em() as f32;
+    let half = face.units_per_em() / 2;
+    let pixels: f32 = text.chars().map(|c| (face.glyph_index(c).and_then(|g| face.glyph_hor_advance(g)).unwrap_or(half) as f32 * px).round()).sum();
+    Some(pixels * 0.75)
+}
+
 fn library() -> &'static LazyHash<Library> {
     static LIBRARY: OnceLock<LazyHash<Library>> = OnceLock::new();
     LIBRARY.get_or_init(|| LazyHash::new(Library::default()))

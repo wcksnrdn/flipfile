@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use super::numfmt::{self, Separators, Shown, Value, HIDE_OFF, HIDE_ON};
-use super::xlsx::{Edge, HAlign, Line, Range, Sheet, Style, VAlign, Workbook};
+use super::xlsx::{Edge, Font, HAlign, Line, Range, Sheet, Style, VAlign, Workbook};
 
 /// Space between a cell's edge and its text (Excel leaves ~2 px)
 const PAD: f32 = 1.5;
@@ -79,8 +79,20 @@ fn families(name: &str) -> Vec<String> {
     v
 }
 
-/// Width of `text` in the first installed family, or an estimate
+/// Width of `text` in the first installed family as Excel measures it (whole pixels per
+/// character, see `typeset::text_width_excel`), or an estimate
 fn width(fams: &[String], size: f32, bold: bool, italic: bool, text: &str) -> f32 {
+    let plain: String = text.chars().filter(|c| *c != HIDE_ON && *c != HIDE_OFF).collect();
+    for f in fams {
+        if let Some(w) = super::typeset::text_width_excel(f, size, bold, italic, &plain) {
+            return w;
+        }
+    }
+    plain.chars().count() as f32 * size * if bold { 0.56 } else { 0.52 }
+}
+
+/// Width of `text` as it is actually drawn (its outlines)
+fn outline_width(fams: &[String], size: f32, bold: bool, italic: bool, text: &str) -> f32 {
     let plain: String = text.chars().filter(|c| *c != HIDE_ON && *c != HIDE_OFF).collect();
     for f in fams {
         if let Some(w) = super::typeset::text_width(f, size, bold, italic, &plain) {
@@ -88,6 +100,57 @@ fn width(fams: &[String], size: f32, bold: bool, italic: bool, text: &str) -> f3
         }
     }
     plain.chars().count() as f32 * size * if bold { 0.56 } else { 0.52 }
+}
+
+/// A piece of a cell's text in one font: the whole text, or a run of rich text
+#[derive(Clone)]
+struct Piece {
+    text: String,
+    font: Font,
+    /// from the number format ([Red]…), over the font's own colour
+    color: Option<[u8; 3]>,
+    script: i8,
+}
+
+impl Piece {
+    fn plain(text: String, font: &Font, color: Option<[u8; 3]>) -> Vec<Piece> {
+        vec![Piece { text, font: font.clone(), color, script: 0 }]
+    }
+    fn size(&self) -> f32 {
+        if self.script != 0 { self.font.size * 0.65 } else { self.font.size }
+    }
+    fn width(&self) -> f32 {
+        width(&families(&self.font.name), self.size(), self.font.bold, self.font.italic, &self.text)
+    }
+    fn outline(&self) -> f32 {
+        outline_width(&families(&self.font.name), self.size(), self.font.bold, self.font.italic, &self.text)
+    }
+}
+
+fn pieces_width(pieces: &[Piece]) -> f32 {
+    pieces.iter().map(Piece::width).sum()
+}
+
+/// Letter spacing (pt) that draws `pieces` exactly as wide as Excel measures them
+fn tracking(pieces: &[Piece]) -> f32 {
+    let chars: usize = pieces.iter().map(|p| p.text.chars().filter(|c| *c != HIDE_ON && *c != HIDE_OFF).count()).sum();
+    if chars < 2 {
+        return 0.0;
+    }
+    let excel = pieces_width(pieces);
+    let drawn: f32 = pieces.iter().map(Piece::outline).sum();
+    // only ever tighten, and never more than Windows' pixel rounding could
+    ((excel - drawn) / chars as f32).clamp(-0.08 * pieces[0].font.size, 0.0)
+}
+
+/// The pieces a cell's text is drawn in: its rich text runs, or the formatted text
+fn cell_pieces(shown: &Shown, style: &Style, rich: Option<&super::xlsx::Rich>, value: &Value) -> Vec<Piece> {
+    if let (Some(runs), Value::Text(t)) = (rich, value) {
+        if shown.text == *t && shown.color.is_none() {
+            return runs.iter().filter(|r| !r.text.is_empty()).map(|r| Piece { text: r.text.clone(), font: r.font.over(&style.font), color: None, script: r.font.script }).collect();
+        }
+    }
+    Piece::plain(shown.text.clone(), &style.font, shown.color)
 }
 
 /// Height of one line of text, the way Excel sizes rows (15 pt for Calibri 11)
@@ -117,66 +180,86 @@ fn rgb(c: [u8; 3]) -> String {
     format!("rgb({}, {}, {})", c[0], c[1], c[2])
 }
 
-/// A Typst expression for `text` (with hidden padding runs) in a style
 /// Typst's list of `families` for an Excel font name
 fn font_list(name: &str) -> String {
     families(name).iter().map(|s| typst_str(s)).collect::<Vec<_>>().join(", ")
 }
 
+/// A Typst expression for a cell's text pieces (with hidden padding runs), at `scale`;
+/// `shrink` scales the font sizes further (Shrink to fit), `track` is letter spacing in pt.
+///
 /// `default_font` is the `font_list` the document sets for all text (see `print`), so
 /// only cells in another font name theirs: a workbook has tens of thousands of cells, and
 /// every byte of markup per cell costs Typst time and memory.
-fn text_expr(text: &str, style: &Style, color: Option<[u8; 3]>, scale: f32, size_override: Option<f32>, default_font: &str) -> String {
-    let f = &style.font;
-    let fams_list = font_list(&f.name);
-    let size = size_override.unwrap_or(f.size) * scale;
-    let fill = color.or(f.color).unwrap_or([0, 0, 0]);
-    let mut base = format!("size: {size:.2}pt");
-    if fams_list != default_font {
-        base = format!("font: ({fams_list},), {base}");
-    }
-    if f.bold {
-        base.push_str(", weight: \"bold\"");
-    }
-    if f.italic {
-        base.push_str(", style: \"italic\"");
-    }
-    let mut parts = vec![];
-    let mut cur = String::new();
-    let mut hidden = false;
-    let flush = |cur: &mut String, hidden: bool, parts: &mut Vec<String>| {
-        if cur.is_empty() {
-            return;
+fn pieces_expr(pieces: &[Piece], scale: f32, shrink: f32, track: f32, default_font: &str) -> String {
+    let mut all = vec![];
+    for p in pieces {
+        let f = &p.font;
+        let fams_list = font_list(&f.name);
+        let size = p.size() * shrink * scale;
+        let fill = p.color.or(f.color).unwrap_or([0, 0, 0]);
+        let mut base = format!("size: {size:.2}pt");
+        if fams_list != default_font {
+            base = format!("font: ({fams_list},), {base}");
         }
-        let paint = if hidden { "rgb(0, 0, 0, 0)".to_string() } else { rgb(fill) };
-        parts.push(format!("text({base}, fill: {paint}, {})", typst_str(cur)));
-        cur.clear();
-    };
-    for c in text.chars() {
-        match c {
-            HIDE_ON => {
-                flush(&mut cur, hidden, &mut parts);
-                hidden = true;
-            }
-            HIDE_OFF => {
-                flush(&mut cur, hidden, &mut parts);
-                hidden = false;
-            }
-            c => cur.push(c),
+        if f.bold {
+            base.push_str(", weight: \"bold\"");
         }
+        if f.italic {
+            base.push_str(", style: \"italic\"");
+        }
+        if track < -0.005 {
+            let _ = write!(base, ", tracking: {:.3}pt", track * shrink * scale);
+        }
+        if p.script != 0 {
+            let _ = write!(base, ", baseline: {:.2}pt", -(p.script as f32) * f.size * 0.33 * shrink * scale);
+        }
+        let mut parts = vec![];
+        let mut cur = String::new();
+        let mut hidden = false;
+        let flush = |cur: &mut String, hidden: bool, parts: &mut Vec<String>| {
+            if cur.is_empty() {
+                return;
+            }
+            let paint = if hidden { "rgb(0, 0, 0, 0)".to_string() } else { rgb(fill) };
+            parts.push(format!("text({base}, fill: {paint}, {})", typst_str(cur)));
+            cur.clear();
+        };
+        for c in p.text.chars() {
+            match c {
+                HIDE_ON => {
+                    flush(&mut cur, hidden, &mut parts);
+                    hidden = true;
+                }
+                HIDE_OFF => {
+                    flush(&mut cur, hidden, &mut parts);
+                    hidden = false;
+                }
+                c => cur.push(c),
+            }
+        }
+        flush(&mut cur, hidden, &mut parts);
+        if parts.is_empty() {
+            continue;
+        }
+        let mut e = parts.join(" + ");
+        if f.underline {
+            e = format!("underline({e})");
+        }
+        if f.strike {
+            e = format!("strike({e})");
+        }
+        all.push(e);
     }
-    flush(&mut cur, hidden, &mut parts);
-    if parts.is_empty() {
+    if all.is_empty() {
         return "[]".into();
     }
-    let mut e = parts.join(" + ");
-    if f.underline {
-        e = format!("underline({e})");
-    }
-    if f.strike {
-        e = format!("strike({e})");
-    }
-    e
+    all.join(" + ")
+}
+
+/// `pieces_expr` for one text in a style
+fn text_expr(text: &str, style: &Style, color: Option<[u8; 3]>, scale: f32, default_font: &str) -> String {
+    pieces_expr(&Piece::plain(text.to_string(), &style.font, color), scale, 1.0, 0.0, default_font)
 }
 
 // ---------------------------------------------------------------------------
@@ -257,9 +340,20 @@ fn row_heights(sheet: &Sheet, styles: &[Style], range: Range, col_w: &dyn Fn(u32
         }
         let style = &styles[cell.style];
         let fams = families(&style.font.name);
-        let lh = line_height(&fams, style.font.size);
+        // the largest font in the cell sets the line height
+        let size = sheet.rich.get(&(r, c)).map(|runs| runs.iter().map(|run| run.font.size.unwrap_or(style.font.size)).fold(style.font.size, f32::max)).unwrap_or(style.font.size);
+        let lh = line_height(&fams, size);
         let mut need = lh;
-        if style.wrap {
+        if style.rotation != 0 || style.stacked {
+            let shown = numfmt::format(value, &style.num_fmt, date1904, sep);
+            let text = shown.text.replace('\n', " ");
+            need = if style.stacked {
+                lh * text.chars().count() as f32
+            } else {
+                let a = (style.rotation as f32).abs().to_radians();
+                width(&fams, size, style.font.bold, style.font.italic, &text) * a.sin() + lh * a.cos() + 2.0 * PAD
+            };
+        } else if style.wrap {
             let shown = numfmt::format(value, &style.num_fmt, date1904, sep);
             let w = merged.get(&(r, c)).map(|m| (m.1..=m.3).map(col_w).sum()).unwrap_or_else(|| col_w(c)) - 2.0 * PAD;
             let lines = wrapped_lines(&shown.text, &fams, &style.font, w.max(4.0));
@@ -656,7 +750,7 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                     // room for text that does not wrap: it overflows into empty neighbours
                     let in_merge = plan.merged.contains_key(&(r, c));
                     let (mut left, mut right) = (grid.x(c), grid.x(c) + cw);
-                    if !style.wrap && !in_merge && !is_number && shown.fill.is_none() {
+                    if !style.wrap && !in_merge && !is_number && shown.fill.is_none() && style.rotation == 0 && !style.stacked {
                         let free = |cc: u32| !sheet.cells.get(&(r, cc)).map(|x| x.value.is_some()).unwrap_or(false) && !plan.merged.contains_key(&(r, cc));
                         if matches!(h, HAlign::Left | HAlign::Center | HAlign::CenterContinuous | HAlign::Justify) {
                             let mut cc = c + 1;
@@ -686,7 +780,8 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                         let full_l = grid.x(m.1.max(grid.range.1));
                         let full_r = grid.x(m.3.min(grid.range.3) + 1);
                         let vis_l = grid.x(c.max(page.cols.0));
-                        let markup = cell_text(&shown, style, h, is_number, full_r - full_l, ch, s, &default_font);
+                        let pieces = cell_pieces(&shown, style, sheet.rich.get(&src), value);
+                        let markup = cell_text(&shown, pieces, style, h, is_number, full_r - full_l, ch, s, &default_font);
                         let _ = writeln!(
                             out,
                             "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, block(width: {:.2}pt, height: {:.2}pt, clip: true, place(top + left, dx: {:.2}pt, {markup})))",
@@ -698,7 +793,8 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                         );
                         continue;
                     }
-                    let markup = cell_text(&shown, style, h, is_number, right - left, ch, s, &default_font);
+                    let pieces = cell_pieces(&shown, style, sheet.rich.get(&src), value);
+                    let markup = cell_text(&shown, pieces, style, h, is_number, right - left, ch, s, &default_font);
                     let _ = writeln!(out, "#place(top + left, dx: {:.2}pt, dy: {:.2}pt, {markup})", px(left), py(ry[&r]));
                 }
             }
@@ -764,7 +860,7 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                     let align = ["left", "center", "right"][i];
                     let y = if top { format!("dy: {mh:.2}pt") } else { format!("dy: {:.2}pt", ph - mf - 14.0) };
                     let style = Style { font: wb.styles[0].font.clone(), ..Default::default() };
-                    let t = text_expr(text, &style, None, 1.0, None, &default_font);
+                    let t = text_expr(text, &style, None, 1.0, &default_font);
                     let _ = writeln!(out, "#place(top + left, dx: {ml:.2}pt, {y}, block(width: {:.2}pt, align({align}, {t})))", pw - ml - mr);
                 }
             }
@@ -789,7 +885,7 @@ fn cell_box(grid: &Grid, merged: &HashMap<(u32, u32), Range>, r: u32, c: u32, ro
 
 /// A cell's text block: clipped to the cell (or its overflow room), aligned like Excel
 #[allow(clippy::too_many_arguments)]
-fn cell_text(shown: &Shown, style: &Style, h: HAlign, is_number: bool, w: f32, ch: f32, s: f32, default_font: &str) -> String {
+fn cell_text(shown: &Shown, pieces: Vec<Piece>, style: &Style, h: HAlign, is_number: bool, w: f32, ch: f32, s: f32, default_font: &str) -> String {
     let fams = families(&style.font.name);
     let indent = style.indent as f32 * 9.0;
     let inner = (w - 2.0 * PAD - indent).max(1.0);
@@ -817,47 +913,75 @@ fn cell_text(shown: &Shown, style: &Style, h: HAlign, is_number: bool, w: f32, c
         )
     };
     let text_w = |t: &str| width(&fams, style.font.size, style.font.bold, style.font.italic, t);
+    let hashes_expr = || pieces_expr(&Piece::plain("#".repeat(hashes(&fams, style, inner)), &style.font, shown.color), s, 1.0, 0.0, default_font);
 
     // accounting-style formats: the part before the fill hugs the left, the rest the right
     if let (Some(_), Some(after)) = (shown.fill, &shown.after_fill) {
         if text_w(&shown.text) + text_w(after) > inner + 0.5 && is_number {
-            return block(text_expr(&"#".repeat(hashes(&fams, style, inner)), style, shown.color, s, None, default_font), "right");
+            return block(hashes_expr(), "right");
         }
-        let left = text_expr(&shown.text, style, shown.color, s, None, default_font);
-        let right = text_expr(after, style, shown.color, s, None, default_font);
+        let left = Piece::plain(shown.text.clone(), &style.font, shown.color);
+        let right = Piece::plain(after.clone(), &style.font, shown.color);
+        let (left_t, right_t) = (tracking(&left), tracking(&right));
+        let (left, right) = (pieces_expr(&left, s, 1.0, left_t, default_font), pieces_expr(&right, s, 1.0, right_t, default_font));
         return block(format!("box(width: 100%, {left} + h(1fr) + {right})"), "left");
     }
 
-    let mut text = shown.text.clone();
-    let mut size = None;
-    if !style.wrap {
-        text = text.replace('\n', " ");
-        let tw = text_w(&text);
-        if tw > inner + 0.5 {
-            if style.shrink {
-                size = Some((style.font.size * inner / tw).max(4.0));
-            } else if is_number {
-                // numbers never spill: Excel shows #### instead
-                text = "#".repeat(hashes(&fams, style, inner));
-            }
-        }
-    }
-    if h == HAlign::Fill && !text.is_empty() {
-        let tw = text_w(&text).max(0.1);
-        let n = ((inner / tw).floor() as usize).max(1);
-        text = text.repeat(n);
-    }
     let align = match h {
         HAlign::Right => "right",
         HAlign::Center | HAlign::CenterContinuous => "center",
         _ => "left",
     };
-    let t = text_expr(&text, style, shown.color, s, size, default_font);
+    if style.stacked {
+        // one letter per line, centred
+        let stacked: String = shown.text.chars().filter(|c| *c != '\n').map(|c| c.to_string()).collect::<Vec<_>>().join("\n");
+        let t = pieces_expr(&Piece::plain(stacked, &style.font, shown.color), s, 1.0, 0.0, default_font);
+        return block(format!("par(leading: 0.14em, {t})"), "center");
+    }
+    if style.rotation != 0 {
+        let pieces: Vec<Piece> = pieces.into_iter().map(|mut p| {
+            p.text = p.text.replace('\n', " ");
+            p
+        }).collect();
+        let t = pieces_expr(&pieces, s, 1.0, tracking(&pieces), default_font);
+        let tw = pieces_width(&pieces) + 1.0;
+        // anticlockwise in Excel, clockwise in Typst
+        let content = format!("rotate({}deg, reflow: true, box(width: {:.2}pt, {t}))", -style.rotation, tw * s);
+        // steep text stays in its cell; slanted text reaches over its neighbours like Excel's
+        if style.rotation.abs() == 90 {
+            return block(content, align);
+        }
+        return format!("box(width: {:.2}pt, height: {:.2}pt, inset: (x: {:.2}pt), align({align} + {v}, {content}))", w * s, ch * s, PAD * s);
+    }
+
+    let mut pieces = pieces;
+    let mut shrink = 1.0;
+    if !style.wrap {
+        for p in &mut pieces {
+            p.text = p.text.replace('\n', " ");
+        }
+        let tw = pieces_width(&pieces);
+        if tw > inner + 0.5 {
+            if style.shrink {
+                shrink = (inner / tw).max(4.0 / style.font.size);
+            } else if is_number {
+                // numbers never spill: Excel shows #### instead
+                return block(hashes_expr(), align);
+            }
+        }
+    }
+    if h == HAlign::Fill && pieces.len() == 1 && !pieces[0].text.is_empty() {
+        let tw = pieces_width(&pieces).max(0.1);
+        let n = ((inner / tw).floor() as usize).max(1);
+        pieces[0].text = pieces[0].text.repeat(n);
+    }
+    let track = tracking(&pieces);
+    let t = pieces_expr(&pieces, s, shrink, track, default_font);
     if style.wrap {
         block(format!("par(justify: {}, leading: 0.14em, {t})", h == HAlign::Justify), align)
     } else {
         // a box as wide as the text never wraps; what doesn't fit is clipped at the cell edge
-        let tw = text_w(&text) * size.map(|z| z / style.font.size).unwrap_or(1.0);
+        let tw = pieces_width(&pieces) * shrink;
         block(format!("box(width: {:.2}pt, {t})", (tw + 1.0) * s), align)
     }
 }
