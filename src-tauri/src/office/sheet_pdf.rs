@@ -5,6 +5,10 @@
 // numbers that don't fit show ####, and rows without a stored height grow to fit
 // their wrapped text.
 //
+// Sheets nobody set up for printing are laid out to be read instead: turned to
+// landscape and shrunk so that all their columns fit across the page, with a table's
+// heading row repeated on every page (see "Smart layout").
+//
 // Everything is positioned absolutely (in points) and typeset with Typst.
 
 use std::collections::{HashMap, HashSet};
@@ -290,6 +294,53 @@ fn wrapped_lines(text: &str, fams: &[String], font: &super::xlsx::Font, w: f32) 
 }
 
 // ---------------------------------------------------------------------------
+// Smart layout: sheets nobody set up for printing
+
+/// Smallest scale a sheet is shrunk to so that all its columns fit: a PDF is mostly read
+/// zoomed on a screen, where one wide table beats its columns scattered over pages.
+/// Wider sheets than that continue on more pages.
+const SMART_MIN_SCALE: f32 = 0.3;
+
+/// Fitting a portrait page is worth shrinking to this scale before turning to landscape
+const SMART_PORTRAIT_SCALE: f32 = 0.85;
+
+/// Someone chose how the sheet prints: Excel's own layout is then followed exactly
+fn is_set_up(sheet: &Sheet) -> bool {
+    sheet.print.explicit || sheet.print_area.is_some() || sheet.title_rows.is_some() || sheet.title_cols.is_some() || !sheet.row_breaks.is_empty() || !sheet.col_breaks.is_empty()
+}
+
+/// Landscape when the columns don't fit across a portrait page
+fn smart_landscape(p: &super::xlsx::Print, total_w: f32) -> bool {
+    let room = (p.paper.0.min(p.paper.1) - p.margins[0] - p.margins[1]).max(36.0);
+    total_w * SMART_PORTRAIT_SCALE > room
+}
+
+/// The rows to repeat on every page: the frozen rows, or else a table's heading row near
+/// the top (all text, bold or shaded, as wide as the table below it)
+fn heading_rows(sheet: &Sheet, styles: &[Style], range: Range) -> Option<(u32, u32)> {
+    let frozen = sheet.frozen.0;
+    if frozen > range.0 && frozen <= range.0 + 15 && frozen <= range.2 {
+        return Some((range.0, frozen - 1));
+    }
+    let filled = |r: u32| sheet.cells.range((r, range.1)..=(r, range.3)).filter(|(_, c)| c.value.is_some()).count();
+    let last = range.2.min(range.0 + 30);
+    let widest = (range.0..=last).map(filled).max().unwrap_or(0);
+    if widest < 2 {
+        return None;
+    }
+    (range.0..=range.2.min(range.0 + 10)).filter(|&r| r < range.2).find(|&r| {
+        let cells: Vec<_> = sheet.cells.range((r, range.1)..=(r, range.3)).filter(|(_, c)| c.value.is_some()).collect();
+        cells.len() * 2 >= widest
+            && cells.len() >= 2
+            && filled(r + 1) >= 2
+            && cells.iter().all(|(_, c)| {
+                let s = &styles[c.style];
+                matches!(c.value, Some(Value::Text(_))) && (s.font.bold || s.fill.is_some())
+            })
+    }).map(|r| (r, r))
+}
+
+// ---------------------------------------------------------------------------
 // Pages
 
 struct Page {
@@ -407,24 +458,52 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
         let grid = Grid { range, xs, ys };
 
         let p = &sheet.print;
-        let page_size = if p.landscape { (p.paper.1, p.paper.0) } else { p.paper };
         let [ml, mr, mt, mb, _, _] = p.margins;
-        let room_w = (page_size.0 - ml - mr).max(36.0);
-        let room_h = (page_size.1 - mt - mb).max(36.0);
-        let titles = sheet.title_rows.filter(|t| t.0 <= t.1);
-        let titles_h = titles.map(|(a, b)| (a..=b).map(|r| sheet.row_heights.get(&r).copied().unwrap_or(sheet.default_row_height)).sum::<f32>()).unwrap_or(0.0);
-
         let total_w = *grid.xs.last().unwrap();
         let total_h = *grid.ys.last().unwrap();
-        let scale = match p.fit {
-            Some((fw, fh)) => {
-                let sx = if fw > 0 { room_w * fw as f32 / total_w.max(1.0) } else { f32::MAX };
-                let sy = if fh > 0 { room_h * fh as f32 / total_h.max(1.0) } else { f32::MAX };
-                sx.min(sy).min(1.0).max(0.1)
+        let smart = !is_set_up(sheet);
+        let landscape = if smart { smart_landscape(p, total_w) } else { p.landscape };
+        let page_size = if landscape { (p.paper.1, p.paper.0) } else { p.paper };
+        let room_w = (page_size.0 - ml - mr).max(36.0);
+        let room_h = (page_size.1 - mt - mb).max(36.0);
+
+        let scale = if smart {
+            // every column on the page, unless that makes the text unreadably small
+            (room_w / total_w.max(1.0)).clamp(SMART_MIN_SCALE, 1.0)
+        } else {
+            match p.fit {
+                Some((fw, fh)) => {
+                    let sx = if fw > 0 { room_w * fw as f32 / total_w.max(1.0) } else { f32::MAX };
+                    let sy = if fh > 0 { room_h * fh as f32 / total_h.max(1.0) } else { f32::MAX };
+                    sx.min(sy).min(1.0).max(0.1)
+                }
+                None => p.scale / 100.0,
             }
-            None => p.scale / 100.0,
         };
-        let col_bands = bands(range.1, range.3, &|c| grid.w(c) * scale, room_w, &sheet.col_breaks);
+        let mut scale = scale;
+        let mut col_bands = bands(range.1, range.3, &|c| grid.w(c) * scale, room_w, &sheet.col_breaks);
+        if smart && col_bands.len() > 1 {
+            // too wide even when shrunk: spread the columns evenly over the pages it takes,
+            // as large as that allows, rather than a full page and a sliver
+            let n = col_bands.len() as f32;
+            let mut try_scale = (room_w * n / total_w).min(1.0);
+            while try_scale > scale {
+                let b = bands(range.1, range.3, &|c| grid.w(c) * try_scale, room_w, &sheet.col_breaks);
+                if b.len() == col_bands.len() {
+                    scale = try_scale;
+                    col_bands = b;
+                    break;
+                }
+                try_scale *= 0.97;
+            }
+        }
+        let mut titles = sheet.title_rows.filter(|t| t.0 <= t.1);
+        // a table running over several pages repeats its headings on each, as people
+        // would set it up to print
+        if smart && titles.is_none() && total_h * scale > room_h {
+            titles = heading_rows(sheet, &wb.styles, range);
+        }
+        let titles_h = titles.map(|(a, b)| (a.max(range.0)..=b.min(range.2)).map(|r| grid.h(r)).sum::<f32>()).unwrap_or(0.0);
         let row_bands = bands(range.0, range.2, &|r| grid.h(r) * scale, room_h - titles_h * scale, &sheet.row_breaks);
         let mut pages = vec![];
         if p.over_then_down {
@@ -857,6 +936,44 @@ mod tests {
     fn header_codes() {
         let p = header_parts("&L&\"Arial,Bold\"Laporan &A&RPage &P of &N", 2, 5, "x.xlsx", "Neraca");
         assert_eq!(p, ["Laporan Neraca".to_string(), String::new(), "Page 2 of 5".to_string()]);
+    }
+
+    /// A table `cols` wide and `rows` tall with a bold heading row
+    fn table(cols: u32, rows: u32) -> Workbook {
+        use super::super::xlsx::{Cell, Font};
+        let mut sheet = Sheet { name: "T".into(), default_col_width: 64.0, default_row_height: 15.0, ..Default::default() };
+        for c in 0..cols {
+            sheet.cells.insert((0, c), Cell { value: Some(Value::Text(format!("Col {c}"))), style: 1 });
+            for r in 1..rows {
+                sheet.cells.insert((r, c), Cell { value: Some(Value::Number((r * c) as f64)), style: 0 });
+            }
+        }
+        let normal = Style { num_fmt: "General".into(), ..Default::default() };
+        let bold = Style { font: Font { bold: true, ..Default::default() }, ..normal.clone() };
+        Workbook { sheets: vec![sheet], styles: vec![normal, bold], date1904: false }
+    }
+
+    #[test]
+    fn wide_tables_fit_the_page_width() {
+        // 20 columns of 64 pt: 1280 pt, Excel would print 3 pages across
+        let wb = table(20, 10);
+        let printed = print(&wb, Separators::US, "t.xlsx").unwrap();
+        assert_eq!(printed.pages.len(), 1);
+        assert!(printed.sheets[0].contains("width: 841.90pt"), "landscape A4: {}", printed.sheets[0]);
+        // a sheet set up to print as it is keeps Excel's layout
+        let mut wb = table(20, 10);
+        wb.sheets[0].print.explicit = true;
+        assert_eq!(print(&wb, Separators::US, "t.xlsx").unwrap().pages.len(), 3);
+    }
+
+    #[test]
+    fn long_tables_repeat_their_heading() {
+        let wb = table(5, 200);
+        let printed = print(&wb, Separators::US, "t.xlsx").unwrap();
+        assert!(printed.pages.len() > 2);
+        assert!(printed.pages.iter().all(|(_, p)| p.contains("\"Col 3\"")), "the heading row is on every page");
+        // narrow enough for portrait
+        assert!(printed.sheets[0].contains("width: 595.30pt"));
     }
 
     #[test]

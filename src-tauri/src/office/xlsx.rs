@@ -138,6 +138,9 @@ pub struct Print {
     pub header: Option<String>,
     pub footer: Option<String>,
     pub first_page: Option<u32>,
+    /// someone chose how this sheet prints (landscape, a scale, fit to pages); otherwise
+    /// the PDF lays it out to be readable instead of copying Excel's defaults
+    pub explicit: bool,
 }
 
 impl Default for Print {
@@ -156,6 +159,7 @@ impl Default for Print {
             header: None,
             footer: None,
             first_page: None,
+            explicit: false,
         }
     }
 }
@@ -181,6 +185,8 @@ pub struct Sheet {
     /// page breaks: a new page starts *before* these rows / columns
     pub row_breaks: Vec<u32>,
     pub col_breaks: Vec<u32>,
+    /// rows and columns frozen on screen (Freeze Panes): usually a table's headings
+    pub frozen: (u32, u32),
 }
 
 impl Sheet {
@@ -716,6 +722,12 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
     let root = doc.root_element();
     let mut sheet = Sheet::default();
 
+    if let Some(pane) = child(root, "sheetViews").and_then(|v| child(v, "sheetView")).and_then(|v| child(v, "pane")) {
+        if matches!(pane.attribute("state"), Some("frozen") | Some("frozenSplit")) {
+            sheet.frozen = (attr_f32(pane, "ySplit").unwrap_or(0.0) as u32, attr_f32(pane, "xSplit").unwrap_or(0.0) as u32);
+        }
+    }
+
     // default sizes
     let fmt = child(root, "sheetFormatPr");
     let base_font = &styles[0].font;
@@ -802,6 +814,7 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
         }
         p.landscape = s.attribute("orientation") == Some("landscape");
         p.scale = attr_f32(s, "scale").unwrap_or(100.0).clamp(10.0, 400.0);
+        p.explicit |= p.landscape || p.scale != 100.0;
         p.over_then_down = s.attribute("pageOrder") == Some("overThenDown");
         if attr_bool(s, "useFirstPageNumber").unwrap_or(false) {
             p.first_page = attr_u32(s, "firstPageNumber");
@@ -809,6 +822,7 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
         let fit_on = child(root, "sheetPr").and_then(|sp| child(sp, "pageSetUpPr")).and_then(|u| attr_bool(u, "fitToPage")).unwrap_or(false);
         if fit_on {
             p.fit = Some((attr_u32(s, "fitToWidth").unwrap_or(1), attr_u32(s, "fitToHeight").unwrap_or(1)));
+            p.explicit = true;
         }
     }
     if let Some(hf) = child(root, "headerFooter") {
