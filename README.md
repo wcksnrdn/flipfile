@@ -187,7 +187,7 @@ MIT-licensed, built in public by GitHub Actions, with checksums and signed build
 
 ### Compress levels
 
-Hold <kbd>⌥ Option</kbd> (macOS) or <kbd>Alt</kbd> (Windows) while dragging. The ring shows four compress levels, **Light · Balanced · Strong · Extreme**, next to the size presets **50% · 1080p · 720p · Original**. Point at a level and the circle says what it will make of your files **before you drop**, for example `4.2 MB → 610 KB` and `−85% · Fine detail softens · max 1920 px`; every level's slice shows its estimated size too.
+Hold <kbd>⌥ Option</kbd> (macOS) or <kbd>Alt</kbd> (Windows) while dragging. The ring shows four compress levels, **Light · Balanced · Strong · Extreme**, next to the size presets **50% · 1080p · 720p · Original**. Point at a level and the circle says what it will make of your files **before you drop**, for example `4.2 MB → 610 KB` and `−85% · Fine detail softens · max 1920 px`; every level's slice shows its estimated size too. The levels can also go on any ring in the **Ring Workshop** (category *Compress*), where they show their sizes the same way, no key needed.
 
 | Level | Photos | PDFs *(pictures inside; text stays sharp and selectable)* | Videos (MP4) | Recordings (M4A) |
 |---|---|---|---|---|
@@ -202,7 +202,7 @@ Hold <kbd>⌥ Option</kbd> (macOS) or <kbd>Alt</kbd> (Windows) while dragging. T
 - **Built in on macOS and Windows**: videos and recordings are re-encoded by `ffmpeg` when installed, otherwise by AVFoundation on macOS (hardware encoder, a 47 s 1080p video in 2–8 s) or Media Foundation on Windows; on Linux they need `ffmpeg`. Portrait videos stay portrait.
 - **A bubble sums it up** after the drop: sizes, the saving, the **gains** (space saved, upload and attachment limits it now fits) and the **costs**, with a button to show the result.
 
-> On Windows, holding Alt while dragging from File Explorer normally means "create shortcut"; flipfile always reads the dragged files and never moves, links or changes the originals. On Linux, set Resize / Quality in the tray menu instead.
+> On Windows, holding Alt while dragging from File Explorer normally means "create shortcut"; flipfile always reads the dragged files and never moves, links or changes the originals. Linux has no Option/Alt ring (Wayland lets no app read a key held while another app has the focus): add the levels to a ring in the Ring Workshop instead.
 
 ### Transcribe
 
