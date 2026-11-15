@@ -7,8 +7,6 @@ use roxmltree::Node;
 use super::shapes::{self, Geometry, PathCommand, PathFill};
 use super::xlsx::Rgb;
 
-const DRAW: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
-
 /// Points per EMU
 pub const EMU: f32 = 1.0 / 12700.0;
 
@@ -200,8 +198,6 @@ pub struct Shape {
     /// left, top, right, bottom
     pub insets: [f32; 4],
     pub rotation: f32,
-    /// a drawn line rather than an outline (connectors, `line` presets)
-    pub open: bool,
 }
 
 /// The shapes of one drawing anchor: a shape, a connector, or a group of them
@@ -319,7 +315,6 @@ fn shape(n: Node, theme: &[Rgb], box_size: (f32, f32), space: Option<Space>) -> 
         anchor,
         insets: [inset("lIns", 7.2), inset("tIns", 3.6), inset("rIns", 7.2), inset("bIns", 3.6)],
         rotation,
-        open,
     })
 }
 
@@ -466,6 +461,8 @@ pub fn shape_markup(sh: &Shape, w: f32, h: f32, s: f32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const DRAW: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     #[test]
     fn theme_colours_and_modifiers() {

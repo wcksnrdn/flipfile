@@ -98,18 +98,31 @@ pub fn covers(c: char) -> bool {
     (0..).map_while(|i| book.info(i)).any(|info| info.coverage.contains(c as u32))
 }
 
-/// Natural width of `text` set in `family` (or `None` when that font is not installed),
-/// in points: what Word needs for it without any squeezing.
-pub fn text_width(family: &str, size: f32, bold: bool, italic: bool, text: &str) -> Option<f32> {
+/// The installed font for a family and style, looked up once per family
+fn face_for(family: &str, bold: bool, italic: bool) -> Option<Font> {
     use typst::text::{FontStretch, FontStyle, FontVariant, FontWeight};
+    thread_local! {
+        static FACES: std::cell::RefCell<HashMap<(String, bool, bool), Option<Font>>> = Default::default();
+    }
+    let key = (family.to_lowercase(), bold, italic);
+    if let Some(hit) = FACES.with(|f| f.borrow().get(&key).cloned()) {
+        return hit;
+    }
     let store = fonts();
     let variant = FontVariant::new(
         if italic { FontStyle::Italic } else { FontStyle::Normal },
         if bold { FontWeight::BOLD } else { FontWeight::REGULAR },
         FontStretch::NORMAL,
     );
-    let index = store.book().select(&family.to_lowercase(), variant)?;
-    let font = store.font(index)?;
+    let font = store.book().select(&key.0, variant).and_then(|i| store.font(i));
+    FACES.with(|f| f.borrow_mut().insert(key, font.clone()));
+    font
+}
+
+/// Natural width of `text` set in `family` (or `None` when that font is not installed),
+/// in points: what Word needs for it without any squeezing.
+pub fn text_width(family: &str, size: f32, bold: bool, italic: bool, text: &str) -> Option<f32> {
+    let font = face_for(family, bold, italic)?;
     let face = ttf_parser::Face::parse(font.data().as_slice(), font.index()).ok()?;
     let upem = face.units_per_em() as f32;
     let units: f32 = text
@@ -124,15 +137,7 @@ pub fn text_width(family: &str, size: f32, bold: bool, italic: bool, text: &str)
 /// 5% narrower than its outlines. Excel decides with these widths whether a number fits
 /// (or shows ####) and where wrapped text breaks.
 pub fn text_width_excel(family: &str, size: f32, bold: bool, italic: bool, text: &str) -> Option<f32> {
-    use typst::text::{FontStretch, FontStyle, FontVariant, FontWeight};
-    let store = fonts();
-    let variant = FontVariant::new(
-        if italic { FontStyle::Italic } else { FontStyle::Normal },
-        if bold { FontWeight::BOLD } else { FontWeight::REGULAR },
-        FontStretch::NORMAL,
-    );
-    let index = store.book().select(&family.to_lowercase(), variant)?;
-    let font = store.font(index)?;
+    let font = face_for(family, bold, italic)?;
     let face = ttf_parser::Face::parse(font.data().as_slice(), font.index()).ok()?;
     let px = size * 96.0 / 72.0 / face.units_per_em() as f32;
     let half = face.units_per_em() / 2;

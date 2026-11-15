@@ -58,8 +58,21 @@ impl Printed {
     }
 }
 
-/// Font families to try for an Excel font: itself, then metric-compatible and common look-alikes
-fn families(name: &str) -> Vec<String> {
+/// Font families to try for an Excel font: itself, then metric-compatible and common
+/// look-alikes (worked out once per font name: every cell asks)
+fn families(name: &str) -> std::rc::Rc<Vec<String>> {
+    thread_local! {
+        static CACHE: std::cell::RefCell<HashMap<String, std::rc::Rc<Vec<String>>>> = Default::default();
+    }
+    if let Some(hit) = CACHE.with(|c| c.borrow().get(name).cloned()) {
+        return hit;
+    }
+    let v = std::rc::Rc::new(family_list(name));
+    CACHE.with(|c| c.borrow_mut().insert(name.to_string(), v.clone()));
+    v
+}
+
+fn family_list(name: &str) -> Vec<String> {
     let mut v = vec![name.to_string()];
     let alt: &[&str] = match name.to_lowercase().as_str() {
         "calibri" | "calibri light" => &["Carlito"],
@@ -134,11 +147,15 @@ fn pieces_width(pieces: &[Piece]) -> f32 {
 
 /// Letter spacing (pt) that draws `pieces` exactly as wide as Excel measures them
 fn tracking(pieces: &[Piece]) -> f32 {
+    tracking_for(pieces, pieces_width(pieces))
+}
+
+/// `tracking` when Excel's width of the pieces is known already
+fn tracking_for(pieces: &[Piece], excel: f32) -> f32 {
     let chars: usize = pieces.iter().map(|p| p.text.chars().filter(|c| *c != HIDE_ON && *c != HIDE_OFF).count()).sum();
     if chars < 2 {
         return 0.0;
     }
-    let excel = pieces_width(pieces);
     let drawn: f32 = pieces.iter().map(Piece::outline).sum();
     // only ever tighten, and never more than Windows' pixel rounding could
     ((excel - drawn) / chars as f32).clamp(-0.08 * pieces[0].font.size, 0.0)
@@ -182,8 +199,16 @@ fn rgb(c: [u8; 3]) -> String {
 }
 
 /// Typst's list of `families` for an Excel font name
-fn font_list(name: &str) -> String {
-    families(name).iter().map(|s| typst_str(s)).collect::<Vec<_>>().join(", ")
+fn font_list(name: &str) -> std::rc::Rc<str> {
+    thread_local! {
+        static CACHE: std::cell::RefCell<HashMap<String, std::rc::Rc<str>>> = Default::default();
+    }
+    if let Some(hit) = CACHE.with(|c| c.borrow().get(name).cloned()) {
+        return hit;
+    }
+    let list: std::rc::Rc<str> = families(name).iter().map(|s| typst_str(s)).collect::<Vec<_>>().join(", ").into();
+    CACHE.with(|c| c.borrow_mut().insert(name.to_string(), list.clone()));
+    list
 }
 
 /// A Typst expression for a cell's text pieces (with hidden padding runs), at `scale`;
@@ -200,7 +225,7 @@ fn pieces_expr(pieces: &[Piece], scale: f32, shrink: f32, track: f32, default_fo
         let size = p.size() * shrink * scale;
         let fill = p.color.or(f.color).unwrap_or([0, 0, 0]);
         let mut base = format!("size: {size:.2}pt");
-        if fams_list != default_font {
+        if &*fams_list != default_font {
             base = format!("font: ({fams_list},), {base}");
         }
         if f.bold {
@@ -1077,9 +1102,13 @@ fn cell_text(shown: &Shown, pieces: Vec<Piece>, style: &Style, h: HAlign, is_num
     let mut shrink = 1.0;
     if !style.wrap {
         for p in &mut pieces {
-            p.text = p.text.replace('\n', " ");
+            if p.text.contains('\n') {
+                p.text = p.text.replace('\n', " ");
+            }
         }
-        let tw = pieces_width(&pieces);
+    }
+    let mut tw = pieces_width(&pieces);
+    if !style.wrap {
         if tw > inner + 0.5 {
             if style.shrink {
                 shrink = (inner / tw).max(4.0 / style.font.size);
@@ -1090,18 +1119,17 @@ fn cell_text(shown: &Shown, pieces: Vec<Piece>, style: &Style, h: HAlign, is_num
         }
     }
     if h == HAlign::Fill && pieces.len() == 1 && !pieces[0].text.is_empty() {
-        let tw = pieces_width(&pieces).max(0.1);
-        let n = ((inner / tw).floor() as usize).max(1);
+        let n = ((inner / tw.max(0.1)).floor() as usize).max(1);
         pieces[0].text = pieces[0].text.repeat(n);
+        tw *= n as f32;
     }
-    let track = tracking(&pieces);
+    let track = tracking_for(&pieces, tw);
     let t = pieces_expr(&pieces, s, shrink, track, default_font);
     if style.wrap {
         block(format!("par(justify: {}, leading: 0.14em, {t})", h == HAlign::Justify), align)
     } else {
         // a box as wide as the text never wraps; what doesn't fit is clipped at the cell edge
-        let tw = pieces_width(&pieces) * shrink;
-        block(format!("box(width: {:.2}pt, {t})", (tw + 1.0) * s), align)
+        block(format!("box(width: {:.2}pt, {t})", (tw * shrink + 1.0) * s), align)
     }
 }
 
