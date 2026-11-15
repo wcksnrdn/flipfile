@@ -1245,6 +1245,44 @@ mod tests {
         }
     }
 
+    /// A workbook printed to PDF by flipfile's own engine and read back: the table, its
+    /// dates and amounts come back as values
+    #[test]
+    fn tables_come_back_from_a_pdf() {
+        use crate::office::numfmt::{Separators, Value as N};
+        use crate::office::xlsx::{self, Cell, Font, Sheet, Style, Workbook};
+        let mut sheet = Sheet { name: "T".into(), default_col_width: 90.0, default_row_height: 15.0, ..Default::default() };
+        sheet.col_widths.insert(1, 150.0);
+        for (c, h) in ["Tanggal", "Keterangan", "Jumlah"].iter().enumerate() {
+            sheet.cells.insert((0, c as u32), Cell { value: Some(N::Text(h.to_string())), style: 1 });
+        }
+        for i in 1..=12u32 {
+            sheet.cells.insert((i, 0), Cell { value: Some(N::Number(46340.0 + i as f64)), style: 2 });
+            sheet.cells.insert((i, 1), Cell { value: Some(N::Text(format!("Pembayaran tagihan {i}"))), style: 0 });
+            sheet.cells.insert((i, 2), Cell { value: Some(N::Number(1250000.5 * i as f64)), style: 3 });
+        }
+        let normal = Style { num_fmt: "General".into(), ..Default::default() };
+        let styles = vec![
+            normal.clone(),
+            Style { font: Font { bold: true, ..Default::default() }, ..normal.clone() },
+            Style { num_fmt: "dd/mm/yyyy".into(), ..normal.clone() },
+            Style { num_fmt: "#,##0.00".into(), ..normal },
+        ];
+        let wb = Workbook { sheets: vec![sheet], styles, date1904: false };
+        let pdf = crate::office::sheet_pdf::to_pdf(&wb, Separators::COMMA, "t.xlsx").unwrap();
+        let bytes = pdf_to_xlsx(crate::pdf::render::pdfium().unwrap(), &pdf, "T", &|_, _| {}).unwrap();
+        let back = xlsx::read(&bytes).unwrap();
+        let s = &back.sheets[0];
+        let heading = s.cells.iter().find(|(_, c)| c.value == Some(N::Text("Tanggal".into()))).map(|(k, _)| *k).expect("the heading");
+        let (r, c) = heading;
+        assert_eq!(s.cells[&(r, c + 1)].value, Some(N::Text("Keterangan".into())));
+        assert_eq!(s.cells[&(r + 1, c)].value, Some(N::Number(46341.0)));
+        assert_eq!(back.styles[s.cells[&(r + 1, c)].style].num_fmt, "dd/mm/yyyy");
+        assert_eq!(s.cells[&(r + 1, c + 1)].value, Some(N::Text("Pembayaran tagihan 1".into())));
+        assert_eq!(s.cells[&(r + 12, c + 2)].value, Some(N::Number(15000006.0)));
+        assert_eq!(back.styles[s.cells[&(r + 12, c + 2)].style].num_fmt, "#,##0.00");
+    }
+
     #[test]
     fn dates_become_dates() {
         let id = Notation::Indonesian;
