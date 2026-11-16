@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-16
+
 ### Added
 
 - **Compress levels for documents**: Word, Excel and PowerPoint files (DOCX, XLSX, PPTX and
@@ -456,7 +458,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/wcksnrdn/flipfile/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/wcksnrdn/flipfile/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/wcksnrdn/flipfile/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/wcksnrdn/flipfile/compare/v0.8.1...v0.9.0
