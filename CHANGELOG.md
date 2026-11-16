@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-16
+
 ### Added
 
 - **Excel → PDF: charts, shapes and text boxes**: column and bar (clustered, stacked, 100%),
@@ -424,7 +426,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/wcksnrdn/flipfile/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/wcksnrdn/flipfile/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/wcksnrdn/flipfile/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/wcksnrdn/flipfile/compare/v0.8.0...v0.8.1
