@@ -227,6 +227,11 @@ pub(super) fn encode_webp_bytes(img: &DynamicImage, quality: u8, fast: bool) -> 
 /// compressed only to be decoded and recompressed again (2.6 s instead of 3.8 s for a
 /// 5K screenshot, identical file).
 pub(super) fn encode_png_oxipng(img: &DynamicImage, output: &Path) -> Result<(), String> {
+    fs::write(output, encode_png_oxipng_bytes(img)?).map_err(save_err)
+}
+
+/// `encode_png_oxipng`, in memory
+pub(super) fn encode_png_oxipng_bytes(img: &DynamicImage) -> Result<Vec<u8>, String> {
     use oxipng::ColorType as C;
     let (w, h) = (img.width(), img.height());
     let (color, data) = match keep_gray(img).into_owned() {
@@ -244,8 +249,7 @@ pub(super) fn encode_png_oxipng(img: &DynamicImage, output: &Path) -> Result<(),
         // Measured on a 5K screenshot: 40% faster (1.6 s instead of 2.7 s), 0.6% larger
         opts.deflater = oxipng::Deflater::Libdeflater { compression: 10 };
     }
-    let png = raw.create_optimized_png(&opts).map_err(save_err)?;
-    fs::write(output, png).map_err(save_err)
+    raw.create_optimized_png(&opts).map_err(save_err)
 }
 
 /// Multi-resolution Windows `.ico` file containing standard icon sizes up to 256×256.

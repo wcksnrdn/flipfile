@@ -1,17 +1,23 @@
 // Compress levels (the Option/Alt ring): Light, Balanced, Strong and Extreme, for photos,
-// PDFs, videos and recordings alike, each in its own format where that can get smaller.
+// PDFs, documents, books, animations, videos and recordings alike, each in its own format
+// where that can get smaller.
 // Before the user lets go, `compress_estimate` works out what each level would make of
 // the files, and says what it costs ("4.2 MB → 610 KB · fine detail softens").
 //
 // - photo: re-encoded at the level's quality and size (lossless formats become JPG, or
 //   WebP when transparent, from Balanced on)
 // - pdf:   the pictures inside re-encoded at the level's resolution; text and layout stay
+// - package: Word, Excel, PowerPoint, OpenDocument and EPUB: the pictures inside at the
+//          level's resolution where they are shown, videos inside at its bitrate
+// - animation: animated GIFs, kept animated
 // - av:    video and audio at the level's bitrate and resolution (ffmpeg, else the
 //          system's own engines)
 // - estimate: the live estimates
 
+mod animation;
 mod av;
 pub mod estimate;
+mod package;
 mod pdf;
 mod photo;
 
@@ -60,6 +66,12 @@ impl Level {
 pub enum Kind {
     Photo,
     Pdf,
+    /// Word, Excel, PowerPoint and OpenDocument files
+    Document,
+    /// EPUB
+    Book,
+    /// An animated GIF
+    Animation,
     Video,
     Audio,
 }
@@ -67,6 +79,14 @@ pub enum Kind {
 pub fn kind_of(path: &Path) -> Option<Kind> {
     if pdf_render::is_pdf(&header(path)) {
         return Some(Kind::Pdf);
+    }
+    match package::family(path) {
+        Some(package::Family::Book) => return Some(Kind::Book),
+        Some(_) => return Some(Kind::Document),
+        None => {}
+    }
+    if animation::is_animated_gif(path) {
+        return Some(Kind::Animation);
     }
     let ext = path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
     if is_video_file(path) {
@@ -78,7 +98,12 @@ pub fn kind_of(path: &Path) -> Option<Kind> {
     ) {
         return Some(Kind::Audio);
     }
-    super::input::same_format_ext(path).is_ok().then_some(Kind::Photo)
+    (super::input::same_format_ext(path).is_ok() || photo::is_source_only(path)).then_some(Kind::Photo)
+}
+
+/// True for a document compressed as a ZIP package (Office, OpenDocument, EPUB)
+pub(super) fn is_package(path: &Path) -> bool {
+    package::family(path).is_some()
 }
 
 /// What a level does to a kind of file, in a few words: shown before the drop, and as
@@ -93,6 +118,18 @@ pub fn consequence(kind: Kind, level: Level) -> &'static str {
         (Kind::Pdf, Level::Balanced) => "Pictures at 150 dpi · fine on screens",
         (Kind::Pdf, Level::Strong) => "Pictures at 110 dpi · soft when printed",
         (Kind::Pdf, Level::Extreme) => "Pictures at 72 dpi, blurry · text stays sharp",
+        (Kind::Document, Level::Light) => "Pictures at 200 dpi · text untouched",
+        (Kind::Document, Level::Balanced) => "Pictures at 150 dpi · fine on screens",
+        (Kind::Document, Level::Strong) => "Pictures at 110 dpi · soft when printed",
+        (Kind::Document, Level::Extreme) => "Pictures at 72 dpi, blurry · text untouched",
+        (Kind::Book, Level::Light) => "Pictures up to 2400 px · text untouched",
+        (Kind::Book, Level::Balanced) => "Pictures up to 1800 px · fine on tablets",
+        (Kind::Book, Level::Strong) => "Pictures up to 1400 px · fine on phones",
+        (Kind::Book, Level::Extreme) => "Pictures up to 1000 px, soft · text untouched",
+        (Kind::Animation, Level::Light) => "Looks the same · every frame kept",
+        (Kind::Animation, Level::Balanced) => "Hard to tell apart · fewer colours",
+        (Kind::Animation, Level::Strong) => "Fewer details · max 480 px",
+        (Kind::Animation, Level::Extreme) => "Choppier, half the frames · max 320 px",
         (Kind::Video, Level::Light) => "Looks the same · up to 1080p",
         (Kind::Video, Level::Balanced) => "Slightly softer · up to 1080p",
         (Kind::Video, Level::Strong) => "Softer, fine on phones · 720p",
@@ -110,14 +147,28 @@ pub fn consequence(kind: Kind, level: Level) -> &'static str {
 pub(super) fn compress_file(input: &Path, format: &str, out_dir: Option<&Path>, on_step: OnPage) -> Result<Converted, String> {
     let name = file_name(input);
     let level = Level::from_format(format).ok_or_else(|| format!("\"{name}\": unknown compress level"))?;
-    let kind = kind_of(input).ok_or_else(|| format!("\"{name}\": photos, PDFs, videos and recordings can be compressed"))?;
+    let kind = kind_of(input).ok_or_else(|| unsupported(input))?;
     let result = match kind {
         Kind::Photo => photo::compress(input, level, out_dir)?,
         Kind::Pdf => pdf::compress(input, level, out_dir)?,
+        Kind::Document | Kind::Book => package::compress(input, level, out_dir, on_step)?,
+        Kind::Animation => animation::compress(input, level, out_dir)?,
         Kind::Video => av::compress_video(input, level, out_dir, on_step)?,
         Kind::Audio => av::compress_audio(input, level, out_dir)?,
     };
     finish(input, result, kind, level, out_dir)
+}
+
+/// Why a file can't be compressed
+fn unsupported(input: &Path) -> String {
+    let name = file_name(input);
+    let ext = input.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
+    match ext.as_str() {
+        "doc" | "dot" | "xls" | "xlt" | "ppt" | "pps" | "pot" => {
+            format!("\"{name}\" is an old Office file: save it as .{}x first, then compress that", ext.chars().take(3).collect::<String>())
+        }
+        _ => format!("\"{name}\": photos, PDFs, Office and OpenDocument files, EPUBs, GIFs, videos and recordings can be compressed"),
+    }
 }
 
 /// A result before it is checked against the original
@@ -292,6 +343,141 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// A ZIP package with these parts, deflated as Office writes them
+    fn package(parts: &[(&str, &[u8])]) -> Vec<u8> {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (name, data) in parts {
+            let method = if *name == "mimetype" { zip::CompressionMethod::Stored } else { zip::CompressionMethod::Deflated };
+            zip.start_file(*name, zip::write::SimpleFileOptions::default().compression_method(method)).unwrap();
+            zip.write_all(data).unwrap();
+        }
+        zip.finish().unwrap().into_inner()
+    }
+
+    fn part(path: &str, name: &str) -> Option<Vec<u8>> {
+        use std::io::Read;
+        let mut zip = zip::ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
+        let mut file = zip.by_name(name).ok()?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data).unwrap();
+        Some(data)
+    }
+
+    fn png_bytes(img: &image::DynamicImage) -> Vec<u8> {
+        let mut data = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut data), image::ImageFormat::Png).unwrap();
+        data
+    }
+
+    /// A Word document with a photo pasted as PNG (shown 6 x 4 in) and a camera JPEG
+    /// (shown 3 x 2.25 in): pictures are scaled to where they're shown, the PNG photo
+    /// becomes a JPEG from Balanced on with its references, and the text stays
+    #[test]
+    fn word_pictures_shrink_to_where_they_are_shown() {
+        let dir = temp_dir("docx");
+        let mut jpeg = Vec::new();
+        encode_jpeg(&photo(4000, 3000), 95, &mut jpeg).unwrap();
+        let drawing = |rid: &str, cx: u64, cy: u64| {
+            format!(
+                r#"<w:r><w:drawing><wp:inline><wp:extent cx="{cx}" cy="{cy}"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="{rid}"/></pic:blipFill><pic:spPr><a:xfrm><a:ext cx="{cx}" cy="{cy}"/></a:xfrm></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"#
+            )
+        };
+        let document = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body><w:p><w:r><w:t>Site visit report</w:t></w:r></w:p><w:p>{}</w:p><w:p>{}</w:p></w:body></w:document>"#,
+            drawing("rId1", 6 * 914_400, 4 * 914_400),
+            drawing("rId2", 3 * 914_400, 2_057_400)
+        );
+        let docx = package(&[
+            ("[Content_Types].xml", br#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>"#),
+            ("_rels/.rels", br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>"#),
+            ("word/document.xml", document.as_bytes()),
+            ("word/_rels/document.xml.rels", br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image2.jpeg"/></Relationships>"#),
+            ("word/media/image1.png", &png_bytes(&photo(3000, 2000))),
+            ("word/media/image2.jpeg", &jpeg),
+        ]);
+        let path = dir.join("report.docx");
+        fs::write(&path, &docx).unwrap();
+        let mut last = docx.len() as u64;
+        for level in LEVELS {
+            let out = run(&path, level);
+            assert!(out.path.ends_with(".docx"), "{}", out.path);
+            let size = bytes(&out.path);
+            assert!(size < last, "{level:?}: {size} not below {last}");
+            last = size;
+            assert_eq!(out.note.as_deref(), Some(consequence(Kind::Document, level)));
+            let dpi = match level {
+                Level::Light => 200,
+                Level::Balanced => 150,
+                Level::Strong => 110,
+                Level::Extreme => 72,
+            };
+            let rels = String::from_utf8(part(&out.path, "word/_rels/document.xml.rels").unwrap()).unwrap();
+            let pasted = if level == Level::Light {
+                assert!(rels.contains("media/image1.png"), "{rels}");
+                part(&out.path, "word/media/image1.png").unwrap()
+            } else {
+                assert!(rels.contains(r#"Target="media/image1.jpeg""#) && !rels.contains("image1.png"), "{rels}");
+                assert!(part(&out.path, "word/media/image1.png").is_none());
+                part(&out.path, "word/media/image1.jpeg").unwrap()
+            };
+            assert_eq!(image::load_from_memory(&pasted).unwrap().width(), 6 * dpi, "{level:?}");
+            let camera = image::load_from_memory(&part(&out.path, "word/media/image2.jpeg").unwrap()).unwrap();
+            assert_eq!(camera.width(), 3 * dpi, "{level:?}");
+            let text = crate::convert::text::extract(Path::new(&out.path), &|_, _| {}).unwrap();
+            assert!(text.text.contains("Site visit report"), "{}", text.text);
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// OpenDocument and EPUB keep `mimetype` first and stored, and their manifests follow
+    /// a picture that becomes a JPEG
+    #[test]
+    fn opendocument_and_books_stay_valid() {
+        let dir = temp_dir("odf");
+        let picture = png_bytes(&photo(2400, 1600));
+        let odt = package(&[
+            ("mimetype", b"application/vnd.oasis.opendocument.text"),
+            ("content.xml", br#"<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink"><office:body><office:text><text:p>Holiday</text:p><draw:frame svg:width="10.16cm" svg:height="6.773cm"><draw:image xlink:href="Pictures/beach.png"/></draw:frame></office:text></office:body></office:document-content>"#),
+            ("META-INF/manifest.xml", br#"<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="Pictures/beach.png" manifest:media-type="image/png"/></manifest:manifest>"#),
+            ("Pictures/beach.png", &picture),
+        ]);
+        let epub = package(&[
+            ("mimetype", b"application/epub+zip"),
+            ("META-INF/container.xml", br#"<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#),
+            ("OEBPS/book.opf", br#"<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/><item id="p1" href="images/beach.png" media-type="image/png"/></manifest></package>"#),
+            ("OEBPS/ch1.xhtml", br#"<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>Chapter one</p><img src="images/beach.png" alt=""/></body></html>"#),
+            ("OEBPS/images/beach.png", &picture),
+        ]);
+        for (name, data, picture_dir, manifest) in [("trip.odt", &odt, "Pictures", "META-INF/manifest.xml"), ("trip.epub", &epub, "OEBPS/images", "OEBPS/book.opf")] {
+            let path = dir.join(name);
+            fs::write(&path, data).unwrap();
+            let out = run(&path, Level::Balanced);
+            assert!(bytes(&out.path) < data.len() as u64 / 2, "{name}: {}", bytes(&out.path));
+            let mut zip = zip::ZipArchive::new(fs::File::open(&out.path).unwrap()).unwrap();
+            let first = zip.by_index(0).unwrap();
+            assert_eq!((first.name().unwrap().as_ref(), first.compression()), ("mimetype", zip::CompressionMethod::Stored), "{name}");
+            drop(first);
+            let listed = String::from_utf8(part(&out.path, manifest).unwrap()).unwrap();
+            assert!(listed.contains("beach.jpg\" manifest:media-type=\"image/jpeg\"") || listed.contains("beach.jpg\" media-type=\"image/jpeg\""), "{name}: {listed}");
+            let shrunk = image::load_from_memory(&part(&out.path, &format!("{picture_dir}/beach.jpg")).unwrap()).unwrap();
+            // The ODT shows it 4 in wide (600 px at 150 dpi); books fit 1800 px
+            assert_eq!(shrunk.width(), if name.ends_with(".odt") { 600 } else { 1800 }, "{name}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Old binary Office files get a way forward rather than "can't be compressed"
+    #[test]
+    fn old_office_files_say_what_to_do() {
+        let dir = temp_dir("doc");
+        let doc = dir.join("letter.doc");
+        fs::write(&doc, [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0, 0, 0]).unwrap();
+        let Err(err) = compress_file(&doc, "cmp-strong", None, &|_, _| {}) else { panic!("an old .doc compressed") };
+        assert!(err.contains(".docx"), "{err}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     /// A recording becomes a smaller M4A (built-in engine on the Mac)
     #[cfg(target_os = "macos")]
     #[test]
@@ -311,6 +497,34 @@ mod tests {
         assert!(bytes(&out.path) * 8 < bytes(wav.to_str().unwrap()), "{}", bytes(&out.path));
         assert!(out.note.as_deref().unwrap().starts_with("WAV → M4A"), "{:?}", out.note);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// `FLIPFILE_FILES=a.docx:b.gif FLIPFILE_OUT=dir cargo test --profile bench --lib compresses_files -- --ignored --nocapture`:
+    /// every level of real files, their sizes, times and estimates
+    #[test]
+    #[ignore]
+    fn compresses_files() {
+        let out_dir = std::env::var("FLIPFILE_OUT").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir());
+        for path in std::env::var("FLIPFILE_FILES").unwrap_or_default().split(':').filter(|p| !p.is_empty()) {
+            let input = Path::new(path);
+            let before = fs::metadata(input).unwrap().len();
+            let estimates = estimate::tests_estimate(&[input.to_path_buf()]);
+            for (level, estimate) in LEVELS.iter().zip(estimates) {
+                let started = std::time::Instant::now();
+                match compress_file(input, level.id(), Some(&out_dir), &|_, _| {}) {
+                    Ok(out) => eprintln!(
+                        "{} {level:?}: {before} -> {} bytes ({:.1}x) in {:.1} s, estimated {estimate:?}; {:?} -> {}",
+                        file_name(input),
+                        bytes(&out.path),
+                        before as f64 / bytes(&out.path) as f64,
+                        started.elapsed().as_secs_f64(),
+                        out.note,
+                        out.path
+                    ),
+                    Err(e) => eprintln!("{} {level:?}: {e}", file_name(input)),
+                }
+            }
+        }
     }
 
     /// `FLIPFILE_VIDEO=clip.mp4 cargo test --lib compresses_video -- --ignored --nocapture`:
