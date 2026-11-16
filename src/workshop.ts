@@ -98,7 +98,7 @@ export const CATALOG: CatalogEntry[] = [
   { id: "flip-v", label: "Flip", sub: "vert", title: "Flip Vertical", category: "photo-tools" },
   { id: "grayscale", label: "B&W", sub: "gray", title: "Convert to Grayscale (B&W)", category: "photo-tools" },
 
-  // ─── Compress levels (any photo, PDF, video or recording) ──────────────────
+  // ─── Compress levels (photos, PDFs, documents, GIFs, videos, recordings) ───
   { id: "cmp-light", label: "Light", sub: "compress", title: "Compress · Light (looks the same)", category: "compress" },
   { id: "cmp-balanced", label: "Balanced", sub: "compress", title: "Compress · Balanced", category: "compress" },
   { id: "cmp-strong", label: "Strong", sub: "compress", title: "Compress · Strong", category: "compress" },

@@ -6,6 +6,36 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Compress levels for documents**: Word, Excel and PowerPoint files (DOCX, XLSX, PPTX and
+  their macro and template variants, XLSB), OpenDocument (ODT, ODS, ODP, ODG) and EPUB books
+  can now be compressed at Light · Balanced · Strong · Extreme, with the live estimate. The
+  file keeps its format, text, styles, formulas, charts, macros and layout.
+  - Each picture is scaled to 200/150/110/72 dpi at the largest size it is shown in the
+    document (DrawingML extents, crops and VML shapes in Office; frame sizes in
+    OpenDocument), as Word's own "Compress Pictures" does; pictures whose size isn't known
+    fit a 13.33 in widescreen slide, a book's pictures 2400/1800/1400/1000 px.
+  - Photos stored as PNG, BMP or TIFF become JPEG from Balanced on (screenshots, drawings
+    and transparent pictures stay PNG; BMP and TIFF always become PNG). The part is renamed
+    and its relationships, manifest entries and content types follow; a picture whose
+    references can't all be found safely keeps its format.
+  - Videos (MP4, M4V, MOV) and recordings in presentations get the level's bitrate through
+    the same engines as a lone video; their saving is estimated from their length.
+  - Every part is deflated at the highest level; `mimetype` stays first and stored in
+    OpenDocument and EPUB. Signed documents are refused rather than broken, and old
+    `.doc`/`.xls`/`.ppt` files say to save them in the new format first.
+  - Measured on real files: a 7.2 MB report became 3.0 MB at Balanced and 1.0 MB at
+    Extreme; an 8.2 MB slide deck 4.4 MB and 3.3 MB, rendering the same.
+- **Animated GIFs stay animated when compressed** (before, they kept only their first
+  frame): frames are stored as only what changed since the one before, with each frame's
+  own palette or one shared by the whole animation, whichever is smaller. Light keeps the
+  colours exact; Balanced lets go of changes too small to see; Strong scales to 480 px and
+  Extreme to 320 px with every other frame dropped (the animation lasts as long).
+- **Camera RAW, Photoshop and JPEG 2000 files can be compressed** (macOS and Windows): DNG,
+  CR2, CR3, NEF, ARW, RAF, ORF, RW2 and other RAW formats, PSD/PSB and JP2 become JPG (WebP
+  when transparent) at every level.
+
 ## [0.10.0] - 2026-11-16
 
 ### Added
