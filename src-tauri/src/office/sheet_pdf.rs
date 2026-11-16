@@ -1256,8 +1256,8 @@ fn draw_edge(out: &mut String, e: Edge, x1: f32, y1: f32, x2: f32, y2: f32, s: f
         Line::MediumDashed => (1.5, "\"dashed\""),
         Line::DashDot => (0.75, "\"dash-dotted\""),
     };
-    // lines keep their weight when the sheet is scaled down, like a printer driver does
-    let t = (thick * s.max(0.6)).max(0.25);
+    // lines shrink with the sheet, down to the thinnest line that still prints clearly
+    let t = (thick * s).max(0.3);
     let stroke = format!("(paint: {}, thickness: {t:.2}pt, dash: {dash})", rgb(e.color));
     if e.line == Line::Double {
         // two thin lines, one each side of the edge

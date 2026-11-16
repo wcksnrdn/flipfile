@@ -1085,7 +1085,8 @@ fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], m
             p.paper = size;
         }
         p.landscape = s.attribute("orientation") == Some("landscape");
-        p.scale = attr_f32(s, "scale").unwrap_or(100.0).clamp(10.0, 400.0);
+        // Excel's range is 10-400%; other programs write 0 (or nonsense) for "not set"
+        p.scale = attr_f32(s, "scale").filter(|v| (10.0..=400.0).contains(v)).unwrap_or(100.0);
         p.explicit |= p.landscape || p.scale != 100.0;
         p.over_then_down = s.attribute("pageOrder") == Some("overThenDown");
         if attr_bool(s, "useFirstPageNumber").unwrap_or(false) {
@@ -1440,6 +1441,17 @@ mod tests {
         // accent1 at 80% lighter: Excel shows D9E1F2
         let c = tint([0x44, 0x72, 0xC4], 0.7999816888943144);
         assert!(c.iter().zip([0xD9, 0xE1, 0xF2]).all(|(a, b)| (*a as i32 - b).abs() <= 2), "{c:x?}");
+    }
+
+    #[test]
+    fn print_scales_outside_excels_range_mean_not_set() {
+        // other programs write scale="0" for "no scale chosen": printing at 10% made the
+        // sheet a speck on the page
+        let xml = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/><pageSetup paperSize="0" scale="0" orientation="portrait"/></worksheet>"#;
+        let colors = Colors { theme: default_theme(), indexed: None };
+        let sheet = read_sheet(xml, &[], &[Style::default()], 7.0, &colors).unwrap();
+        assert_eq!(sheet.print.scale, 100.0);
+        assert!(!sheet.print.explicit);
     }
 
     #[test]
