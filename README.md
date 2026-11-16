@@ -29,22 +29,22 @@ No uploads. No accounts. No waiting.
 
 <br>
 
-[**Download**](#download) &nbsp;·&nbsp; [What's new](#whats-new-in-09) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [How to use](#how-to-use) &nbsp;·&nbsp; [Formats](#supported-formats) &nbsp;·&nbsp; [Privacy](#privacy--security) &nbsp;·&nbsp; [FAQ](#faq) &nbsp;·&nbsp; [Website](https://flipfile.satria.cloud)
+[**Download**](#download) &nbsp;·&nbsp; [What's new](#whats-new-in-010) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [How to use](#how-to-use) &nbsp;·&nbsp; [Formats](#supported-formats) &nbsp;·&nbsp; [Privacy](#privacy--security) &nbsp;·&nbsp; [FAQ](#faq) &nbsp;·&nbsp; [Website](https://flipfile.satria.cloud)
 
 </div>
 
 <br>
 
-## What's new in 0.9
+## What's new in 0.10
 
 > [!TIP]
-> **Compress anything, and see the size before you let go.** Hold <kbd>⌥ Option</kbd> (<kbd>Alt</kbd> on Windows) while dragging and pick **Light · Balanced · Strong · Extreme** for photos, PDFs, videos and recordings. Each level shows the size it will give (`4.2 MB → 610 KB · −85%`) and what it costs, and a result is never larger than the original.
+> **Spreadsheets that print right, and PDFs that come back as tables.** Excel → PDF now draws charts, table styles and conditional formatting, and a wide sheet fits the page instead of being cut into a few columns per page. PDF → Excel gives you real tables with numbers you can sum, not a column of text.
 
-- **Compress levels** for photos, PDFs (only the pictures inside get smaller; text stays sharp and selectable), MP4 videos and recordings, with a live estimate on every slice. [More ↓](#compress-levels)
-- **Notification bubbles** beside the circle: what a compression **gained** (space saved, which upload limit it now fits) and **cost** (format change, softer detail), and what failed and why, file by file, with **Show in Finder / Explorer**.
-- **Sharper transcripts**: every word is timed within about a third of a second of its sound, silence and music are cut out before Whisper listens (no made-up sentences over a quiet room), and voice-overs come out punctuated, in readable paragraphs.
+- **Wide sheets fit the page**: a sheet nobody set up for printing turns landscape, every column fits across the page, and the heading row repeats on each page. Sheets with their own print setup keep Excel's layout. [More ↓](#office-word-excel-powerpoint)
+- **Excel → PDF, complete**: charts (column, bar, line, area, pie, doughnut, scatter), shapes and text boxes, *Format as Table* colours, conditional formatting (highlights, colour scales, data bars, icons), and formulas worked out when the file stores no result. No more `####` where Excel shows the number.
+- **PDF → Excel, rebuilt**: tables with or without lines (bank statements, invoices) become cells; a table over several pages becomes one; amounts in Rp or $, percentages and dates become real values in the document's own notation, while account and ID numbers stay text. Scans are read with your computer's text recognition.
 
-Full details in the [CHANGELOG](CHANGELOG.md).
+Earlier: **0.9** brought [compress levels](#compress-levels) with a live size estimate, notification bubbles beside the circle and sharper transcripts. Full details in the [CHANGELOG](CHANGELOG.md).
 
 <br>
 
@@ -67,7 +67,7 @@ No upload, no queue, no "your download will start in 30 seconds". Drag onto the 
 <td width="33%" valign="top">
 
 ### 🧰 Does it all
-75+ formats and tools: iPhone HEIC, PDF ⇄ Word, Excel and PowerPoint → PDF, data formats, video, audio, OCR, compress, upscale, remove background, subtitles and transcripts.
+75+ formats and tools: iPhone HEIC, PDF ⇄ Word, PDF ⇄ Excel, PowerPoint → PDF, data formats, video, audio, OCR, compress, upscale, remove background, subtitles and transcripts.
 
 </td>
 </tr>
@@ -81,7 +81,7 @@ No upload, no queue, no "your download will start in 30 seconds". Drag onto the 
 <td width="33%" valign="top">
 
 ### 🖨️ Office that looks like Office
-Word, Excel and PowerPoint become PDFs that look like the originals, with **nothing to install**: flipfile has its own typesetting engine, and uses Office or LibreOffice when you have them.
+Word, Excel and PowerPoint become PDFs that look like the originals, charts and colours included, with **nothing to install**: flipfile has its own typesetting engine, and uses Office or LibreOffice when you have them.
 
 </td>
 <td width="33%" valign="top">
@@ -179,7 +179,7 @@ MIT-licensed, built in public by GitHub Actions, with checksums and signed build
 | 🎙️ | [**Transcribe**](#transcribe) | Recordings and videos → SRT/VTT subtitles or TXT, Word, Markdown transcripts, 99 languages | macOS · Windows · Linux |
 | 🔍 | [**AI Upscale**](#ai-upscale) | Small, blurry or old photos redrawn 2× or 4×, every face in HD | macOS · Windows · Linux |
 | ✦ | [**AI Summary**](#ai-summary) | Any document or recording explained: headline, key points, figures, to-dos; ask it questions | macOS 26 with Apple Intelligence |
-| 📄 | [**Office**](#office-word-excel-powerpoint) | Word ⇄ PDF, Excel → PDF, PowerPoint ⇄ PDF/Word/images, anything → slides | macOS · Windows · Linux |
+| 📄 | [**Office**](#office-word-excel-powerpoint) | Word ⇄ PDF, Excel ⇄ PDF (charts, table styles, real tables back from PDFs), PowerPoint ⇄ PDF/Word/images, anything → slides | macOS · Windows · Linux |
 | 🔤 | [**WORD OCR**](#office-word-excel-powerpoint) | Scans and photos of documents → editable Word | macOS · Windows |
 | 🖼️ | [**Photos**](#photos) | 19 image formats incl. HEIC, AVIF, EXR, RAW; remove background, transform, square, GIF, ICO/ICNS | macOS · Windows · Linux |
 | 🎬 | [**Video & audio**](#video--audio) | MP4, MOV, WEBM, MKV, AVI, FLV, GIF clips; mute, extract audio, 1080p/720p; 11 audio formats | macOS · Windows · Linux *(some need `ffmpeg`)* |
@@ -247,7 +247,8 @@ No time to read a 40-page report? Drop it on **AI ✦** in the lobby. A glass pa
 <img align="right" src="docs/media/excel-to-pdf.webp" width="44%" alt="A profit and loss statement printed from Excel by flipfile, with Rupiah accounting formats and a double-underlined total">
 
 - **Word → PDF** that paginates like Word, **PDF → Word** you can edit (real tables, columns, headers and footers, live page numbers).
-- **Excel → PDF** the way Excel prints it: page setup, repeated title rows, merged cells, logos, and **numbers exactly as Excel shows them**, including accounting and Rupiah formats, in your region's separators.
+- **Excel → PDF** the way Excel shows it: **charts**, shapes and text boxes, *Format as Table* colours, conditional formatting, merged cells, logos, and **numbers exactly as Excel shows them**, including accounting and Rupiah formats, in your region's separators. Formulas stored without a result are worked out. A sheet with its own page setup prints exactly that way; one without is laid out to be read: landscape, every column across the page, the heading repeated on each page.
+- **PDF → Excel** with real tables: lines or no lines (bank statements, invoices), merged cells, shading, and a table over several pages as one. Amounts, percentages and dates become numbers you can sum and sort, in the document's own notation (`1.234.567,89` or `1,234,567.89`); account, ID and phone numbers stay text. Scans are read with your computer's own text recognition.
 - **PowerPoint → PDF / images / Word handout** with speaker notes, and **anything → PowerPoint**: PDFs, photos, documents and tables become slides.
 - **WORD OCR**: scans and photos of documents become editable Word, read by your computer's own text recognition, with the scan kept behind the text so stamps and signatures stay.
 - **Documents and data**: Markdown, TXT, HTML, RTF, EPUB, ODT; Excel, CSV, TSV, JSON, YAML, XML, SQL and Markdown tables, in any direction.
@@ -469,7 +470,7 @@ Over **75 formats, tools and conversions**, all processed on your machine.
 
 | Format | Extensions | Read | Write | Notes |
 |---|---|:---:|:---:|---|
-| **PDF** | `.pdf` | ✓ | ✓ | Built-in Typst & PDFium; → editable Word, slides or images (200 dpi) |
+| **PDF** | `.pdf` | ✓ | ✓ | Built-in Typst & PDFium; → editable Word, Excel tables, slides or images (200 dpi) |
 | **Word** | `.docx` | ✓ | ✓ | Layout, tables, styles, images; → PDF, PPTX, MD, TXT, HTML, RTF, EPUB, ODT |
 | **WORD OCR** | scans & photos → `.docx` | ✓ | ✓ | macOS Vision / Windows OCR, scan kept as background |
 | **Legacy Word** | `.doc`, `.dot` | ✓ | — | Via Word or LibreOffice when installed |
@@ -485,7 +486,7 @@ Over **75 formats, tools and conversions**, all processed on your machine.
 
 | Format | Extensions | Read | Write | Notes |
 |---|---|:---:|:---:|---|
-| **Excel** | `.xlsx`, `.xlsm` | ✓ | ✓ | Prints every sheet to PDF with Excel's number formats |
+| **Excel** | `.xlsx`, `.xlsm` | ✓ | ✓ | Every sheet to PDF with charts, table styles, conditional formatting and Excel's number formats; PDF tables → `.xlsx` |
 | **Legacy Excel & Calc** | `.xls`, `.xlt`, `.ods` | ✓ | — | Via Excel or LibreOffice |
 | **CSV / TSV** | `.csv`, `.tsv`, `.tab` | ✓ | ✓ | Separator detected; leading zeros kept |
 | **JSON / YAML / XML** | `.json`, `.yaml`, `.yml`, `.xml` | ✓ | ✓ | Records ⇄ tables |
@@ -722,7 +723,7 @@ cd src-tauri && cargo check        # Rust
 cd src-tauri && cargo test         # Rust unit tests
 ```
 
-The tests cover every output format, EXIF orientation, metadata stripping, PDF merging and rendering, resize/quality, compress levels, transcription, history and settings. `renders_pdf_pages_to_images` needs PDFium from `npm run fetch-pdfium`; `decodes_heic_and_avif_via_imageio` runs only on macOS.
+The tests cover every output format, EXIF orientation, metadata stripping, PDF merging and rendering, resize/quality, compress levels, transcription, the spreadsheet engines (formulas, table styles, conditional formats, charts, PDF tables read back as values), history and settings. `renders_pdf_pages_to_images` needs PDFium from `npm run fetch-pdfium`; `decodes_heic_and_avif_via_imageio` runs only on macOS.
 
 They include stress tests (`src-tauri/src/convert/stress.rs`): about 90 hostile and odd inputs (empty, truncated, random bytes behind every extension, a decompression bomb, hollow Office files, 1 px and 70,000 px images) against every target format, close to 3,000 conversions, each with a time limit. Every file must come back converted or with an error message: never a crash, a hang, a left-over empty file or two outputs with the same name. `npm run stress` adds the slow ones that go through the system engines.
 
@@ -737,13 +738,14 @@ FLIPFILE_BENCH_BASE=before.tsv npm run bench    # …and compare a later run wit
 
 Each scenario (12 and 48 MP photos to every common format, HEIC, screenshots, icons, batches of 24 photos, PDF pages, Word, Excel) runs in its own process and reports time, peak memory and output size.
 
-### Reviewing Word ↔ PDF and Excel → PDF output
+### Reviewing Word ↔ PDF and Excel ↔ PDF output
 
 ```bash
 cd src-tauri
 FLIPFILE_DOCX=in.docx FLIPFILE_OUT=/tmp/out cargo test review_docx -- --ignored   # Word → PDF → PNGs
 FLIPFILE_PDF=in.pdf   FLIPFILE_OUT=/tmp/out cargo test review_pdf  -- --ignored   # PDF → Word → PDF → PNGs
 FLIPFILE_XLSX=in.xlsx FLIPFILE_OUT=/tmp/out cargo test review_xlsx -- --ignored   # Excel/CSV → PDF → PNGs (FLIPFILE_SEP=, for 1.234,56)
+FLIPFILE_PDF=in.pdf   FLIPFILE_OUT=/tmp/out cargo test review_pdf_xlsx -- --ignored --nocapture   # PDF → Excel, printing each cell's type and format
 FLIPFILE_PDF=in.pdf   FLIPFILE_PAGE=3     cargo test dump_pdf_page -- --ignored --nocapture   # what the PDF analysis sees on a page
 FLIPFILE_PDF=ours.pdf FLIPFILE_REF=ref.pdf FLIPFILE_MAP=1 cargo test compare_pages -- --ignored --nocapture   # where two PDFs' pages drift apart
 ```
@@ -814,7 +816,12 @@ Shows a red dot where flipfile thinks the cursor is, with the raw Tauri position
         │   ├── bench.rs       #   `npm run bench`
         │   └── stress.rs      #   `npm run stress`
         ├── pdf/               # streaming PDF writer, PDFium rendering
-        ├── office/            # Word ⇄ PDF, Excel → PDF, PowerPoint ⇄ PDF/Word, OCR
+        ├── office/            # Word ⇄ PDF, Excel ⇄ PDF, PowerPoint ⇄ PDF/Word, OCR
+        │   ├── xlsx.rs, sheet_pdf.rs #  Excel reader and printing (smart layout)
+        │   ├── formula.rs     #   formulas stored without a result
+        │   ├── sheet_style.rs #   Format as Table styles, conditional formatting
+        │   ├── chart.rs, drawing.rs # charts, shapes and DrawingML colours
+        │   └── pdf_xlsx.rs, xlsx_writer.rs # PDF → Excel tables, the .xlsx writer
         ├── platform/          # OS integration
         │   ├── system_codec.rs #  HEIC/AVIF/PSD/RAW via ImageIO / WIC
         │   ├── background.rs  #   background removal via macOS Vision
@@ -870,7 +877,16 @@ Shows a red dot where flipfile thinks the cursor is, with the raw Tauri position
 
 **PDF → Word** rebuilds the document from the PDF's layout and keeps every page on its own page: ruling lines become real Word tables (merged cells, borders, shading); text keeps its fonts, sizes, styles, alignment, indents and spacing; repeated top and bottom content becomes the header and footer with a live page number; side-by-side blocks stay side by side; pictures stay where they were; coloured bands, boxes and page-size artwork are drawn behind the editable text. On a test set of 30 varied PDFs, every converted document has exactly as many pages as the original. Scanned pages without text stay page images in **WORD**; use **WORD OCR** for their text.
 
-**Excel → PDF** prints every visible sheet with its own page setup (paper, orientation, margins, scale or fit to pages, print area, repeated title rows, page breaks, headers and footers), numbers exactly as Excel formats them (accounting and currency formats, `[Red]` negatives, percentages, dates) in your region's separators, and the sheet's look (column widths, row heights, fonts, fills, borders, merged cells, wrapped text, logos). CSV prints as a table with a bold header row. Charts, shapes and conditional formatting are not drawn by the built-in engine yet.
+**Excel → PDF** prints every visible sheet with its own page setup (paper, orientation, margins, scale or fit to pages, print area, repeated title rows, page breaks, headers and footers), numbers exactly as Excel formats them (accounting and currency formats, `[Red]` negatives, percentages, dates) in your region's separators, and the sheet's look (column widths, row heights, fonts, rich text, fills and gradients, borders, merged cells, wrapped and rotated text, logos). Text is measured the way Excel measures it (whole pixels per character), so a number shows `####` only where Excel's would. It also draws:
+
+- **charts**: column and bar (clustered, stacked, 100%), line, area, pie and doughnut, and scatter, with title, legend, axes, gridlines and data labels, in the series' or the theme's colours; charts without a cached copy of their numbers read the cells;
+- **shapes, text boxes, arrows, connectors and groups**, in their stacking order;
+- **Format as Table** styles (all 60 built-in ones, from the workbook's theme, and custom ones) and **conditional formatting**: highlight rules, colour scales, data bars and icon sets;
+- **formulas the file stores no result for** (exports from web apps and libraries), worked out by a built-in evaluator: sums, counts, IF/IFS, lookups, text, dates, rounding, SUMPRODUCT, SUBTOTAL. Anything it doesn't know stays empty rather than wrong.
+
+A sheet nobody set up for printing is laid out to be read: landscape when its columns don't fit a portrait page, shrunk so every column fits across (spread evenly over pages when even that is too small to read), and its heading row (or its frozen rows) repeated on every page. CSV prints as a table with a bold header row.
+
+**PDF → Excel** reads the page layout like PDF → Word and puts everything on one sheet, top to bottom. Tables drawn with lines keep their merged cells, borders, shading and row heights; tables drawn without lines are found from rows whose parts line up, down to columns closer than a font size apart when the rows agree on them, with wrapped text kept in its cell. A table running over pages becomes one, its repeated heading dropped, and totals line up under the amounts they add up. Amounts (Rp, $, …), percentages, dates (Indonesian month names too) and times become numbers with a format that shows them as written, in the notation the document uses; codes and account, ID and phone numbers stay text. Titles keep their size and weight, and coloured bands behind text become the cells' fill. Scanned PDFs are read with macOS Vision or Windows.Media.Ocr first. CSV, JSON and the other data formats made from a PDF use the same tables.
 
 **PowerPoint** renders slide → layout → master → theme inheritance, theme colours, ~70 preset shapes and custom geometry, gradients and picture fills, groups, cached SmartArt, text styles, bullets, autofit and tables. A deck dropped on **WORD** becomes a printable handout with each slide's picture, title and speaker notes; on **MD / TXT / HTML / RTF / EPUB / ODT** an outline. PDFs, photos, documents and tables dropped on **SLIDES** become presentations. Old `.ppt`/`.pps`/`.pot` files need PowerPoint or LibreOffice.
 
