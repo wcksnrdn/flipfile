@@ -1,7 +1,9 @@
 // Photos at a compress level: lossy formats (JPG, WebP, AVIF, HEIC) stay in their format
 // at the level's quality; lossless ones (PNG, TIFF, BMP, ...) are only optimised
 // losslessly at Light, and become JPG (WebP when transparent) from Balanced on, where
-// the bytes are. Large photos are scaled down from Strong on.
+// the bytes are. Camera RAW, Photoshop and JPEG 2000 files, which only the system can
+// read, become JPG (WebP when transparent) at every level. Large photos are scaled down
+// from Strong on.
 
 use std::borrow::Cow;
 use std::fs;
@@ -25,8 +27,28 @@ fn params(level: Level) -> (u8, Option<u32>) {
     }
 }
 
+/// Photos the system reads but flipfile can't write back: camera RAW, Photoshop, JPEG 2000
+const SOURCE_ONLY: &[&str] = &[
+    "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "raf", "orf", "rw2", "pef", "srw", "x3f", "3fr", "iiq", "rwl", "erf",
+    "mef", "mos", "kdc", "dcr", "psd", "psb", "jp2", "j2k", "jpx",
+];
+
+/// True for a camera RAW, Photoshop or JPEG 2000 file, on a system that reads them
+pub(super) fn is_source_only(path: &Path) -> bool {
+    let ext = path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
+    cfg!(any(target_os = "macos", windows)) && SOURCE_ONLY.contains(&ext.as_str())
+}
+
+/// The format a photo keeps, or "source" for one that can only be read
+pub(super) fn own_format(input: &Path) -> Result<String, String> {
+    match same_format_ext(input) {
+        Err(_) if is_source_only(input) => Ok("source".into()),
+        other => other,
+    }
+}
+
 pub(super) fn compress(input: &Path, level: Level, out_dir: Option<&Path>) -> Result<Made, String> {
-    let own = same_format_ext(input)?;
+    let own = own_format(input)?;
     let (img, _) = open_oriented(input)?;
     let (bytes, ext) = encode_level(&img, &own, level)?;
     let path = unique_output_path(input, out_dir, "compressed", &ext);
@@ -44,7 +66,7 @@ pub(super) fn encode_level(img: &DynamicImage, own: &str, level: Level) -> Resul
     let lossy = matches!(own, "jpg" | "jpeg" | "webp" | "avif" | "heic");
     let ext = if lossy {
         own.to_string()
-    } else if level == Level::Light {
+    } else if level == Level::Light && own != "source" {
         if own == "tiff" { "tiff" } else { "png" }.to_string()
     } else if has_transparency(&img) {
         "webp".into()
