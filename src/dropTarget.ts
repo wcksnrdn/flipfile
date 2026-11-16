@@ -322,8 +322,9 @@ const VIDEO_TRANSCRIBE = alignedSubRing(
 );
 
 // ─── Option/Alt ring: compress levels and size presets ───────────────────
-// Shown while Option/Alt is held during a drag. The levels compress any photo, PDF, video
-// or recording (src-tauri/src/convert/compress); their slices show the estimated result
+// Shown while Option/Alt is held during a drag. The levels compress any photo, PDF, Office
+// or OpenDocument file, EPUB, GIF, video or recording (src-tauri/src/convert/compress);
+// their slices show the estimated result
 // once it is known. The size presets keep the photo's format; ids match settings.rs.
 export const COMPRESS_LEVELS = ["cmp-light", "cmp-balanced", "cmp-strong", "cmp-extreme"];
 const SIZE = ring(

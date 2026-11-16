@@ -40,7 +40,7 @@ No uploads. No accounts. No waiting.
 > [!TIP]
 > **Compress anything, and see the size before you let go.** Hold <kbd>⌥ Option</kbd> (<kbd>Alt</kbd> on Windows) while dragging and pick **Light · Balanced · Strong · Extreme** for photos, PDFs, videos and recordings. Each level shows the size it will give (`4.2 MB → 610 KB · −85%`) and what it costs, and a result is never larger than the original.
 
-- **Compress levels** for photos, PDFs (only the pictures inside get smaller; text stays sharp and selectable), MP4 videos and recordings, with a live estimate on every slice. [More ↓](#compress-levels)
+- **Compress levels** for photos (camera RAW and PSD too), PDFs (only the pictures inside get smaller; text stays sharp and selectable), **Word, Excel, PowerPoint, OpenDocument and EPUB files**, animated GIFs, MP4 videos and recordings, with a live estimate on every slice. [More ↓](#compress-levels)
 - **Notification bubbles** beside the circle: what a compression **gained** (space saved, which upload limit it now fits) and **cost** (format change, softer detail), and what failed and why, file by file, with **Show in Finder / Explorer**.
 - **Sharper transcripts**: every word is timed within about a third of a second of its sound, silence and music are cut out before Whisper listens (no made-up sentences over a quiet room), and voice-overs come out punctuated, in readable paragraphs.
 
@@ -175,7 +175,7 @@ MIT-licensed, built in public by GitHub Actions, with checksums and signed build
 
 | | Feature | What it does | Runs on |
 |---|---|---|---|
-| 🗜️ | [**Compress levels**](#compress-levels) | Photos, PDFs, videos and recordings, four levels, size shown before the drop | macOS · Windows *(Linux: tray presets)* |
+| 🗜️ | [**Compress levels**](#compress-levels) | Photos, PDFs, Word/Excel/PowerPoint, OpenDocument, EPUB, GIFs, videos and recordings, four levels, size shown before the drop | macOS · Windows *(Linux: tray presets)* |
 | 🎙️ | [**Transcribe**](#transcribe) | Recordings and videos → SRT/VTT subtitles or TXT, Word, Markdown transcripts, 99 languages | macOS · Windows · Linux |
 | 🔍 | [**AI Upscale**](#ai-upscale) | Small, blurry or old photos redrawn 2× or 4×, every face in HD | macOS · Windows · Linux |
 | ✦ | [**AI Summary**](#ai-summary) | Any document or recording explained: headline, key points, figures, to-dos; ask it questions | macOS 26 with Apple Intelligence |
@@ -189,14 +189,17 @@ MIT-licensed, built in public by GitHub Actions, with checksums and signed build
 
 Hold <kbd>⌥ Option</kbd> (macOS) or <kbd>Alt</kbd> (Windows) while dragging. The ring shows four compress levels, **Light · Balanced · Strong · Extreme**, next to the size presets **50% · 1080p · 720p · Original**. Point at a level and the circle says what it will make of your files **before you drop**, for example `4.2 MB → 610 KB` and `−85% · Fine detail softens · max 1920 px`; every level's slice shows its estimated size too. The levels can also go on any ring in the **Ring Workshop** (category *Compress*), where they show their sizes the same way, no key needed.
 
-| Level | Photos | PDFs *(pictures inside; text stays sharp and selectable)* | Videos (MP4) | Recordings (M4A) |
-|---|---|---|---|---|
-| **Light** | Looks the same | Pictures at 200 dpi | Looks the same, up to 1080p | 160 kbps |
-| **Balanced** | Hard to tell apart | Pictures at 150 dpi | Slightly softer, up to 1080p | 128 kbps |
-| **Strong** | Fine detail softens, max 1920 px | Pictures at 110 dpi | Softer, 720p | 96 kbps |
-| **Extreme** | Visibly soft, max 1280 px | Pictures at 72 dpi | Blocky in motion, 480p | 48 kbps mono |
+| Level | Photos | PDFs *(pictures inside; text stays sharp and selectable)* | Word, Excel, PowerPoint, OpenDocument *(pictures inside, where they're shown)* | EPUB | Animated GIFs | Videos (MP4) | Recordings (M4A) |
+|---|---|---|---|---|---|---|---|
+| **Light** | Looks the same | Pictures at 200 dpi | Pictures at 200 dpi | Pictures up to 2400 px | Every frame, exact colours | Looks the same, up to 1080p | 160 kbps |
+| **Balanced** | Hard to tell apart | Pictures at 150 dpi | Pictures at 150 dpi | Pictures up to 1800 px | Fewer colours | Slightly softer, up to 1080p | 128 kbps |
+| **Strong** | Fine detail softens, max 1920 px | Pictures at 110 dpi | Pictures at 110 dpi | Pictures up to 1400 px | Max 480 px | Softer, 720p | 96 kbps |
+| **Extreme** | Visibly soft, max 1280 px | Pictures at 72 dpi | Pictures at 72 dpi | Pictures up to 1000 px | Half the frames, max 320 px | Blocky in motion, 480p | 48 kbps mono |
 
-- **Measured, not guessed**: photos and PDFs are compressed in memory to get their size; videos and recordings are worked out from their length (`≈`, within about 5% for videos on a Mac).
+- **Documents stay documents**: a `.docx` comes back a `.docx`, with its text, styles, formulas, charts, macros and layout untouched. As Word's own *Compress Pictures*, each picture is scaled to the level's resolution at the size it's shown in the document (crops included), photos pasted as PNG become JPEG from Balanced on (screenshots and transparent pictures stay PNG), and videos and recordings in presentations get the level's bitrate. Works for DOCX, XLSX, PPTX (and their macro and template variants), ODT, ODS, ODP, ODG and EPUB. Signed documents are left alone, as any change would break the signature; old `.doc`, `.xls` and `.ppt` files need saving in the new format first.
+- **GIFs stay animated**: frames are stored as only what changed, with one shared palette when that's smaller.
+- **Camera RAW, PSD and JPEG 2000** become JPG at every level, on macOS and Windows (`CR2 → JPG`).
+- **Measured, not guessed**: photos, PDFs, documents and GIFs are compressed in memory to get their size; videos and recordings (also those inside presentations) are worked out from their length (`≈`, within about 5% for videos on a Mac).
 - **Never larger than the original**: a file that can't get smaller is copied and marked "Already compact". Results are saved next to the original as `name_compressed.ext`.
 - **Your format where it helps**: JPG, WebP, AVIF and HEIC stay in their format; PNG and TIFF stay lossless at Light and become JPG (WebP when transparent) from Balanced on, and flipfile says so (`PNG → JPG`).
 - **Built in on macOS and Windows**: videos and recordings are re-encoded by `ffmpeg` when installed, otherwise by AVFoundation on macOS (hardware encoder, a 47 s 1080p video in 2–8 s) or Media Foundation on Windows; on Linux they need `ffmpeg`. Portrait videos stay portrait.
