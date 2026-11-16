@@ -8,10 +8,12 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Read};
+use std::sync::Arc;
 
 use roxmltree::{Document, Node};
 
 use super::numfmt::{self, Value};
+use super::sheet_style::{Cfvo, CfKind, CfRule, CondFormat, Dxf, Mark, TableDef};
 
 const MAIN: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -65,6 +67,9 @@ pub struct Borders {
     pub right: Option<Edge>,
     pub top: Option<Edge>,
     pub bottom: Option<Edge>,
+    /// diagonal lines: bottom-left to top-right, top-left to bottom-right
+    pub up: Option<Edge>,
+    pub down: Option<Edge>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -99,7 +104,49 @@ pub struct Style {
     pub wrap: bool,
     pub indent: u32,
     pub shrink: bool,
+    /// text turned this many degrees anticlockwise (-90..=90)
+    pub rotation: i16,
+    /// letters stacked one under the other ("Vertical Text")
+    pub stacked: bool,
 }
+
+/// What a run of rich text changes from its cell's font
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RunFont {
+    pub name: Option<String>,
+    pub size: Option<f32>,
+    pub bold: Option<bool>,
+    pub italic: Option<bool>,
+    pub underline: Option<bool>,
+    pub strike: Option<bool>,
+    pub color: Option<Rgb>,
+    /// 1 superscript, -1 subscript
+    pub script: i8,
+}
+
+impl RunFont {
+    /// The cell's font with this run's changes
+    pub fn over(&self, base: &Font) -> Font {
+        Font {
+            name: self.name.clone().unwrap_or_else(|| base.name.clone()),
+            size: self.size.unwrap_or(base.size),
+            bold: self.bold.unwrap_or(base.bold),
+            italic: self.italic.unwrap_or(base.italic),
+            underline: self.underline.unwrap_or(base.underline),
+            strike: self.strike.unwrap_or(base.strike),
+            color: self.color.or(base.color),
+        }
+    }
+}
+
+/// A piece of a cell's text in its own font (bold words, a red figure…)
+#[derive(Clone, Debug, PartialEq)]
+pub struct RichRun {
+    pub text: String,
+    pub font: RunFont,
+}
+
+pub type Rich = Arc<Vec<RichRun>>;
 
 #[derive(Clone, Debug)]
 pub struct Cell {
@@ -120,6 +167,30 @@ pub struct Picture {
     pub ext: String,
 }
 
+/// Where a drawing object sits: top-left (row, col, row offset pt, col offset pt), the
+/// same for its bottom-right corner (two-cell anchors), and its size in points
+#[derive(Clone, Debug)]
+pub struct Anchor {
+    pub from: (u32, u32, f32, f32),
+    pub to: Option<(u32, u32, f32, f32)>,
+    pub size: (f32, f32),
+}
+
+/// A chart or shapes of the drawing layer
+#[derive(Clone, Debug)]
+pub enum Drawn {
+    Chart(Anchor, Box<super::chart::Chart>),
+    Shapes(Anchor, Vec<super::drawing::Shape>),
+}
+
+impl Drawn {
+    pub fn anchor(&self) -> &Anchor {
+        match self {
+            Drawn::Chart(a, _) | Drawn::Shapes(a, _) => a,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Print {
     /// paper size in points, before orientation
@@ -138,6 +209,9 @@ pub struct Print {
     pub header: Option<String>,
     pub footer: Option<String>,
     pub first_page: Option<u32>,
+    /// someone chose how this sheet prints (landscape, a scale, fit to pages); otherwise
+    /// the PDF lays it out to be readable instead of copying Excel's defaults
+    pub explicit: bool,
 }
 
 impl Default for Print {
@@ -156,6 +230,7 @@ impl Default for Print {
             header: None,
             footer: None,
             first_page: None,
+            explicit: false,
         }
     }
 }
@@ -174,6 +249,11 @@ pub struct Sheet {
     pub auto_rows: bool,
     pub merges: Vec<Range>,
     pub pictures: Vec<Picture>,
+    /// charts and shapes
+    pub drawn: Vec<Drawn>,
+    /// charts waiting for the cells they plot to be worked out, with their place among
+    /// `drawn` (what is drawn later covers what came before)
+    pub chart_parts: Vec<(usize, Anchor, String)>,
     pub print: Print,
     pub print_area: Option<Range>,
     pub title_rows: Option<(u32, u32)>,
@@ -181,6 +261,19 @@ pub struct Sheet {
     /// page breaks: a new page starts *before* these rows / columns
     pub row_breaks: Vec<u32>,
     pub col_breaks: Vec<u32>,
+    /// cells whose text mixes fonts, by position
+    pub rich: HashMap<(u32, u32), Rich>,
+    /// formulas the file stores no result for, worked out once the workbook is read
+    pub formulas: HashMap<(u32, u32), super::formula::Pending>,
+    /// the style of empty cells in a column (cells of a table that hold nothing)
+    pub col_styles: HashMap<u32, usize>,
+    /// Format as Table and conditional formats, folded into the cells once read
+    pub tables: Vec<TableDef>,
+    pub conds: Vec<CondFormat>,
+    /// data bars and icons drawn by conditional formats
+    pub marks: HashMap<(u32, u32), Mark>,
+    /// rows and columns frozen on screen (Freeze Panes): usually a table's headings
+    pub frozen: (u32, u32),
 }
 
 impl Sheet {
@@ -338,7 +431,7 @@ fn hex(s: &str) -> Option<Rgb> {
 }
 
 /// Lightens (tint > 0) or darkens (tint < 0) like Excel, in HSL
-fn tint(c: Rgb, t: f32) -> Rgb {
+pub fn tint(c: Rgb, t: f32) -> Rgb {
     if t == 0.0 {
         return c;
     }
@@ -475,6 +568,15 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
         .map(|fs| {
             children(fs, "fill")
                 .map(|f| {
+                    // a gradient prints as the blend of its colours
+                    if let Some(g) = child(f, "gradientFill") {
+                        let stops: Vec<Rgb> = children(g, "stop").filter_map(|s| child(s, "color").and_then(|c| colors.get(c))).collect();
+                        if stops.is_empty() {
+                            return None;
+                        }
+                        let n = stops.len() as u32;
+                        return Some([0, 1, 2].map(|i| (stops.iter().map(|c| c[i] as u32).sum::<u32>() / n) as u8));
+                    }
                     let p = child(f, "patternFill")?;
                     let kind = p.attribute("patternType").unwrap_or("none");
                     if kind == "none" {
@@ -524,7 +626,15 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
                         let color = child(e, "color").and_then(|c| colors.get(c)).unwrap_or([0, 0, 0]);
                         Some(Edge { line, color })
                     };
-                    Borders { left: edge("left"), right: edge("right"), top: edge("top"), bottom: edge("bottom") }
+                    let diagonal = edge("diagonal");
+                    Borders {
+                        left: edge("left"),
+                        right: edge("right"),
+                        top: edge("top"),
+                        bottom: edge("bottom"),
+                        up: diagonal.filter(|_| attr_bool(b, "diagonalUp").unwrap_or(false)),
+                        down: diagonal.filter(|_| attr_bool(b, "diagonalDown").unwrap_or(false)),
+                    }
                 })
                 .collect()
         })
@@ -559,6 +669,12 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
                 s.wrap = attr_bool(a, "wrapText").unwrap_or(false);
                 s.indent = attr_u32(a, "indent").unwrap_or(0);
                 s.shrink = attr_bool(a, "shrinkToFit").unwrap_or(false);
+                match attr_u32(a, "textRotation").unwrap_or(0) {
+                    255 => s.stacked = true,
+                    r @ 0..=90 => s.rotation = r as i16,
+                    r @ 91..=180 => s.rotation = 90 - r as i16,
+                    _ => {}
+                }
             }
             styles.push(s);
         }
@@ -572,10 +688,44 @@ fn read_styles(xml: &str, colors: &Colors) -> Vec<Style> {
 // ---------------------------------------------------------------------------
 // Workbook
 
-/// Shared strings (rich text flattened to its plain text)
-fn shared_strings(xml: &str) -> Vec<String> {
+/// Shared strings: the plain text, and its runs when it mixes fonts
+fn shared_strings(xml: &str, colors: &Colors) -> Vec<(String, Option<Rich>)> {
     let Ok(doc) = Document::parse(xml) else { return vec![] };
-    doc.root_element().children().filter(|n| n.has_tag_name((MAIN, "si"))).map(rich_text).collect()
+    doc.root_element().children().filter(|n| n.has_tag_name((MAIN, "si"))).map(|si| (rich_text(si), runs(si, colors))).collect()
+}
+
+/// The runs of an `<si>` / `<is>` that sets fonts of its own (None for plain text)
+fn runs(n: Node, colors: &Colors) -> Option<Rich> {
+    let rs: Vec<Node> = children(n, "r").collect();
+    if rs.is_empty() || !rs.iter().any(|r| child(*r, "rPr").is_some()) {
+        return None;
+    }
+    let out: Vec<RichRun> = rs
+        .iter()
+        .map(|r| {
+            let text = child(*r, "t").and_then(|t| t.text()).unwrap_or("").to_string();
+            let font = child(*r, "rPr").map(|p| {
+                let val = |name: &str| child(p, name);
+                let on = |name: &str| val(name).map(|n| n.attribute("val").map(|v| v != "0" && v != "false").unwrap_or(true));
+                RunFont {
+                    name: val("rFont").and_then(|n| n.attribute("val")).map(str::to_string),
+                    size: val("sz").and_then(|n| attr_f32(n, "val")),
+                    bold: on("b"),
+                    italic: on("i"),
+                    underline: val("u").map(|n| n.attribute("val") != Some("none")),
+                    strike: on("strike"),
+                    color: val("color").and_then(|c| colors.get(c)),
+                    script: match val("vertAlign").and_then(|n| n.attribute("val")) {
+                        Some("superscript") => 1,
+                        Some("subscript") => -1,
+                        _ => 0,
+                    },
+                }
+            });
+            RichRun { text, font: font.unwrap_or_default() }
+        })
+        .collect();
+    Some(Arc::new(out))
 }
 
 /// The text of an `<si>` / `<is>`: its `<t>` runs, without phonetic hints
@@ -626,8 +776,10 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
     let theme = rel_target("/theme").and_then(|p| pkg.text(&p)).map(|x| theme_colors(&x)).unwrap_or_else(default_theme);
     let indexed = rel_target("/styles").and_then(|p| pkg.text(&p)).and_then(|x| custom_palette(&x));
     let colors = Colors { theme: if theme.is_empty() { default_theme() } else { theme }, indexed };
-    let styles = rel_target("/styles").and_then(|p| pkg.text(&p)).map(|x| read_styles(&x, &colors)).unwrap_or_else(|| vec![Style { num_fmt: "General".into(), ..Default::default() }]);
-    let strings = rel_target("/sharedStrings").and_then(|p| pkg.text(&p)).map(|x| shared_strings(&x)).unwrap_or_default();
+    let styles_xml = rel_target("/styles").and_then(|p| pkg.text(&p));
+    let mut styles = styles_xml.as_deref().map(|x| read_styles(x, &colors)).unwrap_or_else(|| vec![Style { num_fmt: "General".into(), ..Default::default() }]);
+    let (dxfs, table_styles) = styles_xml.as_deref().map(|x| read_dxfs(x, &colors)).unwrap_or_default();
+    let strings = rel_target("/sharedStrings").and_then(|p| pkg.text(&p)).map(|x| shared_strings(&x, &colors)).unwrap_or_default();
     let mdw = max_digit_width(&styles[0].font);
 
     // print areas and titles, per sheet index
@@ -641,11 +793,11 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
     }
 
     let mut sheets = vec![];
+    // hidden sheets don't print, but formulas may read them
+    let mut hidden = vec![];
     if let Some(list) = child(wb, "sheets") {
         for (index, s) in children(list, "sheet").enumerate() {
-            if matches!(s.attribute("state"), Some("hidden") | Some("veryHidden")) {
-                continue;
-            }
+            let is_hidden = matches!(s.attribute("state"), Some("hidden") | Some("veryHidden"));
             let name = s.attribute("name").unwrap_or("Sheet").to_string();
             let Some(rid) = s.attribute((REL, "id")) else { continue };
             let Some(path) = wb_rels.get(rid).cloned() else { continue };
@@ -654,9 +806,10 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
                 continue;
             }
             let Some(xml) = pkg.text(&path) else { continue };
-            let mut sheet = read_sheet(&xml, &strings, &styles, mdw).map_err(|e| format!("sheet \"{name}\": {e}"))?;
+            let mut sheet = read_sheet(&xml, &strings, &styles, mdw, &colors).map_err(|e| format!("sheet \"{name}\": {e}"))?;
             sheet.name = name.clone();
-            sheet.pictures = read_pictures(&mut pkg, &path, &xml);
+            (sheet.pictures, sheet.chart_parts, sheet.drawn) = read_drawing(&mut pkg, &path, &xml, &colors.theme);
+            sheet.tables = read_tables(&mut pkg, &path, &xml);
             for (n, local, text) in &names {
                 let mine = local.map(|l| l == index).unwrap_or_else(|| refers_to_sheet(text, &name));
                 if !mine {
@@ -680,12 +833,99 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
                 }
             }
             sheets.push(sheet);
+            hidden.push(is_hidden);
         }
     }
+    work_out_formulas(&mut sheets, date1904);
+    let tables: Vec<Vec<TableDef>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.tables)).collect();
+    let conds: Vec<Vec<CondFormat>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.conds)).collect();
+    let defs = super::sheet_style::Defs { dxfs: &dxfs, table_styles: &table_styles, theme: &colors.theme };
+    super::sheet_style::apply(&mut sheets, &mut styles, &defs, &tables, &conds, date1904);
+    read_charts(&mut sheets, &styles, &colors.theme, date1904);
+    let mut hidden = hidden.into_iter();
+    sheets.retain(|_| !hidden.next().unwrap_or(false));
     if sheets.is_empty() {
         return Err("the workbook has no sheets to print".into());
     }
     Ok(Workbook { sheets, styles, date1904 })
+}
+
+/// Charts, once the cells they plot hold their values
+fn read_charts(sheets: &mut [Sheet], styles: &[Style], theme: &[Rgb], date1904: bool) {
+    let parts: Vec<Vec<(usize, Anchor, String)>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.chart_parts)).collect();
+    if parts.iter().all(|p| p.is_empty()) {
+        return;
+    }
+    let sep = numfmt::Separators::system();
+    for (si, list) in parts.into_iter().enumerate() {
+        let mut added = 0;
+        for (at, anchor, xml) in list {
+            let data = |f: &str| -> Vec<(Option<f64>, String)> {
+                let super::formula::Expr::Area(a) = super::formula::parse(f) else { return vec![] };
+                let target = match &a.sheet {
+                    Some(name) => sheets.iter().position(|s| s.name.eq_ignore_ascii_case(name)),
+                    None => Some(si),
+                };
+                let Some(sheet) = target.map(|t| &sheets[t]) else { return vec![] };
+                let last = sheet.cells.keys().next_back().map(|k| k.0).unwrap_or(0);
+                let (r2, c2) = (a.r2.min(last), a.c2.min(a.c1 + 16_383));
+                let mut out = vec![];
+                for r in a.r1..=r2 {
+                    for c in a.c1..=c2 {
+                        let cell = sheet.cells.get(&(r, c));
+                        let value = cell.and_then(|c| c.value.as_ref());
+                        let n = match value {
+                            Some(Value::Number(n)) => Some(*n),
+                            _ => None,
+                        };
+                        let code = cell.map(|c| styles[c.style].num_fmt.as_str()).unwrap_or("General");
+                        let shown = value.map(|v| numfmt::format(v, code, date1904, sep).text).unwrap_or_default();
+                        let shown: String = shown.chars().filter(|c| *c != numfmt::HIDE_ON && *c != numfmt::HIDE_OFF).collect();
+                        out.push((n, shown.trim().to_string()));
+                        if out.len() > 100_000 {
+                            return out;
+                        }
+                    }
+                }
+                out
+            };
+            if let Some(chart) = super::chart::parse(&xml, theme, &data) {
+                let at = (at + added).min(sheets[si].drawn.len());
+                sheets[si].drawn.insert(at, Drawn::Chart(anchor, Box::new(chart)));
+                added += 1;
+            }
+        }
+    }
+}
+
+/// Fills in the results of formulas stored without one, top to bottom
+fn work_out_formulas(sheets: &mut [Sheet], date1904: bool) {
+    if sheets.iter().all(|s| s.formulas.is_empty()) {
+        return;
+    }
+    let results: Vec<(usize, (u32, u32), Option<Value>)> = {
+        let book = super::formula::Book::new(
+            sheets.iter().map(|s| s.name.clone()).collect(),
+            sheets.iter().map(|s| &s.cells).collect(),
+            sheets.iter().map(|s| &s.formulas).collect(),
+            date1904,
+        );
+        let mut out = vec![];
+        for (si, s) in sheets.iter().enumerate() {
+            let mut keys: Vec<(u32, u32)> = s.formulas.keys().copied().collect();
+            keys.sort_unstable();
+            out.extend(keys.into_iter().map(|(r, c)| (si, (r, c), book.result(si, r, c).into_value())));
+        }
+        out
+    };
+    for (si, pos, value) in results {
+        if let Some(value) = value.filter(|v| !matches!(v, Value::Text(t) if t.is_empty())) {
+            sheets[si].cells.entry(pos).or_insert(Cell { value: None, style: 0 }).value = Some(value);
+        }
+    }
+    for s in sheets {
+        s.formulas = HashMap::new();
+    }
 }
 
 fn strip_sheet(r: &str) -> &str {
@@ -711,10 +951,16 @@ fn custom_palette(styles_xml: &str) -> Option<Vec<Rgb>> {
     Some(children(ic, "rgbColor").filter_map(|c| c.attribute("rgb").and_then(hex)).collect())
 }
 
-fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Result<Sheet, String> {
+fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], mdw: f32, colors: &Colors) -> Result<Sheet, String> {
     let doc = Document::parse(xml).map_err(|_| "damaged sheet".to_string())?;
     let root = doc.root_element();
     let mut sheet = Sheet::default();
+
+    if let Some(pane) = child(root, "sheetViews").and_then(|v| child(v, "sheetView")).and_then(|v| child(v, "pane")) {
+        if matches!(pane.attribute("state"), Some("frozen") | Some("frozenSplit")) {
+            sheet.frozen = (attr_f32(pane, "ySplit").unwrap_or(0.0) as u32, attr_f32(pane, "xSplit").unwrap_or(0.0) as u32);
+        }
+    }
 
     // default sizes
     let fmt = child(root, "sheetFormatPr");
@@ -737,6 +983,11 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
             let (Some(min), Some(max)) = (attr_u32(c, "min"), attr_u32(c, "max")) else { continue };
             let hidden = attr_bool(c, "hidden").unwrap_or(false);
             let w = if hidden { 0.0 } else { attr_f32(c, "width").map(|w| col_px(w, mdw) * 0.75).unwrap_or(sheet.default_col_width) };
+            if let Some(st) = attr_u32(c, "style").filter(|&st| st > 0 && (st as usize) < styles.len()) {
+                for i in min.max(1)..=max.min(16384) {
+                    sheet.col_styles.insert(i - 1, st as usize);
+                }
+            }
             // a <col> spanning the rest of the sheet only sets the default
             if max - min > 16000 {
                 sheet.default_col_width = w;
@@ -748,6 +999,8 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
         }
     }
 
+    // shared formulas: index -> (text, the cell it was written for)
+    let mut shared: HashMap<String, (Arc<str>, u32, u32)> = HashMap::new();
     if let Some(data) = child(root, "sheetData") {
         for (ri, row) in children(data, "row").enumerate() {
             let r = attr_u32(row, "r").map(|r| r - 1).unwrap_or(ri as u32);
@@ -765,16 +1018,47 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
                 let style = if style < styles.len() { style } else { 0 };
                 let v = child(c, "v").and_then(|v| v.text());
                 let value = match c.attribute("t").unwrap_or("n") {
-                    "s" => v.and_then(|i| i.trim().parse::<usize>().ok()).and_then(|i| strings.get(i)).map(|s| Value::Text(s.clone())),
+                    "s" => v.and_then(|i| i.trim().parse::<usize>().ok()).and_then(|i| strings.get(i)).map(|(s, rich)| {
+                        if let Some(rich) = rich {
+                            sheet.rich.insert((cr, cc), rich.clone());
+                        }
+                        Value::Text(s.clone())
+                    }),
                     "str" => v.map(|s| Value::Text(s.to_string())),
-                    "inlineStr" => child(c, "is").map(|is| Value::Text(rich_text(is))),
+                    "inlineStr" => child(c, "is").map(|is| {
+                        if let Some(rich) = runs(is, colors) {
+                            sheet.rich.insert((cr, cc), rich);
+                        }
+                        Value::Text(rich_text(is))
+                    }),
                     "b" => v.map(|s| Value::Bool(s.trim() == "1")),
                     "e" => v.map(|s| Value::Error(s.to_string())),
                     "d" => v.map(|s| Value::Text(s.to_string())),
                     _ => v.and_then(|s| s.trim().parse::<f64>().ok()).map(Value::Number),
                 };
                 let value = value.filter(|v| !matches!(v, Value::Text(t) if t.is_empty()));
-                if value.is_none() && style == 0 {
+                // a formula: kept to work out when the file has no result for it
+                let mut formula = false;
+                if let Some(f) = child(c, "f") {
+                    let text = f.text().map(str::trim).filter(|t| !t.is_empty());
+                    let si = f.attribute("si").filter(|_| f.attribute("t") == Some("shared"));
+                    let pending = match (text, si) {
+                        (Some(t), si) => {
+                            let text: Arc<str> = Arc::from(t);
+                            if let Some(si) = si {
+                                shared.insert(si.to_string(), (text.clone(), cr, cc));
+                            }
+                            Some(super::formula::Pending { text, shift: (0, 0) })
+                        }
+                        (None, Some(si)) => shared.get(si).map(|(text, r0, c0)| super::formula::Pending { text: text.clone(), shift: (cr as i64 - *r0 as i64, cc as i64 - *c0 as i64) }),
+                        _ => None,
+                    };
+                    if let (Some(p), None) = (pending, &value) {
+                        sheet.formulas.insert((cr, cc), p);
+                        formula = true;
+                    }
+                }
+                if value.is_none() && style == 0 && !formula {
                     continue;
                 }
                 sheet.cells.insert((cr, cc), Cell { value, style });
@@ -801,7 +1085,9 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
             p.paper = size;
         }
         p.landscape = s.attribute("orientation") == Some("landscape");
-        p.scale = attr_f32(s, "scale").unwrap_or(100.0).clamp(10.0, 400.0);
+        // Excel's range is 10-400%; other programs write 0 (or nonsense) for "not set"
+        p.scale = attr_f32(s, "scale").filter(|v| (10.0..=400.0).contains(v)).unwrap_or(100.0);
+        p.explicit |= p.landscape || p.scale != 100.0;
         p.over_then_down = s.attribute("pageOrder") == Some("overThenDown");
         if attr_bool(s, "useFirstPageNumber").unwrap_or(false) {
             p.first_page = attr_u32(s, "firstPageNumber");
@@ -809,6 +1095,7 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
         let fit_on = child(root, "sheetPr").and_then(|sp| child(sp, "pageSetUpPr")).and_then(|u| attr_bool(u, "fitToPage")).unwrap_or(false);
         if fit_on {
             p.fit = Some((attr_u32(s, "fitToWidth").unwrap_or(1), attr_u32(s, "fitToHeight").unwrap_or(1)));
+            p.explicit = true;
         }
     }
     if let Some(hf) = child(root, "headerFooter") {
@@ -821,7 +1108,152 @@ fn read_sheet(xml: &str, strings: &[String], styles: &[Style], mdw: f32) -> Resu
     // a break "at id" puts row/column `id` (zero-based) first on the next page
     sheet.row_breaks = breaks("rowBreaks");
     sheet.col_breaks = breaks("colBreaks");
+    sheet.conds = children(root, "conditionalFormatting").filter_map(|cf| cond_format(cf, colors)).collect();
     Ok(sheet)
+}
+
+/// A `<conditionalFormatting>`: its ranges and rules
+fn cond_format(cf: Node, colors: &Colors) -> Option<CondFormat> {
+    let ranges: Vec<Range> = cf.attribute("sqref")?.split_whitespace().filter_map(range_ref).collect();
+    if ranges.is_empty() {
+        return None;
+    }
+    let cfvos = |n: Node| -> Vec<Cfvo> {
+        children(n, "cfvo").map(|v| Cfvo { kind: v.attribute("type").unwrap_or("min").to_string(), val: v.attribute("val").map(str::to_string), gte: attr_bool(v, "gte").unwrap_or(true) }).collect()
+    };
+    let rules = children(cf, "cfRule")
+        .map(|r| {
+            let rule = r.attribute("type").unwrap_or("").to_string();
+            let kind = if let Some(n) = child(r, "colorScale") {
+                CfKind::Scale(cfvos(n), children(n, "color").filter_map(|c| colors.get(c)).collect())
+            } else if let Some(n) = child(r, "dataBar") {
+                let v = cfvos(n);
+                let lo = v.first().cloned().unwrap_or(Cfvo { kind: "min".into(), val: None, gte: true });
+                let hi = v.get(1).cloned().unwrap_or(Cfvo { kind: "max".into(), val: None, gte: true });
+                CfKind::Bar(lo, hi, child(n, "color").and_then(|c| colors.get(c)).unwrap_or([0x63, 0x8E, 0xC6]))
+            } else if let Some(n) = child(r, "iconSet") {
+                CfKind::Icons {
+                    set: n.attribute("iconSet").unwrap_or("3TrafficLights1").to_string(),
+                    cfvos: cfvos(n),
+                    reverse: attr_bool(n, "reverse").unwrap_or(false),
+                    show_value: attr_bool(n, "showValue").unwrap_or(true),
+                }
+            } else {
+                CfKind::Rule
+            };
+            CfRule {
+                kind,
+                rule,
+                priority: r.attribute("priority").and_then(|p| p.parse().ok()).unwrap_or(i32::MAX),
+                dxf: attr_u32(r, "dxfId").map(|i| i as usize),
+                operator: r.attribute("operator").map(str::to_string),
+                formulas: children(r, "formula").filter_map(|f| f.text()).map(str::to_string).collect(),
+                text: r.attribute("text").map(str::to_string),
+                stop: attr_bool(r, "stopIfTrue").unwrap_or(false),
+                rank: attr_u32(r, "rank").unwrap_or(10),
+                percent: attr_bool(r, "percent").unwrap_or(false),
+                bottom: attr_bool(r, "bottom").unwrap_or(false),
+                above: attr_bool(r, "aboveAverage").unwrap_or(true),
+                equal_average: attr_bool(r, "equalAverage").unwrap_or(false),
+                time_period: r.attribute("timePeriod").map(str::to_string),
+            }
+        })
+        .collect();
+    Some(CondFormat { ranges, rules })
+}
+
+/// One side of a `<border>` (also in differential formats)
+fn border_edge(b: Node, name: &str, colors: &Colors) -> Option<Edge> {
+    let e = child(b, name)?;
+    let line = match e.attribute("style")? {
+        "hair" => Line::Hair,
+        "thin" => Line::Thin,
+        "medium" => Line::Medium,
+        "thick" => Line::Thick,
+        "double" => Line::Double,
+        "dotted" => Line::Dotted,
+        "dashed" => Line::Dashed,
+        "mediumDashed" => Line::MediumDashed,
+        "dashDot" | "dashDotDot" | "mediumDashDot" | "mediumDashDotDot" | "slantDashDot" => Line::DashDot,
+        _ => return None,
+    };
+    let color = child(e, "color").and_then(|c| colors.get(c)).unwrap_or([0, 0, 0]);
+    Some(Edge { line, color })
+}
+
+/// The differential formats (`<dxfs>`) and custom table styles of styles.xml
+fn read_dxfs(xml: &str, colors: &Colors) -> (Vec<Dxf>, HashMap<String, Vec<(String, usize)>>) {
+    let Ok(doc) = Document::parse(xml) else { return Default::default() };
+    let root = doc.root_element();
+    let dxfs = child(root, "dxfs")
+        .map(|ds| {
+            children(ds, "dxf")
+                .map(|d| {
+                    let mut x = Dxf::default();
+                    if let Some(f) = child(d, "font") {
+                        let on = |name: &str| child(f, name).map(|n| n.attribute("val").map(|v| v != "0" && v != "false").unwrap_or(true));
+                        x.bold = on("b");
+                        x.italic = on("i");
+                        x.strike = on("strike");
+                        x.underline = child(f, "u").map(|n| n.attribute("val") != Some("none"));
+                        x.color = child(f, "color").and_then(|c| colors.get(c));
+                    }
+                    if let Some(p) = child(d, "fill").and_then(|f| child(f, "patternFill")) {
+                        if p.attribute("patternType") != Some("none") {
+                            // a differential fill keeps its solid colour in bgColor
+                            x.fill = child(p, "bgColor").and_then(|c| colors.get(c)).or_else(|| child(p, "fgColor").and_then(|c| colors.get(c)));
+                        }
+                    }
+                    if let Some(n) = child(d, "numFmt") {
+                        x.num_fmt = n.attribute("formatCode").map(str::to_string);
+                    }
+                    if let Some(b) = child(d, "border") {
+                        x.borders = Borders { left: border_edge(b, "left", colors), right: border_edge(b, "right", colors), top: border_edge(b, "top", colors), bottom: border_edge(b, "bottom", colors), ..Default::default() };
+                        x.inside_h = border_edge(b, "horizontal", colors);
+                        x.inside_v = border_edge(b, "vertical", colors);
+                    }
+                    x
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut styles = HashMap::new();
+    if let Some(ts) = child(root, "tableStyles") {
+        for t in children(ts, "tableStyle") {
+            let Some(name) = t.attribute("name") else { continue };
+            let parts = children(t, "tableStyleElement").filter_map(|e| Some((e.attribute("type")?.to_string(), attr_u32(e, "dxfId")? as usize))).collect();
+            styles.insert(name.to_string(), parts);
+        }
+    }
+    (dxfs, styles)
+}
+
+/// The tables (Format as Table) of a sheet
+fn read_tables(pkg: &mut Package, sheet_path: &str, sheet_xml: &str) -> Vec<TableDef> {
+    let Ok(doc) = Document::parse(sheet_xml) else { return vec![] };
+    let Some(parts) = child(doc.root_element(), "tableParts") else { return vec![] };
+    let rels = pkg.rels(sheet_path);
+    let mut out = vec![];
+    for part in children(parts, "tablePart") {
+        let Some(path) = part.attribute((REL, "id")).and_then(|id| rels.get(id)).cloned() else { continue };
+        let Some(xml) = pkg.text(&path) else { continue };
+        let Ok(t) = Document::parse(&xml) else { continue };
+        let t = t.root_element();
+        let Some(range) = t.attribute("ref").and_then(range_ref) else { continue };
+        let info = child(t, "tableStyleInfo");
+        let flag = |name: &str| info.and_then(|i| attr_bool(i, name)).unwrap_or(false);
+        out.push(TableDef {
+            range,
+            header_rows: attr_u32(t, "headerRowCount").unwrap_or(1),
+            totals_rows: attr_u32(t, "totalsRowCount").unwrap_or(0),
+            style: info.and_then(|i| i.attribute("name")).map(str::to_string),
+            row_stripes: flag("showRowStripes"),
+            col_stripes: flag("showColumnStripes"),
+            first_col: flag("showFirstColumn"),
+            last_col: flag("showLastColumn"),
+        });
+    }
+    out
 }
 
 /// Paper sizes Excel writes in `paperSize`, in points (portrait)
@@ -844,30 +1276,24 @@ fn paper(code: u32) -> Option<(f32, f32)> {
 // ---------------------------------------------------------------------------
 // Pictures
 
-fn read_pictures(pkg: &mut Package, sheet_path: &str, sheet_xml: &str) -> Vec<Picture> {
-    let Ok(doc) = Document::parse(sheet_xml) else { return vec![] };
-    let Some(drawing) = doc.root_element().children().find(|n| n.tag_name().name() == "drawing") else { return vec![] };
-    let Some(rid) = drawing.attribute((REL, "id")) else { return vec![] };
+/// A sheet's drawing layer: pictures, charts (their XML, read once the cells are worked
+/// out) and shapes
+fn read_drawing(pkg: &mut Package, sheet_path: &str, sheet_xml: &str, theme: &[Rgb]) -> (Vec<Picture>, Vec<(usize, Anchor, String)>, Vec<Drawn>) {
+    let none = || (vec![], vec![], vec![]);
+    let Ok(doc) = Document::parse(sheet_xml) else { return none() };
+    let Some(drawing) = doc.root_element().children().find(|n| n.tag_name().name() == "drawing") else { return none() };
+    let Some(rid) = drawing.attribute((REL, "id")) else { return none() };
     let rels = pkg.rels(sheet_path);
-    let Some(dpath) = rels.get(rid).cloned() else { return vec![] };
-    let Some(dxml) = pkg.text(&dpath) else { return vec![] };
+    let Some(dpath) = rels.get(rid).cloned() else { return none() };
+    let Some(dxml) = pkg.text(&dpath) else { return none() };
     let drels = pkg.rels(&dpath);
-    let Ok(ddoc) = Document::parse(&dxml) else { return vec![] };
-    let mut out = vec![];
+    let Ok(ddoc) = Document::parse(&dxml) else { return none() };
+    let (mut pictures, mut charts, mut drawn) = (vec![], vec![], vec![]);
     for anchor in ddoc.root_element().children().filter(|n| n.is_element()) {
         let kind = anchor.tag_name().name();
         if !matches!(kind, "twoCellAnchor" | "oneCellAnchor" | "absoluteAnchor") {
             continue;
         }
-        // pictures only (charts and shapes are not printed by this engine)
-        let Some(pic) = anchor.descendants().find(|n| n.has_tag_name((XDR, "pic"))) else { continue };
-        let Some(embed) = pic.descendants().find(|n| n.has_tag_name((DRAW, "blip"))).and_then(|b| b.attribute((REL, "embed"))) else { continue };
-        let Some(media) = drels.get(embed).cloned() else { continue };
-        let ext = media.rsplit('.').next().unwrap_or("png").to_lowercase();
-        if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
-            continue;
-        }
-        let Some(data) = pkg.read(&media) else { continue };
         let marker = |name: &str| -> Option<(u32, u32, f32, f32)> {
             let m = child(anchor, name)?;
             let num = |n: &str| child(m, n).and_then(|x| x.text()).and_then(|t| t.trim().parse::<f64>().ok());
@@ -878,21 +1304,44 @@ fn read_pictures(pkg: &mut Package, sheet_path: &str, sheet_xml: &str) -> Vec<Pi
             .find(|n| n.has_tag_name((DRAW, "ext")) || n.has_tag_name((XDR, "ext")))
             .and_then(|e| Some((attr_f32(e, "cx")? * EMU, attr_f32(e, "cy")? * EMU)))
             .unwrap_or((0.0, 0.0));
-        match kind {
-            "twoCellAnchor" => {
-                if let (Some(from), Some(to)) = (marker("from"), marker("to")) {
-                    out.push(Picture { from, to: Some(to), size: ext_size, data, ext });
-                }
+        let place = match kind {
+            "twoCellAnchor" => match (marker("from"), marker("to")) {
+                (Some(from), Some(to)) => Anchor { from, to: Some(to), size: ext_size },
+                _ => continue,
+            },
+            "oneCellAnchor" => match marker("from") {
+                Some(from) => Anchor { from, to: None, size: ext_size },
+                None => continue,
+            },
+            _ => continue,
+        };
+        // a picture
+        if let Some(pic) = anchor.children().find(|n| n.has_tag_name((XDR, "pic"))) {
+            let Some(embed) = pic.descendants().find(|n| n.has_tag_name((DRAW, "blip"))).and_then(|b| b.attribute((REL, "embed"))) else { continue };
+            let Some(media) = drels.get(embed).cloned() else { continue };
+            let ext = media.rsplit('.').next().unwrap_or("png").to_lowercase();
+            if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
+                continue;
             }
-            "oneCellAnchor" => {
-                if let Some(from) = marker("from") {
-                    out.push(Picture { from, to: None, size: ext_size, data, ext });
-                }
+            let Some(data) = pkg.read(&media) else { continue };
+            pictures.push(Picture { from: place.from, to: place.to, size: place.size, data, ext });
+            continue;
+        }
+        // a chart
+        if let Some(frame) = anchor.children().find(|n| n.has_tag_name((XDR, "graphicFrame"))) {
+            let chart_rel = frame.descendants().find(|n| n.tag_name().name() == "chart").and_then(|c| c.attribute((REL, "id")));
+            if let Some(xml) = chart_rel.and_then(|id| drels.get(id).cloned()).and_then(|p| pkg.text(&p)) {
+                charts.push((drawn.len(), place, xml));
             }
-            _ => {}
+            continue;
+        }
+        // shapes, text boxes, lines and groups of them
+        let shapes = super::drawing::shapes(anchor, theme, place.size);
+        if !shapes.is_empty() {
+            drawn.push(Drawn::Shapes(place, shapes));
         }
     }
-    out
+    (pictures, charts, drawn)
 }
 
 // ---------------------------------------------------------------------------
@@ -992,6 +1441,17 @@ mod tests {
         // accent1 at 80% lighter: Excel shows D9E1F2
         let c = tint([0x44, 0x72, 0xC4], 0.7999816888943144);
         assert!(c.iter().zip([0xD9, 0xE1, 0xF2]).all(|(a, b)| (*a as i32 - b).abs() <= 2), "{c:x?}");
+    }
+
+    #[test]
+    fn print_scales_outside_excels_range_mean_not_set() {
+        // other programs write scale="0" for "no scale chosen": printing at 10% made the
+        // sheet a speck on the page
+        let xml = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/><pageSetup paperSize="0" scale="0" orientation="portrait"/></worksheet>"#;
+        let colors = Colors { theme: default_theme(), indexed: None };
+        let sheet = read_sheet(xml, &[], &[Style::default()], 7.0, &colors).unwrap();
+        assert_eq!(sheet.print.scale, 100.0);
+        assert!(!sheet.print.explicit);
     }
 
     #[test]

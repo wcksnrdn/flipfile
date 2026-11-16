@@ -6,6 +6,45 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Excel → PDF: charts, shapes and text boxes**: column and bar (clustered, stacked, 100%),
+  line, area, pie and doughnut, and scatter charts are drawn with their title, legend, axes,
+  gridlines and data labels, in the series' or the theme's colours. Charts without a cached
+  copy of their numbers read them from the cells. Shapes, text boxes, arrows, connectors and
+  groups keep their outline, fill and text, in the order they are stacked.
+- **Excel → PDF: Format as Table and conditional formatting**: table styles (all 60 built-in
+  ones, from the workbook's theme, and custom ones) give header colours, banded rows and the
+  totals row. Conditional formats are evaluated: highlight rules (values, formulas, text,
+  top/bottom, above average, duplicates, dates), colour scales, data bars and icon sets.
+- **Excel → PDF: formulas without a stored result are worked out**: workbooks exported by
+  web apps and libraries often keep only the formula; the common functions (sums, counts,
+  IF/IFS, lookups, text, dates, rounding, SUMPRODUCT, SUBTOTAL) are computed instead of
+  printing an empty cell.
+- **Excel → PDF: rich text, rotated and stacked text, gradient fills, diagonal borders**.
+- **PDF → Excel rebuilt**: tables come back as real cells instead of one line of text per
+  row. Tables drawn with lines keep merges, borders, shading and row heights; tables without
+  lines (bank statements, invoices) are found from columns that line up, with wrapped text
+  kept in its cell. A table running over pages becomes one, its repeated heading dropped.
+  Amounts (Rp, $, …), percentages, dates (Indonesian month names too) and times become
+  numbers in the notation the document uses; codes, account, ID and phone numbers stay text.
+  Titles keep their size and weight, shading becomes the cells' fill, and scanned PDFs are
+  read with the system's text recognition. CSV and the other data formats from a PDF use the
+  same tables.
+
+### Changed
+
+- **Excel → PDF: sheets without a print setup are laid out to be read**: wide tables turn to
+  landscape and shrink so every column fits across the page (instead of a few columns per
+  page), and a table's heading row repeats on every page. Sheets with their own print setup
+  keep Excel's layout.
+
+### Fixed
+
+- **Excel → PDF: numbers no longer turn into #### and text no longer gets cut** where Excel
+  shows it whole: text is now measured the way Excel measures it (whole pixels per
+  character).
+
 ## [0.9.1] - 2026-11-15
 
 ### Added
