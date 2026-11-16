@@ -93,6 +93,10 @@ pub(super) fn cost(path: &str, format: &str) -> u64 {
             _ => 2,
         };
     }
+    // A document at a compress level: its parts unpacked, and a few pictures decoded at once
+    if super::compress::Level::from_format(format).is_some() && super::compress::is_package(path) {
+        return (size * 4 + 512 * MB).min(2 * GB);
+    }
     let ext = path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
     match ext.as_str() {
         // Every cell becomes a positioned box when typeset: a 160 KB workbook of 3000

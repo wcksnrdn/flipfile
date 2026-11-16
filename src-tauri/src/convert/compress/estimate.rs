@@ -1,7 +1,8 @@
 // Live estimates for the Option/Alt ring: what each level would make of the dropped files,
 // worked out while the user points, so the slices can say "≈ 610 KB" and the centre what
-// it costs. Photos and PDFs are really compressed, in memory; videos and recordings are
-// worked out from their length and the level's bitrate. With many files, a few of them
+// it costs. Photos, PDFs, documents and animations are really compressed, in memory;
+// videos and recordings (also those inside documents) are worked out from their length
+// and the level's bitrate. With many files, a few of them
 // stand for all. Results are kept per file and level while the file doesn't change.
 
 use std::collections::HashMap;
@@ -13,14 +14,17 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 
-use super::{av, consequence, kind_of, pdf, photo, Kind, Level, LEVELS};
-use crate::convert::input::{file_name, open_oriented, same_format_ext};
+use super::{animation, av, consequence, kind_of, package, pdf, photo, Kind, Level, LEVELS};
+use crate::convert::input::{file_name, open_oriented};
 use crate::state::grants::Grants;
 
 /// Files measured to stand for all of them
 const SAMPLES: usize = 3;
-/// PDFs larger than this aren't measured (each level holds the whole document)
+/// PDFs and documents larger than this aren't measured (each level holds the whole
+/// document)
 const MAX_PDF_ESTIMATE: u64 = 100 * 1024 * 1024;
+/// Animations larger than this aren't measured (each level decodes every frame)
+const MAX_GIF_ESTIMATE: u64 = 30 * 1024 * 1024;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,7 +114,7 @@ fn measure(path: &Path, level: Level, bytes: u64) -> Option<Measured> {
     let changed = |ext: &str| super::changed(path, ext);
     match kind_of(path)? {
         Kind::Photo => {
-            let own = same_format_ext(path).ok()?;
+            let own = photo::own_format(path).ok()?;
             let (img, _) = open_oriented(path).ok()?;
             let (encoded, ext) = photo::encode_level(&img, &own, level).ok()?;
             Some((encoded.len() as u64, changed(&ext)))
@@ -123,6 +127,21 @@ fn measure(path: &Path, level: Level, bytes: u64) -> Option<Measured> {
             }
             let data = std::fs::read(path).ok()?;
             Some((pdf::compress_bytes(&data, level).ok()?.len() as u64, None))
+        }
+        Kind::Document | Kind::Book => {
+            if bytes > MAX_PDF_ESTIMATE {
+                return None;
+            }
+            let data = std::fs::read(path).ok()?;
+            let packed = package::compress_bytes(&data, package::family(path)?, level, package::Media::Estimate).ok()?;
+            Some(((packed.bytes.len() as u64).saturating_sub(packed.media_saving), None))
+        }
+        Kind::Animation => {
+            if bytes > MAX_GIF_ESTIMATE {
+                return None;
+            }
+            let data = std::fs::read(path).ok()?;
+            Some((animation::encode_level(&data, level).ok()?.len() as u64, None))
         }
         Kind::Video => {
             let seconds = av::duration(path)?;
