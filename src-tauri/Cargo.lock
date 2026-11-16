@@ -1842,8 +1842,10 @@ version = "0.10.0"
 dependencies = [
  "arboard",
  "block2",
+ "color_quant",
  "docx-rs",
  "fast_image_resize",
+ "gif",
  "image",
  "jpeg-encoder",
  "libc",

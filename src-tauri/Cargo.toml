@@ -71,6 +71,12 @@ opus1 = { version = "0.3", default-features = false, features = ["std"] }
 # Compress levels for PDFs: re-encodes the pictures inside a PDF and leaves its text and
 # layout untouched (src/convert/compress/pdf.rs)
 lopdf = { version = "0.47", default-features = false }
+# Animated GIFs at a compress level (src/convert/compress/animation.rs): frames written
+# as only what changed, with their own palettes; already part of the build through `image`
+gif = "0.14"
+# One palette learned from the whole animation (NeuQuant), so unchanged areas stay
+# unchanged from frame to frame; already part of the build through `gif`
+color_quant = "1.1"
 # Resampling to the 16 kHz Whisper hears
 rubato = { version = "5", default-features = false, features = ["fft_resampler"] }
 
