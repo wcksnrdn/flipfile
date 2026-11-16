@@ -1,9 +1,9 @@
 cask "flipfile" do
   arch arm: "aarch64", intel: "x64"
 
-  version "0.9.1"
-  sha256 arm:   "02317a4a559139a528e055026c9abd723da5bb730934d74ae366cea1e3530126",
-         intel: "bf9a62d0db3ad4f992af5415603bb6cda2007cd180c86989546b799ca1a1c4fb"
+  version "0.10.0"
+  sha256 arm:   "987fbde9c6de9fe9cb52375fd3e78a02525919e3c8e2f316e7929ea34de95756",
+         intel: "c47910b6750e3df6520a4c9a33854c8a18160290577a40664dbbffdac6864719"
 
   url "https://github.com/wcksnrdn/flipfile/releases/download/v#{version}/flipfile_#{version}_#{arch}.dmg"
   name "flipfile"
