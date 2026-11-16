@@ -1,0 +1,26 @@
+name: Update website
+
+# When a release is published (or its notes are edited), tell the website
+# (wcksnrdn/flipfileweb) to sync its version, installer sizes and changelog now
+# instead of on its next scheduled check. Needs a WEBSITE_DISPATCH_TOKEN secret:
+# a fine-grained token for wcksnrdn/flipfileweb with Contents: read and write.
+on:
+  release:
+    types: [published, edited]
+
+permissions: {}
+
+jobs:
+  dispatch:
+    if: ${{ !github.event.release.draft && !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the website to sync
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::WEBSITE_DISPATCH_TOKEN isn't set, so the website picks this release up on its own schedule"
+            exit 0
+          fi
+          gh api repos/wcksnrdn/flipfileweb/dispatches -f event_type=flipfile-release
