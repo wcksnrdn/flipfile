@@ -123,11 +123,13 @@ pub enum Mark {
     Icon { set: String, index: usize, of: usize, show_value: bool },
 }
 
+/// Custom table styles: name -> (element type, dxf index)
+pub type TableStyles = HashMap<String, Vec<(String, usize)>>;
+
 /// What a workbook defines for these formats
 pub struct Defs<'a> {
     pub dxfs: &'a [Dxf],
-    /// custom table styles: name -> (element type, dxf index)
-    pub table_styles: &'a HashMap<String, Vec<(String, usize)>>,
+    pub table_styles: &'a TableStyles,
     /// dk1, lt1, dk2, lt2, accent1..6
     pub theme: &'a [Rgb],
 }
@@ -289,10 +291,9 @@ fn builtin(name: &str, theme: &[Rgb]) -> Option<Elements> {
         ("light", n)
     } else if let Some(n) = rest.strip_prefix("Medium") {
         ("medium", n)
-    } else if let Some(n) = rest.strip_prefix("Dark") {
-        ("dark", n)
     } else {
-        return None;
+        let n = rest.strip_prefix("Dark")?;
+        ("dark", n)
     };
     let n: usize = n.parse().ok()?;
     let theme_color = |i: usize| theme.get(i).copied().unwrap_or([0, 0, 0]);
@@ -445,31 +446,27 @@ fn table_overlay(t: &TableDef, el: &Elements, out: &mut HashMap<(u32, u32), Dxf>
             }
             if t.row_stripes && body {
                 let k = r - header_end;
-                let stripe = if k % 2 == 0 { &el.row1 } else { &el.row2 };
+                let stripe = if k.is_multiple_of(2) { &el.row1 } else { &el.row2 };
                 if let Some(s) = stripe {
                     layer(region(s, (r, c1, r, c2), r, c));
                 }
             }
-            if t.first_col && c == c1 {
-                if let Some(s) = &el.first_col {
+            if t.first_col && c == c1
+                && let Some(s) = &el.first_col {
                     layer(region(s, (r1, c1, r2, c1), r, c));
                 }
-            }
-            if t.last_col && c == c2 {
-                if let Some(s) = &el.last_col {
+            if t.last_col && c == c2
+                && let Some(s) = &el.last_col {
                     layer(region(s, (r1, c2, r2, c2), r, c));
                 }
-            }
-            if header {
-                if let Some(s) = &el.header {
+            if header
+                && let Some(s) = &el.header {
                     layer(region(s, (r1, c1, header_end - 1, c2), r, c));
                 }
-            }
-            if totals {
-                if let Some(s) = &el.totals {
+            if totals
+                && let Some(s) = &el.totals {
                     layer(region(s, (totals_start, c1, r2, c2), r, c));
                 }
-            }
             if d != Dxf::default() {
                 out.insert((r, c), d);
             }

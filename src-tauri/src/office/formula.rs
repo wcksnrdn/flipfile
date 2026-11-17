@@ -398,11 +398,10 @@ fn area(sheet: Option<String>, s: &str) -> Option<Area> {
     if let (Some(c1), Some(c2)) = (col_number(&a), col_number(&b)) {
         return Some(Area { sheet, r1: 0, c1: c1.min(c2), r2: MAX_ROW, c2: c1.max(c2), abs: [true, aa, true, ab] });
     }
-    if let (Ok(r1), Ok(r2)) = (a.parse::<u32>(), b.parse::<u32>()) {
-        if r1 >= 1 && r2 >= 1 {
+    if let (Ok(r1), Ok(r2)) = (a.parse::<u32>(), b.parse::<u32>())
+        && r1 >= 1 && r2 >= 1 {
             return Some(Area { sheet, r1: r1.min(r2) - 1, c1: 0, r2: r1.max(r2) - 1, c2: MAX_COL, abs: [aa, true, ab, true] });
         }
-    }
     None
 }
 
@@ -423,12 +422,11 @@ impl Parser {
         self.toks.get(self.at)
     }
     fn op(&mut self, ops: &[&'static str]) -> Option<&'static str> {
-        if let Some(Tok::Op(o)) = self.peek() {
-            if let Some(found) = ops.iter().find(|x| *x == o) {
+        if let Some(Tok::Op(o)) = self.peek()
+            && let Some(found) = ops.iter().find(|x| *x == o) {
                 self.at += 1;
                 return Some(found);
             }
-        }
         None
     }
     fn binary(&mut self, ops: &[&'static str], next: fn(&mut Parser) -> Expr) -> Expr {
@@ -1106,7 +1104,7 @@ impl Eval<'_> {
                 }
                 V::Text(parts.join(&delim))
             }
-            "REPT" => V::Text(t(0)?.repeat(n(1)?.max(0.0).min(32767.0) as usize)),
+            "REPT" => V::Text(t(0)?.repeat(n(1)?.clamp(0.0, 32767.0) as usize)),
             "EXACT" => V::Bool(t(0)? == t(1)?),
             "SUBSTITUTE" => {
                 let (s, old, new) = (t(0)?, t(1)?, t(2)?);
@@ -1316,11 +1314,10 @@ fn equal(a: &V, b: &V) -> bool {
 /// smallest ≥ (sorted descending)
 fn match_in(v: &V, list: &[&V], kind: f64) -> Option<usize> {
     if kind == 0.0 {
-        if let V::Text(p) = v {
-            if p.contains(['*', '?']) {
+        if let V::Text(p) = v
+            && p.contains(['*', '?']) {
                 return list.iter().position(|x| matches!(x, V::Text(t) if wildcard(p, t)));
             }
-        }
         return list.iter().position(|x| !matches!(x, V::Blank) && rank_eq(v, x));
     }
     let mut best = None;

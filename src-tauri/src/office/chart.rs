@@ -96,9 +96,13 @@ pub struct Chart {
     pub accents: Vec<Rgb>,
 }
 
-/// Reads a chart part. `data` returns the cells a reference like `Sheet1!$B$2:$B$9`
-/// points at, as (number, shown text).
-pub fn parse(xml: &str, theme: &[Rgb], data: &dyn Fn(&str) -> Vec<(Option<f64>, String)>) -> Option<Chart> {
+/// A cell as a chart reads it: (number, shown text)
+pub type CellValue = (Option<f64>, String);
+/// Returns the cells a reference like `Sheet1!$B$2:$B$9` points at
+pub type CellLookup<'a> = &'a dyn Fn(&str) -> Vec<CellValue>;
+
+/// Reads a chart part. `data` looks up the cells its series refer to.
+pub fn parse(xml: &str, theme: &[Rgb], data: CellLookup<'_>) -> Option<Chart> {
     let doc = Document::parse(xml).ok()?;
     let space = doc.root_element();
     let chart = child(space, "chart")?;
@@ -143,8 +147,8 @@ pub fn parse(xml: &str, theme: &[Rgb], data: &dyn Fn(&str) -> Vec<(Option<f64>, 
                 .and_then(|t| child(t, "v").and_then(|v| v.text()).map(str::to_string).or_else(|| child(t, "strRef").map(|r| values(r, data).into_iter().map(|(_, t)| t).collect::<Vec<_>>().join(" "))))
                 .unwrap_or_else(|| format!("Series{index}"));
             let (cat_node, val_node) = if kind == Kind::Scatter { (child(s, "xVal"), child(s, "yVal")) } else { (child(s, "cat"), child(s, "val")) };
-            let cat_data: Vec<(Option<f64>, String)> = cat_node.and_then(|c| c.children().find(|x| x.is_element())).map(|r| values(r, data)).unwrap_or_default();
-            let val_data: Vec<(Option<f64>, String)> = val_node.and_then(|c| c.children().find(|x| x.is_element())).map(|r| values(r, data)).unwrap_or_default();
+            let cat_data: Vec<CellValue> = cat_node.and_then(|c| c.children().find(|x| x.is_element())).map(|r| values(r, data)).unwrap_or_default();
+            let val_data: Vec<CellValue> = val_node.and_then(|c| c.children().find(|x| x.is_element())).map(|r| values(r, data)).unwrap_or_default();
             let fmt = val_node
                 .and_then(|v| v.descendants().find(|d| d.tag_name().name() == "formatCode"))
                 .and_then(|f| f.text())
@@ -270,7 +274,7 @@ fn labels(d: Option<Node>) -> Labels {
     Labels { value: on("showVal"), percent: on("showPercent"), category: on("showCatName") }
 }
 
-fn title_text(t: Node, data: &dyn Fn(&str) -> Vec<(Option<f64>, String)>) -> Option<String> {
+fn title_text(t: Node, data: CellLookup<'_>) -> Option<String> {
     let tx = child(t, "tx")?;
     if let Some(rich) = child(tx, "rich") {
         let lines: Vec<String> = children(rich, "p").map(|p| p.descendants().filter(|d| d.tag_name().name() == "t").filter_map(|d| d.text()).collect::<String>()).collect();
@@ -281,7 +285,7 @@ fn title_text(t: Node, data: &dyn Fn(&str) -> Vec<(Option<f64>, String)>) -> Opt
 }
 
 /// The points of a `numRef` / `strRef` / `numLit` / `strLit` / `multiLvlStrRef`
-fn values(r: Node, data: &dyn Fn(&str) -> Vec<(Option<f64>, String)>) -> Vec<(Option<f64>, String)> {
+fn values(r: Node, data: CellLookup<'_>) -> Vec<CellValue> {
     let cache = r.children().find(|c| matches!(c.tag_name().name(), "numCache" | "strCache" | "multiLvlStrCache")).or_else(|| {
         matches!(r.tag_name().name(), "numLit" | "strLit").then_some(r)
     });
@@ -361,9 +365,12 @@ fn text_w(s: &str, size: f32) -> f32 {
 /// Round numbers for a value axis: (min, max, step)
 fn nice_scale(lo: f64, hi: f64, room: f32, fixed_min: Option<f64>, fixed_max: Option<f64>) -> (f64, f64, f64) {
     let (mut lo, mut hi) = (lo.min(hi), lo.max(hi));
+    // `!(a > b)` on purpose: unlike `a <= b` it also holds for NaN, which then starts at 0
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     if lo >= 0.0 && !(lo > hi * 5.0 / 6.0) {
         lo = 0.0;
     }
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     if hi <= 0.0 && !(hi < lo * 5.0 / 6.0) {
         hi = 0.0;
     }
@@ -399,6 +406,8 @@ impl Out {
         let _ = writeln!(self.s, "#place(top + left, line(start: ({:.2}pt, {:.2}pt), end: ({:.2}pt, {:.2}pt), stroke: {width:.2}pt + {}))", a.0, a.1, b.0, b.1, rgb(color));
     }
     /// text with its anchor point at (x, y): `h` is "left"/"center"/"right", `v` "top"/"horizon"/"bottom"
+    // A drawing primitive: its calls read like the Typst they produce, which a struct would hide
+    #[allow(clippy::too_many_arguments)]
     fn text(&mut self, x: f32, y: f32, s: &str, size: f32, color: Rgb, h: &str, v: &str, bold: bool) {
         let w = text_w(s, size) + 2.0;
         let lines = s.split('\n').count() as f32;
@@ -772,7 +781,7 @@ fn draw_axes_chart(o: &mut Out, c: &Chart, mut l: f32, t: f32, r: f32, mut b: f3
             }
         } else {
             // every k-th label when they would collide
-            let room = if horizontal { ts * 1.3 } else if rotate { ts * 1.3 } else { slot };
+            let room = if horizontal || rotate { ts * 1.3 } else { slot };
             let k = if horizontal || rotate { ((room / slot).ceil() as usize).max(1) } else { 1 };
             for (i, label) in cat_labels.iter().enumerate().step_by(k) {
                 let p = cpos(i as f32);
@@ -850,16 +859,16 @@ fn draw_axes_chart(o: &mut Out, c: &Chart, mut l: f32, t: f32, r: f32, mut b: f3
                 for s in &p.series {
                     let mut pts = vec![];
                     let mut lower = vec![];
-                    for i in 0..n {
+                    for (i, stacked) in base.iter_mut().enumerate() {
                         let Some(mut v) = s.vals.get(i).copied().flatten() else { continue };
                         if p.grouping == Grouping::Percent {
                             let total: f64 = p.series.iter().filter_map(|x| x.vals.get(i).copied().flatten()).sum();
                             v = if total != 0.0 { v / total } else { 0.0 };
                         }
-                        let from = if p.grouping == Grouping::Standard { 0.0 } else { base[i] };
+                        let from = if p.grouping == Grouping::Standard { 0.0 } else { *stacked };
                         let to = from + v;
                         if p.grouping != Grouping::Standard {
-                            base[i] = to;
+                            *stacked = to;
                         }
                         let x = cpos(i as f32);
                         pts.push((x, vpos(to.clamp(vmin, vmax))));
@@ -935,7 +944,7 @@ mod tests {
     #[test]
     fn charts_without_a_cache_read_their_cells() {
         let xml = r#"<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><c:chart><c:plotArea><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:ser><c:idx val="0"/><c:tx><c:strRef><c:f>S!$B$1</c:f></c:strRef></c:tx><c:cat><c:strRef><c:f>S!$A$2:$A$3</c:f></c:strRef></c:cat><c:val><c:numRef><c:f>S!$B$2:$B$3</c:f></c:numRef></c:val></c:ser></c:barChart><c:catAx/><c:valAx/></c:plotArea><c:legend><c:legendPos val="b"/></c:legend></c:chart></c:chartSpace>"#;
-        let data = |f: &str| -> Vec<(Option<f64>, String)> {
+        let data = |f: &str| -> Vec<CellValue> {
             match f {
                 "S!$B$1" => vec![(None, "Sales".into())],
                 "S!$A$2:$A$3" => vec![(None, "Jan".into()), (None, "Feb".into())],

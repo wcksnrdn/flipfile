@@ -160,11 +160,10 @@ impl<'d> Gen<'d> {
     /// `text(..., body)` wrapped in decorations; `body` is a Typst expression.
     fn run_expr(&self, body: &str, r: &RunProps) -> String {
         let mut args = String::new();
-        if let Some(font) = &r.font {
-            if !font.eq_ignore_ascii_case(&self.doc.default_font) && !is_symbol_font(font) {
+        if let Some(font) = &r.font
+            && !font.eq_ignore_ascii_case(&self.doc.default_font) && !is_symbol_font(font) {
                 let _ = write!(args, "font: {}, ", font_list(font));
             }
-        }
         if (r.size - self.doc.default_size).abs() > 0.01 {
             let _ = write!(args, "size: {}, ", pt(r.size));
         }
@@ -298,11 +297,10 @@ impl<'d> Gen<'d> {
             .map(|seg| format!("[{}]", self.inline_markup(seg)))
             .collect();
         let mut stops: Vec<TabStop> = tabs.to_vec();
-        if let Some(pos) = extra_stop {
-            if !stops.iter().any(|t| (t.pos - pos).abs() < 0.5) {
+        if let Some(pos) = extra_stop
+            && !stops.iter().any(|t| (t.pos - pos).abs() < 0.5) {
                 stops.push(TabStop { pos, align: TabAlign::Left, leader: None });
             }
-        }
         stops.sort_by(|a, b| a.pos.partial_cmp(&b.pos).unwrap_or(std::cmp::Ordering::Equal));
         let stops: Vec<String> = stops
             .iter()
@@ -665,8 +663,8 @@ impl<'d> Gen<'d> {
                     if top && !self.in_header.get() {
                         let margin_left = self.doc.sections[self.section].page.margin_left;
                         for inline in &p.inlines {
-                            if let Inline::Image { index, width, height, float: Some((x, y)), on_page: true } = inline {
-                                if let Some(Some(path)) = self.image_paths.get(*index) {
+                            if let Inline::Image { index, width, height, float: Some((x, y)), on_page: true } = inline
+                                && let Some(Some(path)) = self.image_paths.get(*index) {
                                     let _ = writeln!(
                                         s,
                                         "#place(top + left, dx: {}, dy: {} - ff-top, image({}, width: {}, height: {}, fit: \"stretch\"))",
@@ -677,7 +675,6 @@ impl<'d> Gen<'d> {
                                         pt(*height)
                                     );
                                 }
-                            }
                         }
                     }
                     s.push_str(&self.paragraph(&p));
@@ -688,11 +685,10 @@ impl<'d> Gen<'d> {
                     prev_after = Some((p.props.space_after, p.props.style_id.clone(), p.props.contextual_spacing));
                 }
                 Piece::Block(Block::Table(t)) => {
-                    if let Some((after, _, _)) = prev_after {
-                        if after > 0.0 {
+                    if let Some((after, _, _)) = prev_after
+                        && after > 0.0 {
                             let _ = writeln!(s, "#v({}, weak: true)", pt(after));
                         }
-                    }
                     s.push_str(&self.table(&t));
                     s.push('\n');
                     if top {
@@ -769,11 +765,10 @@ impl<'d> Gen<'d> {
             self.in_header.set(false);
             // Word counts the last paragraph's space after in the header's height
             // (Typst would drop weak spacing at the end of the block)
-            if let Some(Block::Paragraph(p)) = blocks.last() {
-                if p.props.space_after > 0.0 {
+            if let Some(Block::Paragraph(p)) = blocks.last()
+                && p.props.space_after > 0.0 {
                     inner.push_str(&format!("\n#v({})", pt(p.props.space_after)));
                 }
-            }
             inner
         };
         (render(&hf.default), hf.first.as_ref().map(|b| render(b)), hf.even.as_ref().map(|b| render(b)))
@@ -892,6 +887,9 @@ impl<'d> Gen<'d> {
     }
 }
 
+// Short-lived (split_breaks hands them straight on), so the Block stays inline rather
+// than boxed: boxing would only add an allocation per block
+#[allow(clippy::large_enum_variant)]
 enum Piece {
     Block(Block),
     PageBreak,

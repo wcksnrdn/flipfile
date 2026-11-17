@@ -201,11 +201,10 @@ pub fn cues(words: &[Segment]) -> Vec<Segment> {
         if cue.end < cue.start + 0.7 {
             cue.end = cue.start + 0.7;
         }
-        if let Some(next) = next {
-            if cue.end > next {
+        if let Some(next) = next
+            && cue.end > next {
                 cue.end = next.max(cue.start);
             }
-        }
     }
     cues
 }

@@ -575,9 +575,12 @@ fn parse_level(l: Node) -> Level {
 struct Numbering {
     // abstractNumId -> levels
     abstracts: HashMap<String, Vec<Level>>,
-    // numId -> (abstractNumId, start overrides per level, whole-level overrides)
-    nums: HashMap<String, (String, HashMap<usize, u32>, HashMap<usize, Level>)>,
+    // numId -> its definition
+    nums: HashMap<String, NumDef>,
 }
+
+/// A `<w:num>`: (abstractNumId, start overrides per level, whole-level overrides)
+type NumDef = (String, HashMap<usize, u32>, HashMap<usize, Level>);
 
 // ---------------------------------------------------------------------------
 // Parsing helpers
@@ -1078,8 +1081,8 @@ impl<'p> Reader<'p> {
         let mut level_patch = ParaPatch::default();
         let base = self.base_run();
         let para_run = style_run.apply(&base, &self.theme);
-        if let Some((num_id, level)) = num.filter(|(id, _)| id != "0") {
-            if let Some((text, lvl_para, lvl_run, suffix)) = self.next_marker(&num_id, level) {
+        if let Some((num_id, level)) = num.filter(|(id, _)| id != "0")
+            && let Some((text, lvl_para, lvl_run, suffix)) = self.next_marker(&num_id, level) {
                 level_patch = lvl_para;
                 let mut run = para_run.clone();
                 run = lvl_run.apply(&run, &self.theme);
@@ -1087,7 +1090,6 @@ impl<'p> Reader<'p> {
                     marker = Some(ListMarker { text: t, run, suffix });
                 }
             }
-        }
         // Numbering indents sit between the style and the paragraph's own formatting
         para_patch.merge(&level_patch);
         para_patch.merge(&direct_para);
@@ -1219,22 +1221,20 @@ impl<'p> Reader<'p> {
                     continue;
                 }
                 "instrText" => {
-                    if let Some(top) = field.stack.last_mut() {
-                        if !top.in_result {
+                    if let Some(top) = field.stack.last_mut()
+                        && !top.in_result {
                             top.instr.push_str(c.text().unwrap_or(""));
                         }
-                    }
                     continue;
                 }
                 _ => {}
             }
             if !field.visible() {
                 // Keep a PAGEREF's cached value as its fallback
-                if name == "t" && field.stack.last().is_some_and(|f| f.replaced && f.in_result && field_name(&f.instr) == "PAGEREF") {
-                    if let Some(Inline::PageRef { cached, .. }) = out.iter_mut().rev().find(|i| matches!(i, Inline::PageRef { .. })) {
+                if name == "t" && field.stack.last().is_some_and(|f| f.replaced && f.in_result && field_name(&f.instr) == "PAGEREF")
+                    && let Some(Inline::PageRef { cached, .. }) = out.iter_mut().rev().find(|i| matches!(i, Inline::PageRef { .. })) {
                         cached.push_str(c.text().unwrap_or(""));
                     }
-                }
                 continue; // field code, or a cached value replaced by a live field
             }
             match name {
@@ -1439,11 +1439,10 @@ impl<'p> Reader<'p> {
 
         // Borders: direct table borders, else the table style's, else none
         let mut borders = tblpr.and_then(|p| w(p, "tblBorders")).map(table_borders);
-        if borders.is_none() {
-            if let Some(style) = tblpr.and_then(|p| w(p, "tblStyle")).and_then(val) {
+        if borders.is_none()
+            && let Some(style) = tblpr.and_then(|p| w(p, "tblStyle")).and_then(val) {
                 borders = self.chain(style).iter().rev().find_map(|s| s.table_borders);
             }
-        }
         let align = match tblpr.and_then(|p| w(p, "jc")).and_then(val) {
             Some("center") => Align::Center,
             Some("right" | "end") => Align::Right,

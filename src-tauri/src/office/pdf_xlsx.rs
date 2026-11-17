@@ -909,11 +909,10 @@ impl Builder {
     /// Before something starting at `top` (points down the page): a blank row where the
     /// PDF leaves a blank line or more
     fn space_before(&mut self, top: f32, size: f32) {
-        if let Some(b) = self.bottom {
-            if top - b > size.max(9.0) * 1.1 {
+        if let Some(b) = self.bottom
+            && top - b > size.max(9.0) * 1.1 {
                 self.gap();
             }
-        }
     }
 }
 

@@ -301,7 +301,7 @@ fn read_ffmpeg(ffmpeg: &Path, input: &Path, name: &str) -> Result<Vec<f32>, Stri
     if out.stdout.len() > 4 * MAX_SECONDS * SAMPLE_RATE {
         return Err(format!("\"{name}\" is longer than 5 hours; please split it first"));
     }
-    Ok(out.stdout.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect())
+    Ok(out.stdout.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect())
 }
 
 /// A temporary file name of flipfile's own

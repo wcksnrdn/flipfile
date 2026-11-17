@@ -253,7 +253,7 @@ pub struct Sheet {
     pub drawn: Vec<Drawn>,
     /// charts waiting for the cells they plot to be worked out, with their place among
     /// `drawn` (what is drawn later covers what came before)
-    pub chart_parts: Vec<(usize, Anchor, String)>,
+    pub chart_parts: Vec<ChartPart>,
     pub print: Print,
     pub print_area: Option<Range>,
     pub title_rows: Option<(u32, u32)>,
@@ -852,7 +852,7 @@ pub fn read(bytes: &[u8]) -> Result<Workbook, String> {
 
 /// Charts, once the cells they plot hold their values
 fn read_charts(sheets: &mut [Sheet], styles: &[Style], theme: &[Rgb], date1904: bool) {
-    let parts: Vec<Vec<(usize, Anchor, String)>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.chart_parts)).collect();
+    let parts: Vec<Vec<ChartPart>> = sheets.iter_mut().map(|s| std::mem::take(&mut s.chart_parts)).collect();
     if parts.iter().all(|p| p.is_empty()) {
         return;
     }
@@ -860,7 +860,7 @@ fn read_charts(sheets: &mut [Sheet], styles: &[Style], theme: &[Rgb], date1904: 
     for (si, list) in parts.into_iter().enumerate() {
         let mut added = 0;
         for (at, anchor, xml) in list {
-            let data = |f: &str| -> Vec<(Option<f64>, String)> {
+            let data = |f: &str| -> Vec<super::chart::CellValue> {
                 let super::formula::Expr::Area(a) = super::formula::parse(f) else { return vec![] };
                 let target = match &a.sheet {
                     Some(name) => sheets.iter().position(|s| s.name.eq_ignore_ascii_case(name)),
@@ -956,11 +956,10 @@ fn read_sheet(xml: &str, strings: &[(String, Option<Rich>)], styles: &[Style], m
     let root = doc.root_element();
     let mut sheet = Sheet::default();
 
-    if let Some(pane) = child(root, "sheetViews").and_then(|v| child(v, "sheetView")).and_then(|v| child(v, "pane")) {
-        if matches!(pane.attribute("state"), Some("frozen") | Some("frozenSplit")) {
+    if let Some(pane) = child(root, "sheetViews").and_then(|v| child(v, "sheetView")).and_then(|v| child(v, "pane"))
+        && matches!(pane.attribute("state"), Some("frozen") | Some("frozenSplit")) {
             sheet.frozen = (attr_f32(pane, "ySplit").unwrap_or(0.0) as u32, attr_f32(pane, "xSplit").unwrap_or(0.0) as u32);
         }
-    }
 
     // default sizes
     let fmt = child(root, "sheetFormatPr");
@@ -1182,7 +1181,7 @@ fn border_edge(b: Node, name: &str, colors: &Colors) -> Option<Edge> {
 }
 
 /// The differential formats (`<dxfs>`) and custom table styles of styles.xml
-fn read_dxfs(xml: &str, colors: &Colors) -> (Vec<Dxf>, HashMap<String, Vec<(String, usize)>>) {
+fn read_dxfs(xml: &str, colors: &Colors) -> (Vec<Dxf>, super::sheet_style::TableStyles) {
     let Ok(doc) = Document::parse(xml) else { return Default::default() };
     let root = doc.root_element();
     let dxfs = child(root, "dxfs")
@@ -1198,12 +1197,11 @@ fn read_dxfs(xml: &str, colors: &Colors) -> (Vec<Dxf>, HashMap<String, Vec<(Stri
                         x.underline = child(f, "u").map(|n| n.attribute("val") != Some("none"));
                         x.color = child(f, "color").and_then(|c| colors.get(c));
                     }
-                    if let Some(p) = child(d, "fill").and_then(|f| child(f, "patternFill")) {
-                        if p.attribute("patternType") != Some("none") {
+                    if let Some(p) = child(d, "fill").and_then(|f| child(f, "patternFill"))
+                        && p.attribute("patternType") != Some("none") {
                             // a differential fill keeps its solid colour in bgColor
                             x.fill = child(p, "bgColor").and_then(|c| colors.get(c)).or_else(|| child(p, "fgColor").and_then(|c| colors.get(c)));
                         }
-                    }
                     if let Some(n) = child(d, "numFmt") {
                         x.num_fmt = n.attribute("formatCode").map(str::to_string);
                     }
@@ -1276,9 +1274,12 @@ fn paper(code: u32) -> Option<(f32, f32)> {
 // ---------------------------------------------------------------------------
 // Pictures
 
+/// A chart waiting for its cells: (its place among `drawn`, where it sits, its XML)
+pub type ChartPart = (usize, Anchor, String);
+
 /// A sheet's drawing layer: pictures, charts (their XML, read once the cells are worked
 /// out) and shapes
-fn read_drawing(pkg: &mut Package, sheet_path: &str, sheet_xml: &str, theme: &[Rgb]) -> (Vec<Picture>, Vec<(usize, Anchor, String)>, Vec<Drawn>) {
+fn read_drawing(pkg: &mut Package, sheet_path: &str, sheet_xml: &str, theme: &[Rgb]) -> (Vec<Picture>, Vec<ChartPart>, Vec<Drawn>) {
     let none = || (vec![], vec![], vec![]);
     let Ok(doc) = Document::parse(sheet_xml) else { return none() };
     let Some(drawing) = doc.root_element().children().find(|n| n.tag_name().name() == "drawing") else { return none() };
@@ -1439,7 +1440,7 @@ mod tests {
     fn tints() {
         assert_eq!(tint([0x44, 0x72, 0xC4], 0.0), [0x44, 0x72, 0xC4]);
         // accent1 at 80% lighter: Excel shows D9E1F2
-        let c = tint([0x44, 0x72, 0xC4], 0.7999816888943144);
+        let c = tint([0x44, 0x72, 0xC4], 0.799_981_7);
         assert!(c.iter().zip([0xD9, 0xE1, 0xF2]).all(|(a, b)| (*a as i32 - b).abs() <= 2), "{c:x?}");
     }
 

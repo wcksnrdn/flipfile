@@ -428,11 +428,10 @@ fn collect_graphics(object: &PdfPageObject, parent: Option<PdfMatrix>, page_h: f
                 subpaths.last_mut().unwrap().0.push(p);
             }
         }
-        if seg.is_close() {
-            if let Some(first) = subpaths.last().and_then(|s| s.0.first().copied()) {
+        if seg.is_close()
+            && let Some(first) = subpaths.last().and_then(|s| s.0.first().copied()) {
                 subpaths.last_mut().unwrap().0.push(first);
             }
-        }
     }
 
     for (points, curved) in subpaths {
@@ -804,11 +803,10 @@ fn lines(glyphs: &[&Glyph], art: &[Rect]) -> Vec<Line> {
             continue;
         }
         if g.ch == ' ' {
-            if let Some(line) = raw.last_mut() {
-                if (g.baseline - baseline).abs() <= size.max(1.0) * 0.5 {
+            if let Some(line) = raw.last_mut()
+                && (g.baseline - baseline).abs() <= size.max(1.0) * 0.5 {
                     line.push(g);
                 }
-            }
             continue;
         }
         let new_line = std::mem::take(&mut forced) || raw.is_empty() || (g.baseline - baseline).abs() > size.max(g.style.size) * 0.5 || g.left < last_right - size * 2.0;
@@ -969,11 +967,10 @@ fn lines(glyphs: &[&Glyph], art: &[Rect]) -> Vec<Line> {
             hinted_space = false;
             push_char(&mut line, g.ch, &style);
             line.right = line.right.max(g.right);
-            if let Some(t) = line.tabs.last_mut() {
-                if !t.leader || t.left > 0.0 {
+            if let Some(t) = line.tabs.last_mut()
+                && (!t.leader || t.left > 0.0) {
                     t.right = t.right.max(g.right);
                 }
-            }
             last_right = g.right.max(last_right);
             // Four dots in a row: a leader. The dots become one tab.
             if is_dot(g.ch) && trailing_dots(&line) >= 4 {
@@ -1432,8 +1429,8 @@ fn hide_text(form: &PdfPageXObjectFormObject, matrix: Option<PdfMatrix>, page_h:
             let _ = text.set_render_mode(PdfPageTextRenderMode::Invisible);
             continue;
         }
-        if child.object_type() == PdfPageObjectType::Path && !underlines.is_empty() {
-            if let Ok(b) = child.bounds() {
+        if child.object_type() == PdfPageObjectType::Path && !underlines.is_empty()
+            && let Ok(b) = child.bounds() {
                 // The form's own placement on the page
                 let corners = [(b.left(), b.bottom()), (b.right(), b.top())].map(|(x, y)| match matrix {
                     Some(m) => m.apply_to_points(x, y),
@@ -1448,16 +1445,14 @@ fn hide_text(form: &PdfPageXObjectFormObject, matrix: Option<PdfMatrix>, page_h:
                     let _ = child.set_stroke_color(PdfColor::new(0, 0, 0, 0));
                 }
             }
-        }
-        if depth < 4 {
-            if let Some(inner) = child.as_x_object_form_object() {
+        if depth < 4
+            && let Some(inner) = child.as_x_object_form_object() {
                 let m = match (inner.matrix().ok(), matrix) {
                     (Some(a), Some(b)) => Some(a.multiply(b)),
                     (a, b) => a.or(b),
                 };
                 hide_text(inner, m, page_h, underlines, depth + 1);
             }
-        }
     }
 }
 
@@ -1678,8 +1673,8 @@ pub(super) fn page_model(page: &PdfPage, document: &PdfDocument, media: &mut Med
     // Diagram regions become pictures, rendered from the page
     if !regions.is_empty() {
         let scale = DRAWING_DPI / 72.0;
-        if let Ok(bitmap) = page.render_with_config(&PdfRenderConfig::new().scale_page_by_factor(scale)) {
-            if let Ok(full) = bitmap.as_image() {
+        if let Ok(bitmap) = page.render_with_config(&PdfRenderConfig::new().scale_page_by_factor(scale))
+            && let Ok(full) = bitmap.as_image() {
                 for r in &regions {
                     let pad = 1.5;
                     let x = ((r.l - pad).max(0.0) * scale) as u32;
@@ -1696,7 +1691,6 @@ pub(super) fn page_model(page: &PdfPage, document: &PdfDocument, media: &mut Med
                     }
                 }
             }
-        }
     }
 
     // Distribute text and pictures: pictures' own text, table cells, free flow
@@ -1722,12 +1716,11 @@ pub(super) fn page_model(page: &PdfPage, document: &PdfDocument, media: &mut Med
             continue;
         }
         for (ti, (rect, lat)) in tables.iter().enumerate() {
-            if rect.contains(x, y) {
-                if let Some(ci) = lat.cells.iter().position(|c| c.rect.contains(x, y)) {
+            if rect.contains(x, y)
+                && let Some(ci) = lat.cells.iter().position(|c| c.rect.contains(x, y)) {
                     cell_glyphs[ti][ci].push(gl);
                     continue 'glyph;
                 }
-            }
         }
         free_glyphs.push(gl);
     }
@@ -1736,12 +1729,11 @@ pub(super) fn page_model(page: &PdfPage, document: &PdfDocument, media: &mut Med
     'image: for img in images {
         let (x, y) = (img.rect.cx(), img.rect.cy());
         for (ti, (rect, lat)) in tables.iter().enumerate() {
-            if rect.contains(x, y) {
-                if let Some(ci) = lat.cells.iter().position(|c| c.rect.contains(x, y)) {
+            if rect.contains(x, y)
+                && let Some(ci) = lat.cells.iter().position(|c| c.rect.contains(x, y)) {
                     cell_images[ti][ci].push(img);
                     continue 'image;
                 }
-            }
         }
         free_images.push(img);
     }

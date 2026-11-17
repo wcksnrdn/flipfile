@@ -46,7 +46,10 @@ pub struct Estimate {
 /// One file's result at one level: its bytes, and the format it changes to
 type Measured = (u64, Option<String>);
 
-static CACHE: Mutex<Option<HashMap<(PathBuf, u64, SystemTime, Level), Option<Measured>>>> = Mutex::new(None);
+/// A file as it was measured: its path, size and modification time, at one level
+type CacheKey = (PathBuf, u64, SystemTime, Level);
+
+static CACHE: Mutex<Option<HashMap<CacheKey, Option<Measured>>>> = Mutex::new(None);
 
 #[tauri::command]
 pub async fn compress_estimate(app: AppHandle, paths: Vec<String>, token: u32, on_estimate: Channel<Estimate>) -> Result<(), String> {
@@ -206,7 +209,7 @@ mod tests {
             image::Rgb([((x / 7) as u8).wrapping_add(noise), ((y / 5) as u8).wrapping_add(noise), ((x + y) / 11) as u8])
         });
         img.save(&path).unwrap();
-        let estimates = collect(&[path.clone()], 9);
+        let estimates = collect(std::slice::from_ref(&path), 9);
         assert_eq!(estimates.len(), 4);
         assert!(estimates.iter().all(|e| e.token == 9 && !e.approximate));
         let afters: Vec<u64> = estimates.iter().map(|e| e.after.unwrap()).collect();

@@ -151,11 +151,10 @@ fn recompress(doc: &Document, stream: &Stream, max_side: u32, quality: u8) -> Op
         return None;
     }
     // A mask whose colours were premultiplied (Matte) must keep the picture's size
-    if let Ok(mask) = dict.get(b"SMask").and_then(Object::as_reference) {
-        if doc.get_object(mask).ok()?.as_stream().ok()?.dict.has(b"Matte") {
+    if let Ok(mask) = dict.get(b"SMask").and_then(Object::as_reference)
+        && doc.get_object(mask).ok()?.as_stream().ok()?.dict.has(b"Matte") {
             return None;
         }
-    }
     let n = channels(doc, dict)?;
     let w = u32::try_from(dict.get(b"Width").and_then(Object::as_i64).ok()?).ok()?;
     let h = u32::try_from(dict.get(b"Height").and_then(Object::as_i64).ok()?).ok()?;

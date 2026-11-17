@@ -163,11 +163,10 @@ fn tracking_for(pieces: &[Piece], excel: f32) -> f32 {
 
 /// The pieces a cell's text is drawn in: its rich text runs, or the formatted text
 fn cell_pieces(shown: &Shown, style: &Style, rich: Option<&super::xlsx::Rich>, value: &Value) -> Vec<Piece> {
-    if let (Some(runs), Value::Text(t)) = (rich, value) {
-        if shown.text == *t && shown.color.is_none() {
+    if let (Some(runs), Value::Text(t)) = (rich, value)
+        && shown.text == *t && shown.color.is_none() {
             return runs.iter().filter(|r| !r.text.is_empty()).map(|r| Piece { text: r.text.clone(), font: r.font.over(&style.font), color: None, script: r.font.script }).collect();
         }
-    }
     Piece::plain(shown.text.clone(), &style.font, shown.color)
 }
 
@@ -630,7 +629,7 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
                 Some((fw, fh)) => {
                     let sx = if fw > 0 { room_w * fw as f32 / total_w.max(1.0) } else { f32::MAX };
                     let sy = if fh > 0 { room_h * fh as f32 / total_h.max(1.0) } else { f32::MAX };
-                    sx.min(sy).min(1.0).max(0.1)
+                    sx.min(sy).clamp(0.1, 1.0)
                 }
                 None => p.scale / 100.0,
             }
@@ -723,11 +722,10 @@ pub fn print(wb: &Workbook, sep: Separators, file_name: &str) -> Result<Printed,
             let grid = &plan.grid;
             // rows on this page: the title rows (unless they are already here), then the band
             let mut rows: Vec<u32> = vec![];
-            if let Some((t1, t2)) = plan.titles {
-                if page.rows.0 > t2 {
+            if let Some((t1, t2)) = plan.titles
+                && page.rows.0 > t2 {
                     rows.extend(t1.max(grid.range.0)..=t2.min(grid.range.2));
                 }
-            }
             rows.extend(page.rows.0..=page.rows.1);
             let cols: Vec<u32> = (page.cols.0..=page.cols.1).collect();
             // y of each printed row on the page (unscaled), x of each column
@@ -1108,8 +1106,8 @@ fn cell_text(shown: &Shown, pieces: Vec<Piece>, style: &Style, h: HAlign, is_num
         }
     }
     let mut tw = pieces_width(&pieces);
-    if !style.wrap {
-        if tw > inner + 0.5 {
+    if !style.wrap
+        && tw > inner + 0.5 {
             if style.shrink {
                 shrink = (inner / tw).max(4.0 / style.font.size);
             } else if is_number {
@@ -1117,7 +1115,6 @@ fn cell_text(shown: &Shown, pieces: Vec<Piece>, style: &Style, h: HAlign, is_num
                 return block(hashes_expr(), align);
             }
         }
-    }
     if h == HAlign::Fill && pieces.len() == 1 && !pieces[0].text.is_empty() {
         let n = ((inner / tw.max(0.1)).floor() as usize).max(1);
         pieces[0].text = pieces[0].text.repeat(n);
@@ -1154,7 +1151,7 @@ fn icon(set: &str, index: usize, of: usize, size: f32) -> String {
     let level = if of > 1 { index as f32 / (of - 1) as f32 } else { 1.0 };
     let traffic = |i: usize| match (of, i) {
         (4, 0) => BLACK,
-        (_, i) if i == 0 => RED,
+        (_, 0) => RED,
         (n, i) if i + 1 == n => GREEN,
         _ => YELLOW,
     };
