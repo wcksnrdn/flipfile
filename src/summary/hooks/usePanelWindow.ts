@@ -52,7 +52,7 @@ export function usePanelDrop(onError: (message: string) => void) {
 
 /** The current time, ticking every second while `running` (the footer's clock) */
 export function useClock(running: boolean) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!running) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -64,11 +64,15 @@ export function useClock(running: boolean) {
 /** New questions and their answers scroll into view as they are written */
 export function useFollowAnswers(doc: Doc | undefined) {
   const bodyRef = useRef<HTMLDivElement>(null);
-  const lastAnswer = doc?.answers[doc.answers.length - 1];
+  const count = doc?.answers.length ?? 0;
+  const last = doc?.answers[count - 1];
+  const text = last?.text;
+  const done = last?.done;
+  // Follows the newest answer as it grows (its text) and when it settles (done)
   useEffect(() => {
     const body = bodyRef.current;
-    if (body && lastAnswer) body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
-  }, [doc?.answers.length, lastAnswer?.text, lastAnswer?.done]);
+    if (body && count > 0) body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
+  }, [count, text, done]);
   return bodyRef;
 }
 

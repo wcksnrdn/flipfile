@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { installUpdate, type UpdateState } from "./updater";
 import "./update.css";
@@ -34,24 +34,16 @@ export default function UpdateDialog({
   onProgress,
   onError,
 }: UpdateDialogProps) {
-  const [downloadProgress, setDownloadProgress] = useState<{ downloaded: number; total?: number } | null>(null);
   const [installing, setInstalling] = useState(false);
-
-  useEffect(() => {
-    if (state.status === "downloading") {
-      setDownloadProgress({ downloaded: state.progress, total: state.total });
-    }
-  }, [state]);
+  // The parent records each progress report in `state` (onProgress)
+  const downloadProgress = state.status === "downloading" ? { downloaded: state.progress, total: state.total } : null;
 
   const handleInstall = async () => {
     if (!update) return;
     setInstalling(true);
     onInstallStart();
     try {
-      await installUpdate(update, (downloaded, total) => {
-        setDownloadProgress({ downloaded, total });
-        onProgress(downloaded, total);
-      });
+      await installUpdate(update, onProgress);
     } catch (err) {
       console.error("Installation failed:", err);
       setInstalling(false);

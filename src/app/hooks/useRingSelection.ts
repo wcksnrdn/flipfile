@@ -39,6 +39,8 @@ export function useRingSelection({ nav, coreCenter, scale }: Options) {
 
   const getPreset = useCallback(() => presetRef.current, []);
   const getPaths = useCallback(() => handPaths.current, []);
+  const isAltHeld = useCallback(() => altHeld.current, []);
+  const setAltHeld = useCallback((held: boolean) => (altHeld.current = held), []);
 
   const choosePreset = (id: string | null) => {
     presetRef.current = id;
@@ -130,7 +132,8 @@ export function useRingSelection({ nav, coreCenter, scale }: Options) {
     hovered,
     preset,
     debugInfo,
-    altHeld,
+    isAltHeld,
+    setAltHeld,
     resolve,
     setHover,
     /** Highlights a slice for display only (Workshop previews), without the drop grace */
