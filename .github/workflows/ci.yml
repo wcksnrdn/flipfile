@@ -1,6 +1,6 @@
 name: CI
 
-# Typecheck + build the UI and run the Rust tests on every push and pull request,
+# Lint, test, typecheck + build the UI, then lint and test the Rust side on every push and pull request,
 # so a broken main is caught before a release tag is pushed.
 on:
   push:
@@ -28,12 +28,20 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
       - run: npm ci
+
+      - name: Lint UI
+        run: npm run lint
+
+      - name: UI unit tests
+        run: npm run test:web
 
       - name: Typecheck and build UI
         run: npm run build
@@ -46,6 +54,12 @@ jobs:
         env:
           FLIPFILE_ONNX: "1"
         run: npm run fetch-models && npm run fetch-onnxruntime
+
+      - name: Rust lint
+        working-directory: src-tauri
+        env:
+          FLIPFILE_REQUIRE_AI: "1"
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Rust tests
         working-directory: src-tauri

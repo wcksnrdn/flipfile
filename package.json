@@ -14,6 +14,7 @@
     "fetch-onnxruntime": "node scripts/fetch-onnxruntime.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "lint:rust": "cd src-tauri && cargo clippy --all-targets -- -D warnings",
     "test:web": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run test:web",
     "test": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && cd src-tauri && cargo test",
