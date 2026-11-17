@@ -17,12 +17,12 @@ type Options = {
  * Polled, because OS drag events carry no modifier keys (see keys.rs).
  */
 export function useAltPresets({ enabled, nav, selection }: Options) {
-  const ringBeforeAlt = useRef<RingId>(nav.getEntryRing());
+  const ringBeforeAlt = useRef<RingId>(nav.built.entryRing);
 
   const poll = useEffectEvent(async () => {
     const down = await invoke<boolean>("option_key_down").catch(() => false);
-    if (down === selection.altHeld.current) return;
-    selection.altHeld.current = down;
+    if (down === selection.isAltHeld()) return;
+    selection.setAltHeld(down);
     if (down) {
       const current = nav.getCurrentRing();
       ringBeforeAlt.current = current === "size" ? nav.getEntryRing() : current;

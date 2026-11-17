@@ -2,7 +2,7 @@
 // right of the circle. It sizes the window to itself, points its tail at the circle,
 // and goes away by itself unless the pointer rests on it.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -33,19 +33,22 @@ export default function ToastBubble() {
     return () => unlisten.forEach((stop) => stop());
   }, []);
 
-  const close = () => {
+  const close = useCallback(() => {
     window.clearTimeout(timer.current);
     setShown(false);
     // Let the bubble fade before the window goes
     window.setTimeout(() => invoke("toast_close").catch(() => {}), 160);
-  };
+  }, []);
 
-  const arm = (tone: ToastData["tone"]) => {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => {
-      if (!hovering.current) close();
-    }, STAY[tone]);
-  };
+  const arm = useCallback(
+    (tone: ToastData["tone"]) => {
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => {
+        if (!hovering.current) close();
+      }, STAY[tone]);
+    },
+    [close]
+  );
 
   // Each new bubble: size the window to it, then show it
   useLayoutEffect(() => {
@@ -60,7 +63,7 @@ export default function ToastBubble() {
       })
       .catch(() => {});
     return () => window.clearTimeout(timer.current);
-  }, [toast]);
+  }, [toast, arm]);
 
   if (!toast) return null;
   const output = toast.outputs?.[0];
