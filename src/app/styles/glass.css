@@ -1,0 +1,46 @@
+/* The glass surface of the circle and its specular rim */
+
+.glass {
+  background:
+    radial-gradient(120% 85% at 30% 10%, var(--glass-light), transparent 55%),
+    radial-gradient(90% 60% at 70% 100%, rgba(255, 255, 255, 0.08), transparent 70%),
+    var(--glass-tint);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.35),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.15),
+    var(--glass-shadow);
+}
+
+/* Glass rim: 1px gradient line, bright at the top-left like a light reflection */
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.75),
+    rgba(255, 255, 255, 0.12) 35%,
+    rgba(255, 255, 255, 0.04) 60%,
+    rgba(255, 255, 255, 0.4)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  transition: background 0.25s ease;
+}
+
+/* Native glass underneath (macOS): keep only a light tint and the highlights */
+.stage.native .glass {
+  background:
+    radial-gradient(120% 85% at 30% 10%, rgba(255, 255, 255, 0.16), transparent 55%),
+    rgba(20, 22, 30, 0.22);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

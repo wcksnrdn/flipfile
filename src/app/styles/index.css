@@ -1,0 +1,13 @@
+/*
+ * Glass look: translucent tint + specular rim + soft inner light.
+ * backdrop-filter only blurs content inside the webview, not the desktop behind the
+ * transparent window. On macOS a native glass view (src-tauri/src/platform/glass.rs) provides
+ * the real material and `.stage.native` lightens the CSS tint on top of it.
+ */
+
+/* The order below is the cascade order: a later file wins a tie in specificity. */
+@import "./base.css";
+@import "./ring.css";
+@import "./glass.css";
+@import "./core.css";
+@import "./ai.css";

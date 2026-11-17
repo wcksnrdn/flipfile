@@ -1,0 +1,71 @@
+/* AI Summary: its pearl slice, and the halo while Apple Intelligence works */
+
+/* Its slice is lit in pearl rather than the accent colour, so it reads as the AI one */
+.segment.ai .segment-label {
+  fill: url(#seg-ai);
+}
+
+.segment.ai .segment-sub {
+  fill: rgba(235, 235, 245, 0.7);
+}
+
+.segment.ai.active .segment-body {
+  fill: rgba(255, 255, 255, 0.24);
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.35));
+}
+
+.segment.ai.active .segment-label,
+.segment.ai.active .segment-sub {
+  fill: #ffffff;
+}
+
+/* The circle while Apple Intelligence works: light running around its glass rim */
+@property --ai-spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ai-spin {
+  to {
+    --ai-spin: 360deg;
+  }
+}
+
+.ai-halo,
+.ai-halo-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--ai-spin),
+    rgba(255, 255, 255, 0.08) 0deg,
+    rgba(255, 255, 255, 0.5) 55deg,
+    rgba(255, 255, 255, 0.08) 120deg,
+    rgba(255, 255, 255, 0.08) 175deg,
+    rgba(255, 255, 255, 0.95) 245deg,
+    rgba(255, 255, 255, 0.08) 320deg
+  );
+  opacity: 0;
+  animation:
+    ai-spin 3.2s linear infinite,
+    progress-in 0.3s ease forwards;
+}
+
+.ai-halo {
+  inset: -5px;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+}
+
+.ai-halo-glow {
+  inset: -16px;
+  filter: blur(9px) opacity(0.45);
+  -webkit-mask: radial-gradient(farthest-side, transparent 62%, #000 76%, #000 84%, transparent 100%);
+  mask: radial-gradient(farthest-side, transparent 62%, #000 76%, #000 84%, transparent 100%);
+}
+
+.core.ai {
+  --ring: transparent;
+  --ring-glow: rgba(255, 255, 255, 0.22);
+}
