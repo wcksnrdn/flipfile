@@ -1,0 +1,136 @@
+/* The saved notice, the footer with its chips, and error notices */
+
+.sp-saved {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 18px 8px;
+  padding: 7px 8px 7px 11px;
+  border-radius: 11px;
+  background: rgba(48, 209, 88, 0.12);
+  border: 1px solid rgba(48, 209, 88, 0.25);
+  font-size: 11px;
+  animation: sp-rise 0.3s ease both;
+}
+
+.sp-saved > .sp-icon {
+  width: 14px;
+  height: 14px;
+  color: #30d158;
+  stroke-width: 2.2;
+}
+
+.sp-saved-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-saved button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--sp-text);
+  font: 500 10.5px "Poppins", sans-serif;
+  cursor: pointer;
+}
+
+.sp-saved button .sp-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.sp-foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 12px 18px;
+  border-top: 1px solid var(--sp-line);
+  font-size: 10.5px;
+  color: var(--sp-muted);
+}
+
+.sp-private {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sp-faint);
+  white-space: nowrap;
+}
+
+.sp-private .sp-icon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.sp-foot-info {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-foot-info b {
+  font-weight: 600;
+  background: var(--sp-ai);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.sp-clock {
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-chip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--sp-text);
+  font: 500 10.5px "Poppins", sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sp-chip:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.sp-chip .sp-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.sp-chip.icon {
+  padding: 4px 6px;
+}
+
+.sp-notice {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 52px;
+  padding: 8px 12px;
+  border-radius: 11px;
+  background: rgba(255, 69, 58, 0.18);
+  border: 1px solid rgba(255, 69, 58, 0.4);
+  font-size: 11px;
+  animation: sp-rise 0.3s ease both;
+  z-index: 15;
+}

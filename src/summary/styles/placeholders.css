@@ -1,0 +1,44 @@
+/* The typing caret and the skeletons of parts still to come */
+
+/* Typing caret on the field being written */
+.sp-caret {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--sp-ai);
+  vertical-align: middle;
+  animation: sp-pulse 0.8s ease-in-out infinite;
+}
+
+/* Placeholders for the parts still to come */
+.sp-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.sp-skeleton span {
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 30%, rgba(255, 255, 255, 0.13) 50%, rgba(255, 255, 255, 0.05) 70%);
+  background-size: 300% 100%;
+  animation: sp-shimmer 1.4s linear infinite;
+}
+
+.sp-skeleton.eyebrow span {
+  width: 90px !important;
+  height: 8px;
+}
+
+.sp-skeleton.title span {
+  height: 18px;
+  width: 80% !important;
+}
+
+.sp-skeleton.card {
+  padding: 13px 14px;
+  border-radius: 14px;
+  background: var(--sp-card);
+}

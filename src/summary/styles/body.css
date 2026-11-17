@@ -1,0 +1,25 @@
+/* The scrolling body, fading at its edges */
+
+.sp-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 18px 18px;
+  scroll-behavior: smooth;
+  -webkit-mask: linear-gradient(transparent, #000 10px, #000 calc(100% - 14px), transparent);
+  mask: linear-gradient(transparent, #000 10px, #000 calc(100% - 14px), transparent);
+}
+
+.sp-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sp-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+}
+
+.sp-body:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.24);
+}

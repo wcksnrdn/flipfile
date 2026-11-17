@@ -1,0 +1,83 @@
+/* Animations shared across the panel, and the spinning angle the glass lights turn by */
+
+@property --sp-spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes sp-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+}
+
+@keyframes sp-spin {
+  to {
+    --sp-spin: 360deg;
+  }
+}
+
+@keyframes sp-twinkle {
+  50% {
+    transform: scale(0.86) rotate(12deg);
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
+  }
+}
+
+@keyframes sp-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes sp-breathe {
+  50% {
+    transform: scale(1.04);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+      inset 0 0 14px rgba(255, 255, 255, 0.16),
+      0 10px 26px rgba(0, 0, 0, 0.28),
+      0 0 46px rgba(255, 255, 255, 0.18);
+  }
+}
+
+@keyframes sp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes sp-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes sp-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes sp-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sp-sheen {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -30% 0;
+  }
+}

@@ -1,0 +1,169 @@
+/* Questions about the document: answers, suggested questions and the question box */
+
+.sp-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sp-qa {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  animation: sp-rise 0.35s ease both;
+}
+
+/* The question, right-aligned like a message sent */
+.sp-question {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 7px 12px;
+  border-radius: 14px 14px 4px 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1c1c1e;
+  font: 500 12.5px/1.45 var(--sp-read);
+}
+
+.sp-answer {
+  display: flex;
+  gap: 8px;
+  font: 400 13px/1.55 var(--sp-read);
+}
+
+.sp-answer > .sp-sparkle {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+}
+
+.sp-answer.error {
+  color: #ff8a80;
+}
+
+/* Three dots while the answer has not started */
+.sp-thinking {
+  display: inline-flex;
+  gap: 4px;
+  padding-top: 7px;
+}
+
+.sp-thinking i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sp-ai);
+  animation: sp-pulse 1s ease-in-out infinite;
+}
+
+.sp-thinking i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.sp-thinking i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.sp-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sp-suggestions:empty {
+  display: none;
+}
+
+.sp-suggestions button {
+  padding: 6px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sp-text);
+  font: 400 11.5px/1.35 var(--sp-read);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+  animation: sp-pop 0.35s ease both;
+}
+
+.sp-suggestions button:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.sp-suggestions button:active {
+  transform: scale(0.97);
+}
+
+/* The question box above the footer */
+.sp-ask {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 14px 10px;
+  padding: 5px 5px 5px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sp-ask:focus-within {
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07);
+}
+
+.sp-ask > .sp-sparkle {
+  width: 15px;
+  height: 15px;
+}
+
+.sp-ask input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--sp-text);
+  font: 400 12.5px var(--sp-read);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.sp-ask input::placeholder {
+  color: var(--sp-faint);
+}
+
+.sp-ask button {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1c1c1e;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.sp-ask button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.sp-ask button .sp-icon {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.2;
+}
+
+.sp-ask.waiting > .sp-sparkle {
+  animation: sp-twinkle 1.6s ease-in-out infinite;
+}

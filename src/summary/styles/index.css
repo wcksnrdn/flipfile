@@ -1,0 +1,24 @@
+/*
+ * Summary panel: a dark glass card like the circle. What the model does is shown in
+ * light rather than colour, the way Siri does it: a sheen running along the glass edge,
+ * a clear glass orb, white and silver accents. Native glass
+ * (src-tauri/src/platform/glass.rs) sits behind the card on macOS; `.sp.native` then
+ * only adds a tint for legible text.
+ */
+
+/* The order below is the cascade order: a later file wins a tie in specificity. */
+@import "./keyframes.css";
+@import "./panel.css";
+@import "./header.css";
+@import "./tabs.css";
+@import "./file.css";
+@import "./body.css";
+@import "./working.css";
+@import "./summary.css";
+@import "./ask.css";
+@import "./placeholders.css";
+@import "./states.css";
+@import "./footer.css";
+@import "./drop.css";
+@import "./motion.css";
+@import "./peek.css";
