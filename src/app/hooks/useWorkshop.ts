@@ -1,39 +1,14 @@
 import { useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { Point, RingId } from "../../rings/dropTarget";
+import { useTauriEvent } from "../../shared/tauri";
+import { editableRing } from "../../workshop/workshop";
+import { applyWorkshopWindow } from "../../workshop/workshopWindow";
 import { GLASS_IDLE, GLASS_OPEN, sendGlass } from "../lib/glass";
-import { editableRing } from "../lib/utils";
 import type { RingNavigation } from "./useRingNavigation";
-import { useTauriEvent } from "./useTauriEvent";
 import type { Workspaces } from "./useWorkspaces";
 
-const WORKSHOP_SIZE = { width: 940, height: 620 };
-const WORKSHOP_MIN = { width: 720, height: 480 };
-const COMPACT_SIZE = 320; // the bare circle
 // Lets the window finish resizing before the glass disc is recentred
 const GLASS_RECENTER_DELAY_MS = 80;
-
-/** Resizes the window between the bare circle and the Workshop beside it */
-function applyWorkshopWindow(open: boolean) {
-  const { width, height } = open ? WORKSHOP_SIZE : { width: COMPACT_SIZE, height: COMPACT_SIZE };
-  invoke("set_workshop_window", { open, width, height }).catch(() => {});
-  const win = getCurrentWindow();
-  const compact = new LogicalSize(COMPACT_SIZE, COMPACT_SIZE);
-  const resizing = open
-    ? win
-        .setResizable(true)
-        .then(() => win.setMinSize(new LogicalSize(WORKSHOP_MIN.width, WORKSHOP_MIN.height)))
-        .then(() => win.setMaxSize(null))
-        .then(() => win.setSize(new LogicalSize(width, height)))
-    : win
-        .setResizable(true)
-        .then(() => win.setMinSize(compact))
-        .then(() => win.setMaxSize(compact))
-        .then(() => win.setSize(compact))
-        .then(() => win.setResizable(false));
-  resizing.catch(() => {});
-}
 
 type Options = {
   workspaces: Workspaces;

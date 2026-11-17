@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { subscription } from "../lib/utils";
+import { subscription } from "../../shared/tauri";
 
 /**
  * The window's scale factor, kept at hand because drag events are synchronous.

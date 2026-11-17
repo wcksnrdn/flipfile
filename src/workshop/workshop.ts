@@ -8,7 +8,7 @@ import {
   type RingId,
 } from "../rings/dropTarget";
 
-const IS_MAC = /Mac/i.test(navigator.userAgent);
+import { IS_MAC } from "../shared/platform";
 
 /** AI summary of a document by Apple Intelligence (src/summary/SummaryPanel.tsx); macOS only */
 export const AI_SUMMARY = "ai-summary";
@@ -20,6 +20,9 @@ export function setAiSupport(supported: boolean) {
   aiSupport = supported;
 }
 export const hasAiSupport = () => aiSupport;
+
+export const MIN_RING_SLOTS = 2;
+export const MAX_RING_SLOTS = 10;
 
 export type CatalogCategory = "photo" | "photo-tools" | "compress" | "office" | "data" | "video" | "music" | "speech" | "nav";
 
@@ -311,6 +314,10 @@ export function saveWorkspacesState(state: WorkspacesState): void {
     // ignore storage quota errors
   }
 }
+
+// A "direct" workspace has a single ring to edit; a "rooms" one edits the room picked in the Workshop
+export const editableRing = (mode: WorkspaceConfig["mode"], editingRing: RingId): RingId =>
+  mode === "direct" ? "custom" : editingRing;
 
 export function getSlotsForRing(ws: WorkspaceConfig, ringId: RingId): string[] {
   if (ringId === "custom") {

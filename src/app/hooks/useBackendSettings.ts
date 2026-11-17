@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { hasAiSupport, setAiSupport } from "../../workshop/workshop";
-import { useTauriEvent } from "./useTauriEvent";
+import { useTauriEvent } from "../../shared/tauri";
 
 /** The tray's resize/quality defaults, shown under the core when they are not the defaults */
 export function useSettingsSummary() {

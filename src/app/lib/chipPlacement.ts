@@ -1,4 +1,4 @@
-import { MAX_RING_SLOTS } from "../../workshop/WorkshopPanel";
+import { MAX_RING_SLOTS } from "../../workshop/workshop";
 import type { ChipDrag } from "./types";
 
 /**

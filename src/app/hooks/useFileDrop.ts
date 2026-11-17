@@ -7,7 +7,7 @@ import { DEBUG_DROP } from "../../debug/DebugOverlay";
 import { isDocument } from "../../summary/summary";
 import { hasAiSupport } from "../../workshop/workshop";
 import type { Execute } from "../lib/types";
-import { subscription } from "../lib/utils";
+import { subscription } from "../../shared/tauri";
 import type { RingSelection } from "./useRingSelection";
 import type { ScaleFactor } from "./useScaleFactor";
 

@@ -1,4 +1,5 @@
 import { CORE_SIZE, type RingId } from "../../rings/dropTarget";
+import { DEVICE_NAME, IS_MAC, IS_WINDOWS } from "../../shared/platform";
 
 // Office documents, data tables, and audio/video files convert one by one; only images merge into one PDF
 export const OFFICE_FILE =
@@ -26,13 +27,11 @@ export const STATUS_CLEAR_MS = {
 } as const;
 
 // Option/Alt presets: macOS and Windows only (see src-tauri/src/keys.rs)
-export const IS_MAC = /Mac/i.test(navigator.userAgent);
-const IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 export const ALT_SUPPORTED = IS_MAC || IS_WINDOWS;
 export const ALT_KEY = IS_MAC ? "⌥" : "Alt";
 export const ALT_POLL_MS = 80;
 // Where the AI tools run: this computer, never a server
-export const ON_DEVICE = IS_MAC ? "On this Mac" : IS_WINDOWS ? "On this PC" : "On this computer";
+export const ON_DEVICE = `On this ${DEVICE_NAME}`;
 
 // Category ring labels for the core center text
 export const CATEGORY_LABELS: Partial<Record<RingId, string>> = {
