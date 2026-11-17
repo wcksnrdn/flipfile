@@ -14,6 +14,8 @@
     "fetch-onnxruntime": "node scripts/fetch-onnxruntime.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "test:web": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm run test:web",
     "test": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && cd src-tauri && cargo test",
     "stress": "npm run fetch-pdfium && cd src-tauri && cargo test --lib convert::stress -- --include-ignored",
     "bench": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && cd src-tauri && cargo test --profile bench --lib convert::bench::bench -- --exact --ignored --nocapture"
@@ -38,6 +40,7 @@
     "globals": "^17.14.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.73.0",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "vitest": "^5.1.0"
   }
 }
