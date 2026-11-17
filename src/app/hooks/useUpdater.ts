@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { checkForUpdate, type UpdateState } from "../../update/updater";
 import type UpdateDialog from "../../update/UpdateDialog";
@@ -37,7 +38,8 @@ export function useUpdater() {
         offer(up);
       } else {
         setState({ status: "up-to-date" });
-        showToast("You're up to date · v0.11.0");
+        const version = await getVersion().catch(() => null);
+        showToast(version ? `You're up to date · v${version}` : "You're up to date");
       }
     } catch (err) {
       setState({ status: "error", message: String(err) });
