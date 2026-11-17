@@ -1,0 +1,27 @@
+/* The chip following the pointer while it is dragged (ChipDragGhost.tsx) */
+
+.ws-drag-ghost {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  padding: 6px 13px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  pointer-events: none;
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1c1c1e;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.ws-drag-ghost-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ws-drag-ghost-sub {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.7;
+}

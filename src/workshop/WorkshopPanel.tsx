@@ -15,7 +15,7 @@ import {
   type WorkspaceConfig,
   type WorkspacesState,
 } from "./workshop";
-import "./workshop.css";
+import "./styles/index.css";
 
 type Props = {
   state: WorkspacesState;

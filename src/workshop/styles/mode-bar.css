@@ -1,0 +1,101 @@
+/* Direct ring vs category rooms, and the ring being edited */
+
+.ws-mode-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ws-mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ws-mode-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 11px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ws-mode-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.ws-mode-card.active {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.ws-mode-card-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ws-mode-card-desc {
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.ws-ring-tabs-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ws-ring-tabs-label {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ws-ring-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.ws-ring-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ws-ring-tab {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4.5px 10px;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.14s ease;
+}
+
+.ws-ring-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ws-ring-tab.active {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: var(--text);
+  font-weight: 600;
+}
