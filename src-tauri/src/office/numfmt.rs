@@ -358,12 +358,11 @@ fn render_literals(body: &str, at: &dyn Fn(char) -> Option<String>) -> Shown {
                 }
             }
             '*' => {
-                if let Some(n) = chars.next() {
-                    if out.fill.is_none() {
+                if let Some(n) = chars.next()
+                    && out.fill.is_none() {
                         out.fill = Some(n);
                         out.text = std::mem::take(&mut cur);
                     }
-                }
             }
             '@' => {
                 if let Some(t) = at(c) {
@@ -734,7 +733,7 @@ fn group(digits: &str, sep: char) -> String {
     let chars: Vec<char> = digits.chars().collect();
     let mut out = String::new();
     for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (chars.len() - i) % 3 == 0 && c.is_ascii_digit() && chars[i - 1].is_ascii_digit() {
+        if i > 0 && (chars.len() - i).is_multiple_of(3) && c.is_ascii_digit() && chars[i - 1].is_ascii_digit() {
             out.push(sep);
         }
         out.push(*c);
@@ -911,7 +910,7 @@ fn format_date(v: f64, body: &str, date1904: bool, sep: Separators) -> Shown {
             'm' => {
                 let n = run(i, 'm');
                 // minutes when right after hours or right before seconds
-                let next_is_sec = chars[i + n..].iter().find(|c| c.is_ascii_alphabetic()).map(|c| c.to_ascii_lowercase() == 's').unwrap_or(false);
+                let next_is_sec = chars[i + n..].iter().find(|c| c.is_ascii_alphabetic()).map(|c| c.eq_ignore_ascii_case(&'s')).unwrap_or(false);
                 if (last_was_hour || next_is_sec) && n <= 2 {
                     out.push_str(&if n == 2 { format!("{mm:02}") } else { mm.to_string() });
                 } else {

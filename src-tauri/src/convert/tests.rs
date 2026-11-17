@@ -167,7 +167,7 @@ fn resizes_without_upscaling() {
 fn lower_quality_gives_smaller_jpeg() {
     let dir = temp_dir("quality");
     let src = dir.join("noise.png");
-    DynamicImage::ImageRgb8(RgbImage::from_fn(300, 300, |x, y| Rgb([(x * 7 ^ y * 13) as u8, (x * y) as u8, (x + y) as u8])))
+    DynamicImage::ImageRgb8(RgbImage::from_fn(300, 300, |x, y| Rgb([((x * 7) ^ (y * 13)) as u8, (x * y) as u8, (x + y) as u8])))
         .save(&src)
         .unwrap();
     let big = run(src.to_str().unwrap(), "jpg", None, &Options { resize: Resize::Original, quality: 95 }).unwrap();
@@ -215,7 +215,7 @@ fn renders_pdf_pages_to_images() {
 fn preset_drop_keeps_the_format() {
     let dir = temp_dir("same");
     let noisy = |w: u32, h: u32| {
-        DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| Rgb([(x * 7 ^ y * 13) as u8, (x * y) as u8, (x + y) as u8])))
+        DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| Rgb([((x * 7) ^ (y * 13)) as u8, (x * y) as u8, (x + y) as u8])))
     };
     let photo = dir.join("photo.jpeg");
     noisy(400, 300).write_with_encoder(JpegEncoder::new_with_quality(&mut File::create(&photo).unwrap(), 98)).unwrap();
@@ -478,7 +478,7 @@ fn webp_is_lossy_and_respects_quality() {
     let dir = temp_dir("webp-lossy");
     let src = dir.join("noisy.png");
     let img = DynamicImage::ImageRgb8(RgbImage::from_fn(400, 300, |x, y| {
-        Rgb([(x * 17 ^ y * 31) as u8, (x * y) as u8, (x * 3 + y * 5) as u8])
+        Rgb([((x * 17) ^ (y * 31)) as u8, (x * y) as u8, (x * 3 + y * 5) as u8])
     }));
     img.save(&src).unwrap();
 
@@ -532,7 +532,7 @@ fn photo_tools_transform_square_and_compress_to_target() {
     let dir = temp_dir("photo-tools");
     let src = dir.join("rect.jpg");
     let img = DynamicImage::ImageRgb8(RgbImage::from_fn(600, 400, |x, y| {
-        Rgb([(x * 13 ^ y * 29) as u8, (x + y * 3) as u8, (x ^ y) as u8])
+        Rgb([((x * 13) ^ (y * 29)) as u8, (x + y * 3) as u8, (x ^ y) as u8])
     }));
     img.write_with_encoder(JpegEncoder::new_with_quality(&mut File::create(&src).unwrap(), 96)).unwrap();
 
@@ -801,7 +801,7 @@ fn target_size_works_through_webp() {
     let c = convert(src.to_str().unwrap(), "cmp-100k", None, &Options::default(), "converted", &|_, _| {}).unwrap();
     assert!(c.path.ends_with(".webp"), "{}", c.path);
     assert!(fs::metadata(&c.path).unwrap().len() <= 100_000);
-    assert_eq!(image::open(&c.path).unwrap().dimensions().0 > 0, true);
+    assert!(image::open(&c.path).unwrap().dimensions().0 > 0);
 }
 
 /// A small deck with a title, nested bullets, a table and a picture, written by

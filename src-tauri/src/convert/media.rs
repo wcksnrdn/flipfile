@@ -142,7 +142,7 @@ fn convert_audio(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
             _ => {}
         }
         cmd.arg(&output);
-        run_cmd(cmd, &name)?;
+        run_cmd(cmd, name)?;
         return Ok(Converted::file(input, &output));
     }
 
@@ -173,7 +173,7 @@ fn convert_audio(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
                     .args(["--output"])
                     .arg(&tmp)
                     .args(["--preset", "PresetAppleM4A", "--replace"]);
-                run_cmd(av, &name)?;
+                run_cmd(av, name)?;
                 if format == "m4a" || format == "aac" {
                     fs::copy(&tmp, &output).map_err(save_err)?;
                     let _ = fs::remove_file(&tmp);
@@ -189,7 +189,7 @@ fn convert_audio(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
             cmd.args(["-f", file_fmt, "-d", data_fmt])
                 .arg(&source_for_af)
                 .arg(&output);
-            let res = run_cmd(cmd, &name);
+            let res = run_cmd(cmd, name);
             if let Some(tmp) = temp_audio {
                 let _ = fs::remove_file(tmp);
             }
@@ -259,7 +259,7 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
             _ => {}
         }
         cmd.arg(&output);
-        run_cmd(cmd, &name)?;
+        run_cmd(cmd, name)?;
         return Ok(Converted::file(input, &output));
     }
 
@@ -267,7 +267,7 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
     #[cfg(target_os = "macos")]
     {
         if format == "vid-mute" {
-            macos_mute(input, &output, &name)?;
+            macos_mute(input, &output, name)?;
             return Ok(Converted::file(input, &output));
         }
 
@@ -285,7 +285,7 @@ fn convert_video(input: &Path, format: &str, out_dir: Option<&Path>) -> Result<C
                 .args(["--output"])
                 .arg(&output)
                 .args(["--preset", p, "--replace"]);
-            run_cmd(cmd, &name)?;
+            run_cmd(cmd, name)?;
             return Ok(Converted::file(input, &output));
         }
     }
@@ -664,6 +664,22 @@ fn fit_short_side(w: u32, h: u32, short: u32) -> (u32, u32) {
     (even(w), even(h))
 }
 
+pub(super) fn run_cmd(mut cmd: Command, name: &str) -> Result<(), String> {
+    let out = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("\"{name}\": {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let msg = stderr.lines().last().unwrap_or("conversion failed").trim();
+        Err(format!("\"{name}\": {msg}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{fit_short_side, muted_ext};
@@ -685,22 +701,6 @@ mod tests {
         assert_eq!(fit_short_side(640, 360, 1080), (640, 360));
         // Odd sizes become even
         assert_eq!(fit_short_side(1001, 1999, 1080), (1000, 1998));
-    }
-}
-
-pub(super) fn run_cmd(mut cmd: Command, name: &str) -> Result<(), String> {
-    let out = cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("\"{name}\": {e}"))?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        let msg = stderr.lines().last().unwrap_or("conversion failed").trim();
-        Err(format!("\"{name}\": {msg}"))
     }
 }
 

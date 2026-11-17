@@ -111,7 +111,7 @@ mod tests {
         let store = dir.join("history.json");
 
         let mut h = History::load(Some(store.clone()));
-        h.record(&[a.clone()]);
+        h.record(std::slice::from_ref(&a));
         h.record(&[b.clone(), c.clone()]);
         assert_eq!(h.recent(10), vec![b.clone(), c.clone(), a.clone()]);
         assert_eq!(h.last_batch(), vec![b.clone(), c.clone()]);

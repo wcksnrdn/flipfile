@@ -259,8 +259,8 @@ pub(super) fn read_any_tables(input: &Path) -> Result<Vec<TableSheet>, String> {
             let blocks = read_any_blocks(input)?;
             let mut sheets = Vec::new();
             for block in &blocks {
-                if let DocBlock::Table(rows) = block {
-                    if !rows.is_empty() {
+                if let DocBlock::Table(rows) = block
+                    && !rows.is_empty() {
                         let sheet_name = if sheets.is_empty() {
                             default_sheet.clone()
                         } else {
@@ -268,7 +268,6 @@ pub(super) fn read_any_tables(input: &Path) -> Result<Vec<TableSheet>, String> {
                         };
                         sheets.push(TableSheet { name: sheet_name, rows: rows.clone() });
                     }
-                }
             }
             if sheets.is_empty() {
                 let rows: Vec<Vec<String>> = blocks
@@ -591,11 +590,10 @@ fn parse_typed_json(s: &str) -> serde_json::Value {
         if let Ok(i) = trimmed.parse::<i64>() {
             return serde_json::Value::Number(i.into());
         }
-        if let Ok(f) = trimmed.parse::<f64>() {
-            if let Some(n) = serde_json::Number::from_f64(f) {
+        if let Ok(f) = trimmed.parse::<f64>()
+            && let Some(n) = serde_json::Number::from_f64(f) {
                 return serde_json::Value::Number(n);
             }
-        }
     }
     serde_json::Value::String(s.to_string())
 }
@@ -982,8 +980,7 @@ fn xlsx_col_name(mut col: u32) -> String {
 }
 
 fn sheets_to_workbook(sheets: &[TableSheet]) -> Workbook {
-    let mut normal = Style::default();
-    normal.wrap = true;
+    let normal = Style { wrap: true, ..Default::default() };
     let mut bold = normal.clone();
     bold.font.bold = true;
 
@@ -1245,14 +1242,13 @@ fn parse_markdown_blocks(md: &str) -> Vec<DocBlock> {
             continue;
         }
 
-        if let Some(hashes) = trimmed.split_whitespace().next() {
-            if hashes.chars().all(|c| c == '#') && hashes.len() <= 6 {
+        if let Some(hashes) = trimmed.split_whitespace().next()
+            && hashes.chars().all(|c| c == '#') && hashes.len() <= 6 {
                 flush_para(&mut para_buf, &mut blocks);
                 let rest = trimmed[hashes.len()..].trim();
                 blocks.push(DocBlock::Heading(hashes.len() as u8, clean_md_inline(rest)));
                 continue;
             }
-        }
 
         if let Some(item) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")).or_else(|| trimmed.strip_prefix("+ ")) {
             flush_para(&mut para_buf, &mut blocks);
@@ -1390,11 +1386,10 @@ fn collect_xml_html_nodes(node: roxmltree::Node, out: &mut Vec<DocBlock>) {
 fn collect_node_text(node: roxmltree::Node) -> String {
     let mut s = String::new();
     for desc in node.descendants() {
-        if desc.is_text() {
-            if let Some(t) = desc.text() {
+        if desc.is_text()
+            && let Some(t) = desc.text() {
                 s.push_str(t);
             }
-        }
     }
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }

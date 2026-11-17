@@ -135,11 +135,10 @@ pub fn run() {
             // macOS: clicking the Dock icon brings back a window hidden via the tray or shortcut.
             // (Windows/Linux: a hidden window leaves the taskbar; the tray icon restores it.)
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = _event {
-                if let Some(w) = _app.get_webview_window("main") {
+            if let tauri::RunEvent::Reopen { .. } = _event
+                && let Some(w) = _app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
                 }
-            }
         });
 }

@@ -354,7 +354,7 @@ mod tests {
         // The app's shared PDFium binding: PDFium can only be bound once per process
         let pdfium = crate::pdf::render::pdfium().unwrap();
         let start = std::time::Instant::now();
-        let docx = from_pdf::pdf_to_docx(&pdfium, &std::fs::read(&input).unwrap(), &|_, _| {}).unwrap();
+        let docx = from_pdf::pdf_to_docx(pdfium, &std::fs::read(&input).unwrap(), &|_, _| {}).unwrap();
         println!("pdf -> docx: {:.2}s, {} bytes", start.elapsed().as_secs_f64(), docx.len());
         std::fs::write(out.join("review.docx"), &docx).unwrap();
         let pdf = docx_to_pdf_builtin(&docx).unwrap();

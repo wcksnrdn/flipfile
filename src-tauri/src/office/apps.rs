@@ -198,6 +198,8 @@ fn powerpoint(_input: &Path, _output: &Path) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 // LibreOffice
 
+// The candidates differ per OS (#[cfg] on each push), which vec![] cannot express
+#[allow(clippy::vec_init_then_push)]
 fn soffice() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = vec![];
     #[cfg(target_os = "macos")]

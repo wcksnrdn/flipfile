@@ -211,8 +211,8 @@ fn compress_lossless_file(input: &Path, out_dir: Option<&Path>, options: &Option
     let (img, orientation) = open_oriented(input)?;
     let unresized = options.resize == Resize::Original && orientation == Orientation::NoTransforms;
 
-    if unresized {
-        if let Some(ref data) = raw_input {
+    if unresized
+        && let Some(ref data) = raw_input {
             match image::guess_format(data).ok() {
                 Some(ImageFormat::Jpeg) => {
                     if let Some(stripped) = strip_jpeg(data) {
@@ -232,7 +232,6 @@ fn compress_lossless_file(input: &Path, out_dir: Option<&Path>, options: &Option
                 _ => {}
             }
         }
-    }
 
     let img = resize(img, options.resize);
     match ext.as_str() {
