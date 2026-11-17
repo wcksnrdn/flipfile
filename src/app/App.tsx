@@ -30,7 +30,7 @@ import { useWorkshop } from "./hooks/useWorkshop";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { coreText } from "./lib/coreText";
 import { GLASS_OPEN, sendGlass } from "./lib/glass";
-import "./App.css";
+import "./styles/index.css";
 
 const STAGE_STYLE = {
   "--stage": `${STAGE_SIZE}px`,

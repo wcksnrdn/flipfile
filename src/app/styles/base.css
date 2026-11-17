@@ -1,0 +1,48 @@
+/* Tokens, and a transparent page so only the circle shows */
+
+:root {
+  /* Monochrome glass accent: bright frosted white, dark text on top */
+  --accent: #ffffff;
+  --accent-2: #dfe2e8;
+  --accent-text: #1c1c1e;
+  --accent-glow: rgba(255, 255, 255, 0.35);
+  --text: rgba(255, 255, 255, 0.96);
+  --muted: rgba(235, 235, 245, 0.62);
+  --ok: #30d158;
+  --err: #ff453a;
+
+  --glass-tint: rgba(30, 32, 42, 0.46);
+  --glass-light: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+/* Everything transparent, so only the circle itself is visible */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+main {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Choosing a format for a pasted file: the hovered segment is clickable */
+main.pick-ready {
+  cursor: pointer;
+}
