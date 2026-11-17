@@ -1,4 +1,5 @@
 import type { PhysicalPosition } from "@tauri-apps/api/dpi";
+import { IS_MAC, IS_WINDOWS } from "../shared/platform";
 
 // Single source of truth for the ring layout. Both the segment layout (App.tsx)
 // and the drop hit-testing below are derived from these values, so they cannot drift.
@@ -38,8 +39,6 @@ export type Ring = {
   start: number; // angle of the first item's center
   sector: number;
 };
-
-const IS_MAC = /Mac/i.test(navigator.userAgent);
 
 export const buildRing = (id: RingId, items: Item[], start = -Math.PI / 2): Ring => ({
   id,
@@ -442,8 +441,7 @@ export type Point = { x: number; y: number };
 // - macOS (WKWebView): NSDraggingInfo.draggingLocation -> points, i.e. already logical
 //   (dividing by devicePixelRatio halves the position on Retina; this was the drop bug).
 // - Linux (WebKitGTK): GTK widget coordinates -> already logical.
-// Detected via the user agent to avoid pulling in @tauri-apps/plugin-os for one check.
-const POSITION_IS_PHYSICAL = /Windows/i.test(navigator.userAgent);
+const POSITION_IS_PHYSICAL = IS_WINDOWS;
 
 export function toCssPoint(position: PhysicalPosition, scaleFactor: number): Point {
   if (POSITION_IS_PHYSICAL) {

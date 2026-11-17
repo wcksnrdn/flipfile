@@ -2,7 +2,7 @@ import { STATUS_CLEAR_MS } from "../lib/constants";
 import type { SummaryProgress } from "../lib/types";
 import { plural } from "../lib/utils";
 import type { StatusActions } from "./useStatus";
-import { useTauriEvent } from "./useTauriEvent";
+import { useTauriEvent } from "../../shared/tauri";
 
 /** Status the backend reports on its own: the summary panel's progress and the tray's Undo */
 export function useBackgroundStatus(status: StatusActions) {

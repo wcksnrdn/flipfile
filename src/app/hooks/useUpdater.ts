@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ComponentProps } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { checkForUpdate, type UpdateState } from "../../update/updater";
 import type UpdateDialog from "../../update/UpdateDialog";
-import { useTauriEvent } from "./useTauriEvent";
+import { useTauriEvent } from "../../shared/tauri";
 
 const TOAST_MS = 3200;
 // Quiet background check, once the app has settled after launch

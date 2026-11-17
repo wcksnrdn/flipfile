@@ -6,6 +6,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { SHOW_IN_FILE_MANAGER as SHOW_IN } from "../shared/platform";
+import { subscription } from "../shared/tauri";
 import type { ToastData } from "./toast";
 import "./ToastBubble.css";
 
@@ -13,8 +15,6 @@ import "./ToastBubble.css";
 const PAD = 16;
 /** How long a bubble stays, in milliseconds */
 const STAY = { error: 9000, info: 7000 };
-
-const SHOW_IN = /Mac/i.test(navigator.userAgent) ? "Show in Finder" : /Windows/i.test(navigator.userAgent) ? "Show in Explorer" : "Show";
 
 export default function ToastBubble() {
   const [toast, setToast] = useState<ToastData | null>(null);
@@ -27,10 +27,10 @@ export default function ToastBubble() {
   useEffect(() => {
     invoke<ToastData | null>("toast_current").then((t) => t && setToast(t)).catch(() => {});
     const unlisten = [
-      listen<ToastData>("toast", (e) => setToast(e.payload)),
-      listen<string>("toast-side", (e) => setSide(e.payload)),
+      subscription(listen<ToastData>("toast", (e) => setToast(e.payload))),
+      subscription(listen<string>("toast-side", (e) => setSide(e.payload))),
     ];
-    return () => unlisten.forEach((p) => p.then((fn) => fn()));
+    return () => unlisten.forEach((stop) => stop());
   }, []);
 
   const close = () => {
