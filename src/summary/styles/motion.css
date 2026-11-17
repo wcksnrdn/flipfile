@@ -1,0 +1,10 @@
+/* Reduced motion: animations end at once */
+
+@media (prefers-reduced-motion: reduce) {
+  .sp,
+  .sp *,
+  .sp-glow {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -1,0 +1,84 @@
+/* The card itself: colour tokens, the glass, and the light running along its edge while the model works */
+
+.sp {
+  --sp-text: rgba(255, 255, 255, 0.95);
+  --sp-muted: rgba(235, 235, 245, 0.62);
+  --sp-faint: rgba(235, 235, 245, 0.38);
+  --sp-line: rgba(255, 255, 255, 0.08);
+  --sp-card: rgba(255, 255, 255, 0.055);
+  /* The model's accent: pearl, white to a cool silver */
+  --sp-ai: linear-gradient(100deg, #ffffff, #d6dfeb 55%, #ffffff);
+  /* Two lights travelling around a glass edge; turned by animating --sp-spin on the
+     element that draws it, only while visible */
+  --sp-sheen:
+    rgba(255, 255, 255, 0.07) 0deg, rgba(255, 255, 255, 0.5) 55deg, rgba(255, 255, 255, 0.07) 120deg,
+    rgba(255, 255, 255, 0.07) 175deg, rgba(255, 255, 255, 0.95) 245deg, rgba(255, 255, 255, 0.07) 320deg;
+  --sp-read: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 22px;
+  color: var(--sp-text);
+  background:
+    radial-gradient(120% 60% at 12% 0%, rgba(255, 255, 255, 0.1), transparent 60%),
+    rgba(22, 24, 32, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  animation: sp-appear 0.42s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+
+/* Native glass behind: a tint is enough */
+.sp.native {
+  background:
+    radial-gradient(120% 60% at 12% 0%, rgba(255, 255, 255, 0.1), transparent 60%),
+    rgba(16, 18, 26, 0.6);
+}
+
+.sp-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* ===== While the model works, light runs along the card's glass edge ===== */
+.sp-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(from var(--sp-spin), var(--sp-sheen));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+  z-index: 20;
+}
+
+.sp-glow.edge {
+  padding: 1.5px;
+}
+
+.sp-glow.haze {
+  padding: 8px;
+  filter: blur(12px);
+}
+
+.sp.busy .sp-glow,
+.sp.dropping .sp-glow {
+  animation: sp-spin 5.5s linear infinite;
+}
+
+.sp.busy .sp-glow.edge {
+  opacity: 0.85;
+}
+
+.sp.busy .sp-glow.haze {
+  opacity: 0.28;
+}

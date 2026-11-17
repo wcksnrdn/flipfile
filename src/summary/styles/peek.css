@@ -1,0 +1,85 @@
+/* Quick look: the document's own words while the model reads */
+
+.sp-working.peeking {
+  justify-content: flex-start;
+  padding-top: 16px;
+}
+
+.sp-working.peeking .sp-orb {
+  width: 46px;
+  height: 46px;
+  margin-bottom: 12px;
+}
+
+.sp-peek {
+  position: relative;
+  width: 100%;
+  margin-top: 18px;
+  padding: 11px 14px 3px;
+  border: 1px solid var(--sp-line);
+  border-radius: 14px;
+  background: var(--sp-card);
+  text-align: left;
+  overflow: hidden;
+  animation: sp-rise 0.45s ease both;
+}
+
+.sp-summary .sp-peek {
+  margin-top: 4px;
+}
+
+/* A light passing over it: the model is still reading */
+.sp-peek::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.07) 50%, transparent 65%);
+  background-size: 260% 100%;
+  animation: sp-sheen 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.sp-peek-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--sp-faint);
+}
+
+.sp-peek-label .sp-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.sp-peek ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sp-peek li {
+  position: relative;
+  padding: 0 0 10px 13px;
+  font: 400 12.5px/1.5 var(--sp-read);
+  color: var(--sp-muted);
+  user-select: text;
+  -webkit-user-select: text;
+  animation: sp-rise 0.5s ease both;
+  animation-delay: calc(var(--i) * 140ms);
+}
+
+.sp-peek li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 13px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.4);
+}

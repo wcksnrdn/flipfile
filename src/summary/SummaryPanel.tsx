@@ -7,7 +7,7 @@ import { AskBox, DocTabs, FileCard, PanelFooter, PanelHeader, SavedBar } from ".
 import { useDocumentExport } from "./hooks/useDocumentExport";
 import { useClock, useFollowAnswers, usePanelDrop, usePanelGlass, usePanelShortcuts } from "./hooks/usePanelWindow";
 import { useSummaryJobs } from "./hooks/useSummaryJobs";
-import "./SummaryPanel.css";
+import "./styles/index.css";
 
 // How long an error notice stays at the bottom of the panel
 const NOTICE_MS = 4000;

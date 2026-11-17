@@ -1,0 +1,94 @@
+/* The file card: a coloured badge per kind, name and details */
+
+.sp-file {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0 18px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--sp-card);
+  border: 1px solid var(--sp-line);
+}
+
+.sp-badge {
+  --tone: #8e8e93;
+  position: relative;
+  width: 30px;
+  height: 37px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 5px;
+  border-radius: 5px 9px 5px 5px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 92%, white), color-mix(in srgb, var(--tone) 75%, black));
+  box-shadow:
+    0 3px 10px color-mix(in srgb, var(--tone) 40%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Folded corner */
+.sp-badge::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 0 9px 0 4px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.sp-badge span {
+  font: 600 7.5px "Poppins", sans-serif;
+  letter-spacing: 0.3px;
+  color: #fff;
+}
+
+.sp-badge.red {
+  --tone: #ff453a;
+}
+.sp-badge.blue {
+  --tone: #0a84ff;
+}
+.sp-badge.orange {
+  --tone: #ff9f0a;
+}
+.sp-badge.green {
+  --tone: #30d158;
+}
+.sp-badge.teal {
+  --tone: #40c8e0;
+}
+.sp-badge.yellow {
+  --tone: #e5b400;
+}
+.sp-badge.purple {
+  --tone: #bf5af2;
+}
+.sp-badge.pink {
+  --tone: #ff375f;
+}
+
+.sp-file-text {
+  min-width: 0;
+}
+
+.sp-file-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-file-meta {
+  margin-top: 1px;
+  font-size: 10.5px;
+  color: var(--sp-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

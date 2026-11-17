@@ -1,0 +1,61 @@
+/* One tab per document when several were dropped */
+
+.sp-tabs {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 0 18px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sp-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.sp-tab {
+  flex-shrink: 0;
+  max-width: 150px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--sp-line);
+  border-radius: 99px;
+  background: transparent;
+  color: var(--sp-muted);
+  font: 500 10.5px "Poppins", sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.sp-tab.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--sp-text);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.sp-tab-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--sp-faint);
+}
+
+.sp-tab.reading .sp-tab-dot,
+.sp-tab.thinking .sp-tab-dot,
+.sp-tab.writing .sp-tab-dot {
+  background: var(--sp-ai);
+  animation: sp-pulse 1s ease-in-out infinite;
+}
+
+.sp-tab.done .sp-tab-dot {
+  background: #30d158;
+}
+
+.sp-tab.failed .sp-tab-dot {
+  background: #ff453a;
+}
