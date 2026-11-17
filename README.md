@@ -779,15 +779,14 @@ Shows a red dot where flipfile thinks the cursor is, with the raw Tauri position
 │   ├── install.sh             # one-line installer for macOS & Linux
 │   └── install.ps1            # one-line installer for Windows PowerShell
 ├── src/                       # UI (React + TypeScript)
-│   ├── App.tsx                # drag & drop, paste, rings, presets, live estimates, status, progress
-│   ├── App.css                # glass look, ring and segment animations
-│   ├── dropTarget.ts          # ring layout + sector hit-testing (single source of truth)
-│   ├── workshop.ts            # Ring Workshop catalog, workspace profiles & slot persistence
-│   ├── WorkshopPanel.tsx      # Ring Workshop editor
-│   ├── SummaryPanel.tsx       # AI Summary panel (macOS; summary.ts: its state)
-│   ├── ToastBubble.tsx        # notification bubble beside the circle (toast.ts: its messages)
-│   ├── UpdateDialog.tsx       # in-app updater dialog (updater.ts: the check and install)
-│   └── DebugOverlay.tsx       # optional drop-position diagnostics
+│   ├── main.tsx               # picks the window: circle, summary panel, or toast
+│   ├── app/                   # the circle: drag & drop, paste, presets, status, progress
+│   ├── rings/dropTarget.ts    # ring layout + sector hit-testing (single source of truth)
+│   ├── workshop/              # Ring Workshop catalog, profiles, and editor
+│   ├── summary/               # AI Summary panel (macOS) and its state
+│   ├── toast/                 # notification bubble beside the circle
+│   ├── update/                # in-app updater: check, install, and dialog
+│   └── debug/                 # optional drop-position diagnostics
 └── src-tauri/                 # native side (Rust)
     ├── tauri.conf.json        # window, bundle, identifier (com.satria.flipfile), resources
     ├── build.rs               # declares the app's commands so capabilities apply to them
@@ -836,7 +835,7 @@ Shows a red dot where flipfile thinks the cursor is, with the raw Tauri position
 <details>
 <summary><b>How it works</b></summary>
 
-**One source of truth for the ring.** `src/dropTarget.ts` defines the rings (items, start angle, sector size) and the geometry. Segment shapes, label positions and hit-testing are all derived from it, so what you see and what gets selected cannot drift apart.
+**One source of truth for the ring.** `src/rings/dropTarget.ts` defines the rings (items, start angle, sector size) and the geometry. Segment shapes, label positions and hit-testing are all derived from it, so what you see and what gets selected cannot drift apart.
 
 **Sector-based selection.** The cursor is taken relative to the center of the core. Inside the core nothing is selected; outside it, the format whose angular slice contains the cursor wins. On drop the position is evaluated again, and if that lands on nothing, a valid hover from the last 150 ms is used.
 

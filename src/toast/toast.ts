@@ -1,4 +1,4 @@
-// What a notification bubble says (shown by src/ToastBubble.tsx in its own window, placed by
+// What a notification bubble says (shown by src/toast/ToastBubble.tsx in its own window, placed by
 // src-tauri/src/toast.rs), and how the circle builds one: failures, and what a
 // compression gained and cost.
 

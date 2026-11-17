@@ -46,13 +46,14 @@ npm run tauri dev
 
 ```text
 ├── src/                         # Frontend (React 19 + TypeScript + Vite)
-│   ├── App.tsx                  # Drag-and-drop, clipboard paste, radial rings, Core state
-│   ├── App.css                  # Glassmorphism, radial segments, Workshop styles
-│   ├── dropTarget.ts            # Single source of truth for ring geometry & sector hit-testing
-│   ├── workshop.ts              # Ring Workshop catalog, custom workspaces & localStorage persistence
-│   ├── WorkshopPanel.tsx        # Interactive drag-and-drop Ring Workshop UI
-│   ├── SummaryPanel.tsx         # AI Summary panel (second window), state in summary.ts
-│   └── DebugOverlay.tsx         # Cursor & angle diagnostics (VITE_DEBUG_DROP=1)
+│   ├── main.tsx                 # Picks the window: circle, summary panel, or toast
+│   ├── app/                     # The circle: drag-and-drop, paste, rings, core state
+│   ├── rings/dropTarget.ts      # Single source of truth for ring geometry & sector hit-testing
+│   ├── workshop/                # Ring Workshop catalog, persistence, and editor
+│   ├── summary/                 # AI Summary panel (second window) and its state
+│   ├── toast/                   # Notification bubble (its own window) and its messages
+│   ├── update/                  # In-app updater check, install, and dialog
+│   └── debug/                   # Cursor & angle diagnostics (VITE_DEBUG_DROP=1)
 └── src-tauri/                   # Backend (Rust + Tauri v2)
     ├── build.rs                 # Registers app commands in Tauri's ACL manifest; builds flipfile-ai (macOS)
     ├── intelligence/main.swift  # flipfile-ai: Apple Intelligence (FoundationModels) helper process
@@ -87,7 +88,7 @@ npm run tauri dev
 ## How to Add a New Format or Tool
 
 1. **Frontend Ring & Catalog:**
-   * Register the format/tool ID and slice label in [`src/dropTarget.ts`](src/dropTarget.ts) (in the appropriate Category Room sub-ring) and [`src/workshop.ts`](src/workshop.ts) (so users can drag it into custom rings in the Ring Workshop).
+   * Register the format/tool ID and slice label in [`src/rings/dropTarget.ts`](src/rings/dropTarget.ts) (in the appropriate Category Room sub-ring) and [`src/workshop/workshop.ts`](src/workshop/workshop.ts) (so users can drag it into custom rings in the Ring Workshop).
 2. **Backend Validation & Dispatch:**
    * Add the format identifier to the allowed targets list in [`src-tauri/src/convert/mod.rs`](src-tauri/src/convert/mod.rs) and route it to the appropriate converter module (`encode.rs`, `tools.rs`, `office_extra.rs`, `media.rs`, etc.).
 3. **Output Naming:**

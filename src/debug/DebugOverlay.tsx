@@ -1,4 +1,5 @@
-import type { Point, RingId, ZoneDetail } from "./dropTarget";
+import type { Point, RingId, ZoneDetail } from "../rings/dropTarget";
+import "./debug.css";
 
 // Drop-position diagnostics. Enabled with `VITE_DEBUG_DROP=1 npm run tauri dev`
 // or by adding `?debug` to the page URL. Off by default.

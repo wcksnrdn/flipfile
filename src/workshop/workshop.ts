@@ -6,11 +6,11 @@ import {
   type Item,
   type Ring,
   type RingId,
-} from "./dropTarget";
+} from "../rings/dropTarget";
 
 const IS_MAC = /Mac/i.test(navigator.userAgent);
 
-/** AI summary of a document by Apple Intelligence (src/SummaryPanel.tsx); macOS only */
+/** AI summary of a document by Apple Intelligence (src/summary/SummaryPanel.tsx); macOS only */
 export const AI_SUMMARY = "ai-summary";
 
 // Whether this computer can write AI summaries: assumed on macOS until the backend says.

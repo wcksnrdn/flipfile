@@ -1,0 +1,26 @@
+/* ===== Drop debug overlay (only rendered when DEBUG_DROP is on) ===== */
+.debug-dot {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 2px #fff;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.debug-readout {
+  position: fixed;
+  left: 4px;
+  top: 4px;
+  margin: 0;
+  padding: 6px 8px;
+  font: 10px/1.35 ui-monospace, Menlo, Consolas, monospace;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 100;
+}

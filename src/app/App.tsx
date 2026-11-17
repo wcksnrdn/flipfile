@@ -5,12 +5,12 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { compressToast, failureToast, formatBytes, type ToastData } from "./toast";
+import { compressToast, failureToast, formatBytes, type ToastData } from "../toast/toast";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { checkForUpdate, type UpdateState } from "./updater";
-import UpdateDialog from "./UpdateDialog";
-import { DEBUG_DROP, DebugOverlay, type DropDebugInfo } from "./DebugOverlay";
-import WorkshopPanel, { MAX_RING_SLOTS } from "./WorkshopPanel";
+import { checkForUpdate, type UpdateState } from "../update/updater";
+import UpdateDialog from "../update/UpdateDialog";
+import { DEBUG_DROP, DebugOverlay, type DropDebugInfo } from "../debug/DebugOverlay";
+import WorkshopPanel, { MAX_RING_SLOTS } from "../workshop/WorkshopPanel";
 import {
   COMPRESS_LEVELS,
   CORE_OPEN_SCALE,
@@ -27,7 +27,7 @@ import {
   type Point,
   type Ring,
   type RingId,
-} from "./dropTarget";
+} from "../rings/dropTarget";
 import {
   AI_SUMMARY,
   buildWorkspaceRings,
@@ -39,8 +39,8 @@ import {
   saveWorkspacesState,
   type CatalogEntry,
   type WorkspacesState,
-} from "./workshop";
-import { isDocument } from "./summary";
+} from "../workshop/workshop";
+import { isDocument } from "../summary/summary";
 import "./App.css";
 
 type Status = {

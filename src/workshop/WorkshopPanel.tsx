@@ -1,7 +1,7 @@
 import { useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import type { RingId } from "./dropTarget";
+import type { RingId } from "../rings/dropTarget";
 import {
   CATALOG,
   CATALOG_CATEGORIES,
@@ -14,6 +14,7 @@ import {
   type WorkspaceConfig,
   type WorkspacesState,
 } from "./workshop";
+import "./workshop.css";
 
 export const MIN_RING_SLOTS = 2;
 export const MAX_RING_SLOTS = 10;

@@ -28,7 +28,7 @@ pub struct Toasts {
     size: Mutex<(f64, f64)>,
 }
 
-/// Shows a bubble (from the circle's page): `toast` is what it says, see src/toast.ts
+/// Shows a bubble (from the circle's page): `toast` is what it says, see src/toast/toast.ts
 #[tauri::command]
 pub fn toast_show(app: AppHandle, toast: Value) -> Result<(), String> {
     *app.state::<Toasts>().current.lock().unwrap() = Some(toast.clone());
