@@ -1,0 +1,149 @@
+/* Step 3: the format and tool catalog */
+
+.ws-catalog {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ws-catalog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ws-cat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ws-cat-tab {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 4.5px 10px;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+
+.ws-cat-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.ws-cat-tab.active {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #ffffff;
+  color: #1c1c1e;
+  font-weight: 600;
+}
+
+.ws-search {
+  width: 210px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+}
+
+.ws-search:focus {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.ws-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.ws-cat-chip {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.ws-cat-chip:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.ws-cat-chip.selected {
+  background: rgba(48, 209, 88, 0.14);
+  border-color: rgba(48, 209, 88, 0.55);
+}
+
+.ws-cat-chip.disabled {
+  opacity: 0.45;
+}
+
+.ws-cat-chip-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ws-cat-chip-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ws-cat-chip-sub {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.ws-cat-chip-action {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1.5px 6px;
+  border-radius: 999px;
+}
+
+.ws-cat-chip-action.on {
+  color: var(--ok);
+  background: rgba(48, 209, 88, 0.16);
+}
+
+.ws-cat-chip-action.off {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.ws-cat-chip:hover .ws-cat-chip-action.off {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ws-cat-chip-title {
+  font-size: 9.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

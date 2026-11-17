@@ -1,0 +1,53 @@
+/* The window while the Workshop is open, the panel and its scrolling body */
+
+main.workshop-open {
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 16px;
+  padding: 14px 16px 14px 12px;
+}
+
+main.workshop-open .stage {
+  flex-shrink: 0;
+  align-self: center;
+  transition: transform 0.2s ease;
+}
+
+.workshop {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border-radius: 22px;
+  padding: 16px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background:
+    radial-gradient(120% 85% at 20% 5%, rgba(255, 255, 255, 0.16), transparent 55%),
+    rgba(20, 22, 30, 0.92);
+  overflow: hidden;
+  z-index: 10;
+}
+
+/* Single scrollable container below the header so nothing ever gets cut off */
+.ws-scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+  padding-bottom: 12px;
+}
+
+.ws-scroll-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ws-scroll-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 5px;
+}

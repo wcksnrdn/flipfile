@@ -1,0 +1,109 @@
+/* Step 1: workspace presets and naming a new one */
+
+.ws-workspaces {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ws-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.ws-pill-row::-webkit-scrollbar {
+  display: none;
+}
+
+.ws-preset-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.ws-preset-pill:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ws-preset-pill.active {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: #ffffff;
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.18);
+}
+
+.ws-preset-select {
+  background: none;
+  border: none;
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ws-preset-pill.active .ws-preset-select {
+  color: #1c1c1e;
+  font-weight: 600;
+}
+
+.ws-preset-del {
+  background: none;
+  border: none;
+  padding: 3px 8px 3px 0;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ws-preset-pill.active .ws-preset-del {
+  color: #1c1c1e;
+}
+
+.ws-add-ws-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.ws-add-ws-btn:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ws-new-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ws-new-input {
+  width: 140px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+}

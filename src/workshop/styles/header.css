@@ -1,0 +1,88 @@
+/* Pinned header: title, window size presets and actions */
+
+.ws-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: grab;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ws-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ws-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ws-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.ws-badge-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.ws-subtitle {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.ws-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ws-size-group {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.ws-size-btn {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  width: 24px;
+  height: 22px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.ws-size-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ws-size-btn.active {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
