@@ -27,14 +27,30 @@ pub(crate) fn pdfium() -> Result<&'static Pdfium, String> {
             if cfg!(debug_assertions) {
                 dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("pdfium"));
             }
+            // A library that is there but refused (code signing, antivirus, wrong
+            // architecture) is not fixed by reinstalling, so it gets its own message
+            let mut refused = None;
             for dir in dirs {
-                if let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&dir)) {
-                    return Ok(Pdfium::new(bindings));
+                let library = Pdfium::pdfium_platform_library_name_at_path(&dir);
+                match Pdfium::bind_to_library(&library) {
+                    Ok(bindings) => return Ok(Pdfium::new(bindings)),
+                    Err(e) if library.exists() => {
+                        eprintln!("Could not load {}: {e:?}", library.display());
+                        refused.get_or_insert(e);
+                    }
+                    Err(_) => {}
                 }
             }
-            Pdfium::bind_to_system_library()
-                .map(Pdfium::new)
-                .map_err(|_| "The PDF engine is missing. Please reinstall flipfile.".to_string())
+            Pdfium::bind_to_system_library().map(Pdfium::new).map_err(|_| match refused {
+                Some(e) => format!("The PDF engine could not be loaded ({e:?})."),
+                // Antivirus software blocking or quarantining the DLL is the usual cause,
+                // and the installer's "Ignore" skips it without a trace
+                None if cfg!(windows) => "The PDF engine (pdfium.dll) is missing; antivirus software may have \
+                    blocked or removed it. Reinstall flipfile and choose Retry, not Ignore, if the installer \
+                    cannot write a file."
+                    .to_string(),
+                None => "The PDF engine is missing. Please reinstall flipfile.".to_string(),
+            })
         })
         .as_ref()
         .map_err(Clone::clone)
