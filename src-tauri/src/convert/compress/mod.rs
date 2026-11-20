@@ -20,6 +20,7 @@ pub mod estimate;
 mod package;
 mod pdf;
 mod photo;
+pub(super) use photo::is_source_only;
 
 use std::path::Path;
 

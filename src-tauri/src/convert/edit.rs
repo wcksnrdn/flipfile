@@ -15,7 +15,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
 
-use super::encode::{encode, resize_exact, resize_to_fit};
+use super::compress::is_source_only;
+use super::encode::{encode, has_transparency, resize_exact, resize_to_fit};
 use super::input::{file_name, open_oriented, same_format_ext};
 use super::output::unique_output_path;
 use crate::state::grants::Grants;
@@ -130,8 +131,8 @@ pub async fn editor_save(app: AppHandle, edits: Edits) -> Result<String, String>
     let quality = app.state::<Mutex<Settings>>().lock().unwrap().options(None).quality;
 
     let output = tauri::async_runtime::spawn_blocking(move || {
-        let ext = same_format_ext(&path)?;
         let edited = apply(&image, &edits);
+        let ext = save_format(&path, &edited)?;
         let output = unique_output_path(&path, out_dir.as_deref(), "edited", &ext);
         encode(&edited, &ext, &output, quality)?;
         Ok::<_, String>(output.to_string_lossy().into_owned())
@@ -150,6 +151,15 @@ pub fn editor_close(app: AppHandle) {
     let session = app.state::<Session>();
     session.generation.fetch_add(1, Ordering::SeqCst);
     *session.opened.lock().unwrap() = None;
+}
+
+/// The photo's own format; a camera RAW, Photoshop or JPEG 2000 file, which flipfile reads
+/// but can't write, becomes a JPG (PNG when it has transparency), as when compressing
+fn save_format(path: &Path, edited: &DynamicImage) -> Result<String, String> {
+    if is_source_only(path) {
+        return Ok(if has_transparency(edited) { "png" } else { "jpg" }.into());
+    }
+    same_format_ext(path)
 }
 
 fn preview_bytes(image: &DynamicImage) -> Vec<u8> {
@@ -353,6 +363,25 @@ mod tests {
         let mut img = DynamicImage::ImageRgb8(RgbImage::from_pixel(1, 1, Rgb([200, 100, 50])));
         adjust(&mut img, &Adjust { brightness: 0.0, contrast: 50.0, saturation: 0.0, warmth: 40.0 });
         assert_eq!(img.to_rgb8().get_pixel(0, 0).0, [246, 86, 1]);
+    }
+
+    #[test]
+    fn photos_keep_their_format_and_raw_becomes_jpg() {
+        let dir = std::env::temp_dir().join(format!("flipfile-edit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("logo.png");
+        marked().save(&png).unwrap();
+        assert_eq!(save_format(&png, &marked()).unwrap(), "png");
+        // A RAW file is only read (the system's codec), so it is saved as a JPG
+        #[cfg(any(target_os = "macos", windows))]
+        {
+            let raw = dir.join("IMG_0001.CR3");
+            std::fs::write(&raw, b"not decoded here").unwrap();
+            assert_eq!(save_format(&raw, &marked()).unwrap(), "jpg");
+            let clear = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 2, Rgba([0, 0, 0, 0])));
+            assert_eq!(save_format(&raw, &clear).unwrap(), "png");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
