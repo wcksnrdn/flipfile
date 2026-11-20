@@ -22,7 +22,18 @@
 
 * {
   box-sizing: border-box;
+  /* Nothing in flipfile is text to select or drag out like a copy: dragging moves things.
+     WebKit (the macOS and Linux webview) only knows the prefixed names. */
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Fields stay typeable and selectable */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Everything transparent, so only the circle itself is visible */
