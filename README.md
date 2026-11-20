@@ -29,7 +29,7 @@ No uploads. No accounts. No waiting.
 
 <br>
 
-[**Download**](#download) &nbsp;·&nbsp; [What's new](#whats-new-in-09) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [How to use](#how-to-use) &nbsp;·&nbsp; [Formats](#supported-formats) &nbsp;·&nbsp; [Privacy](#privacy--security) &nbsp;·&nbsp; [FAQ](#faq) &nbsp;·&nbsp; [Website](https://flipfile.satria.cloud)
+[**Download**](#download) &nbsp;·&nbsp; [What's new](#whats-new-in-012) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [How to use](#how-to-use) &nbsp;·&nbsp; [Formats](#supported-formats) &nbsp;·&nbsp; [Privacy](#privacy--security) &nbsp;·&nbsp; [FAQ](#faq) &nbsp;·&nbsp; [Website](https://flipfile.satria.cloud)
 
 </div>
 
@@ -68,7 +68,7 @@ No upload, no queue, no "your download will start in 30 seconds". Drag onto the 
 <td width="33%" valign="top">
 
 ### 🧰 Does it all
-75+ formats and tools: iPhone HEIC, PDF ⇄ Word, Excel and PowerPoint → PDF, data formats, video, audio, OCR, compress, upscale, remove background, subtitles and transcripts.
+100+ formats and tools: iPhone HEIC, PDF ⇄ Word, Excel and PowerPoint → PDF, data formats, video, audio, OCR, compress, upscale, remove background, subtitles and transcripts.
 
 </td>
 </tr>
@@ -436,7 +436,7 @@ When changed, the circle shows a small badge such as `1080p · 80%`. Images are 
 
 ## Supported formats
 
-Over **75 formats, tools and conversions**, all processed on your machine.
+Over **100 formats, tools and conversions**, all processed on your machine.
 
 <details open>
 <summary><b>📸 Photos & images</b></summary>
