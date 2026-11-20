@@ -8,9 +8,13 @@
 // - Windows: onnxruntime.dll with DirectML, which runs the models on any DirectX 12 GPU
 //   (NuGet Microsoft.ML.OnnxRuntime.DirectML), and DirectML.dll itself (NuGet
 //   Microsoft.AI.DirectML, Microsoft's redistributable licence for Windows apps).
-// - Linux: libonnxruntime.so (CPU), from the GitHub release.
+// - Linux: libonnxruntime.so (CPU), and
 // - macOS (only with FLIPFILE_ONNX=1): libonnxruntime.dylib, to test the Windows/Linux
-//   engine on a Mac (`cargo test` then runs it too).
+//   engine on a Mac (`cargo test` then runs it too),
+//   both from NuGet Microsoft.ML.OnnxRuntime. (They came from the GitHub releases of
+//   microsoft/onnxruntime until that repository went away in November 2026; the Linux
+//   libraries in the NuGet package are byte for byte the same files, so their pinned
+//   hashes did not change.)
 //
 // Supply-chain protection, as for PDFium (fetch-pdfium.mjs): these libraries end up
 // inside every installer, so they are verified against SHA-256 hashes pinned below,
@@ -28,8 +32,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const VERSION = "1.24.4";
-const GITHUB = `https://github.com/microsoft/onnxruntime/releases/download/v${VERSION}`;
 const NUGET = "https://api.nuget.org/v3-flatcontainer";
+
+// The CPU package, for Linux and macOS: every platform's library in one ~120 MB file
+const CPU_PACKAGE = {
+  url: `${NUGET}/microsoft.ml.onnxruntime/${VERSION}/microsoft.ml.onnxruntime.${VERSION}.nupkg`,
+  archive: "4b978d5065b85e7004b6c6f60ca494bd978fbe6836cbf0a0b52d82b61ab99638",
+};
+const CPU_NOTICES = {
+  LICENSE: ["LICENSE-onnxruntime.txt", "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"],
+  "ThirdPartyNotices.txt": ["ThirdPartyNotices-onnxruntime.txt", "fb0af774b4d7cffc5b9d046f2aaeade2f37df2f80abf8033c95dfffcc77a8866"],
+};
 
 // Per platform: the archives to download, and from each, the files to keep
 // (path in the archive -> [name in src-tauri/onnxruntime, pinned hash]).
@@ -56,32 +69,27 @@ const PLATFORMS = {
   ],
   "linux-x64": [
     {
-      url: `${GITHUB}/onnxruntime-linux-x64-${VERSION}.tgz`,
-      archive: "3a211fbea252c1e66290658f1b735b772056149f28321e71c308942cdb54b747",
+      ...CPU_PACKAGE,
       files: {
-        [`onnxruntime-linux-x64-${VERSION}/lib/libonnxruntime.so.${VERSION}`]: ["libonnxruntime.so", "d132535d051344ff5c64c9c200004150559049a81ed330eb4422c1962fb6b7e4"],
-        [`onnxruntime-linux-x64-${VERSION}/LICENSE`]: ["LICENSE-onnxruntime.txt", "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"],
-        [`onnxruntime-linux-x64-${VERSION}/ThirdPartyNotices.txt`]: ["ThirdPartyNotices-onnxruntime.txt", "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"],
+        "runtimes/linux-x64/native/libonnxruntime.so": ["libonnxruntime.so", "d132535d051344ff5c64c9c200004150559049a81ed330eb4422c1962fb6b7e4"],
+        ...CPU_NOTICES,
       },
     },
   ],
   "linux-arm64": [
     {
-      url: `${GITHUB}/onnxruntime-linux-aarch64-${VERSION}.tgz`,
-      archive: "866109a9248d057671a039b9d725be4bd86888e3754140e6701ec621be9d4d7e",
+      ...CPU_PACKAGE,
       files: {
-        [`onnxruntime-linux-aarch64-${VERSION}/lib/libonnxruntime.so.${VERSION}`]: ["libonnxruntime.so", "52b2a0e75e79468404284fec38ad5ee1a7a996232274f5e1b84f3e793fb07554"],
-        [`onnxruntime-linux-aarch64-${VERSION}/LICENSE`]: ["LICENSE-onnxruntime.txt", "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"],
-        [`onnxruntime-linux-aarch64-${VERSION}/ThirdPartyNotices.txt`]: ["ThirdPartyNotices-onnxruntime.txt", "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"],
+        "runtimes/linux-arm64/native/libonnxruntime.so": ["libonnxruntime.so", "52b2a0e75e79468404284fec38ad5ee1a7a996232274f5e1b84f3e793fb07554"],
+        ...CPU_NOTICES,
       },
     },
   ],
   "mac-arm64": [
     {
-      url: `${GITHUB}/onnxruntime-osx-arm64-${VERSION}.tgz`,
-      archive: "93787795f47e1eee369182e43ed51b9e5da0878ab0346aecf4258979b8bba989",
+      ...CPU_PACKAGE,
       files: {
-        [`onnxruntime-osx-arm64-${VERSION}/lib/libonnxruntime.${VERSION}.dylib`]: ["libonnxruntime.dylib", "872533f130f1839a5bc01788ddb4f75c83a189763441ba1178788ed965449289"],
+        "runtimes/osx-arm64/native/libonnxruntime.dylib": ["libonnxruntime.dylib", "0db33e160224e480c17932799d1dfaea59853b8e722b57bf61932c87e03586f0"],
       },
     },
   ],
