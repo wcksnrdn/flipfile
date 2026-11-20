@@ -14,6 +14,9 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "convert_batch",
             "compress_estimate",
+            "editor_open",
+            "editor_save",
+            "editor_close",
             "read_clipboard",
             "option_key_down",
             "settings_summary",

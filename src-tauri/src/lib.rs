@@ -19,12 +19,27 @@ fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Sizes the main window between the bare circle and a panel beside it (the Workshop,
+/// the Photo Editor). The window always grows and shrinks from its top-left corner, where
+/// the circle sits (main in base.css), so the circle never moves on screen.
 #[tauri::command]
-fn set_workshop_window(window: tauri::WebviewWindow, open: bool, width: Option<f64>, height: Option<f64>) {
+fn set_workshop_window(
+    window: tauri::WebviewWindow,
+    open: bool,
+    width: Option<f64>,
+    height: Option<f64>,
+    min_width: Option<f64>,
+    min_height: Option<f64>,
+) {
+    // Where the window is now: put back after resizing, whichever corner the platform
+    // would otherwise keep (AppKit's frames grow from the bottom-left)
+    let top_left = window.outer_position().ok();
     if open {
-        let w = width.unwrap_or(940.0).clamp(720.0, 1800.0);
-        let h = height.unwrap_or(620.0).clamp(480.0, 1200.0);
-        let min = tauri::Size::Logical(tauri::LogicalSize::new(720.0, 480.0));
+        let min_w = min_width.unwrap_or(720.0).clamp(720.0, 1800.0);
+        let min_h = min_height.unwrap_or(480.0).clamp(480.0, 1200.0);
+        let w = width.unwrap_or(940.0).clamp(min_w, 1800.0);
+        let h = height.unwrap_or(620.0).clamp(min_h, 1200.0);
+        let min = tauri::Size::Logical(tauri::LogicalSize::new(min_w, min_h));
         let target = tauri::Size::Logical(tauri::LogicalSize::new(w, h));
         let _ = window.set_resizable(true);
         let _ = window.set_min_size(Some(min));
@@ -37,6 +52,9 @@ fn set_workshop_window(window: tauri::WebviewWindow, open: bool, width: Option<f
         let _ = window.set_max_size(Some(orb));
         let _ = window.set_size(orb);
         let _ = window.set_resizable(false);
+    }
+    if let Some(position) = top_left {
+        let _ = window.set_position(position);
     }
 }
 
@@ -58,6 +76,7 @@ pub fn run() {
         .manage(grants::Grants::default())
         .manage(summary::Summaries::default())
         .manage(toast::Toasts::default())
+        .manage(convert::edit::Session::default())
         // Record dropped files before the UI is told about the drop (see grants.rs).
         // Tauri runs these handlers synchronously right after emitting the event, so
         // the grant is always in place before the UI can call convert_batch.
@@ -102,6 +121,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             convert::convert_batch,
             convert::compress::estimate::compress_estimate,
+            convert::edit::editor_open,
+            convert::edit::editor_save,
+            convert::edit::editor_close,
             clipboard::read_clipboard,
             keys::option_key_down,
             tray::settings_summary,

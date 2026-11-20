@@ -2,8 +2,9 @@ import { useRef, useState } from "react";
 import type { Point, RingId } from "../../rings/dropTarget";
 import { useTauriEvent } from "../../shared/tauri";
 import { editableRing } from "../../workshop/workshop";
-import { applyWorkshopWindow } from "../../workshop/workshopWindow";
+import { WORKSHOP_DEFAULT, WORKSHOP_MIN } from "../../workshop/workshopWindow";
 import { GLASS_IDLE, GLASS_OPEN, sendGlass } from "../lib/glass";
+import { usePanelWindow } from "./usePanelWindow";
 import type { RingNavigation } from "./useRingNavigation";
 import type { Workspaces } from "./useWorkspaces";
 
@@ -29,16 +30,20 @@ export function useWorkshop({ workspaces, nav, coreCenter, clearHover }: Options
   const active = workspaces.active;
   /** The ring the Workshop edits for the active workspace */
   const ringToEdit = editableRing(active.mode, editingRing);
+  // The panel itself comes in once the window has grown, and goes before it shrinks
+  const panel = usePanelWindow();
 
-  const toggle = (nextOpen?: boolean) => {
+  /** `keepWindow`: closing because another panel opens in the window (the Photo Editor) */
+  const toggle = (nextOpen?: boolean, keepWindow = false) => {
     const target = nextOpen ?? !openRef.current;
     openRef.current = target;
     setOpen(target);
-    applyWorkshopWindow(target);
 
     if (target) {
+      panel.show(WORKSHOP_DEFAULT, WORKSHOP_MIN);
       nav.switchRing(ringToEdit);
     } else {
+      panel.hide(undefined, keepWindow);
       nav.resetRing();
       clearHover();
     }
@@ -77,7 +82,7 @@ export function useWorkshop({ workspaces, nav, coreCenter, clearHover }: Options
     onResetRing: workspaces.resetRing,
   };
 
-  return { open, editingRing, ringToEdit, toggle, editRing, panelHandlers };
+  return { open, panel: panel.phase, editingRing, ringToEdit, toggle, editRing, panelHandlers };
 }
 
 export type Workshop = ReturnType<typeof useWorkshop>;

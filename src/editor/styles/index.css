@@ -1,0 +1,13 @@
+/* Photo Editor: a card beside the circle, in the Ring Workshop's style (EditorPanel.tsx) */
+
+/* The order below is the cascade order: a later file wins a tie in specificity. */
+@import "../../workshop/styles/panel.css";
+@import "../../workshop/styles/header.css";
+@import "../../workshop/styles/buttons.css";
+@import "../../workshop/styles/grip.css";
+@import "../../workshop/styles/motion.css";
+@import "./layout.css";
+@import "./photo.css";
+@import "./crop.css";
+@import "./controls.css";
+@import "./states.css";

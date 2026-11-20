@@ -3,8 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { CORE_OPEN_SCALE, CORE_SIZE, STAGE_SIZE } from "../rings/dropTarget";
 import { DEBUG_DROP, DebugOverlay } from "../debug/DebugOverlay";
+import EditorPanel from "../editor/EditorPanel";
+import { photoName } from "../editor/hooks/usePhoto";
 import UpdateDialog from "../update/UpdateDialog";
 import WorkshopPanel from "../workshop/WorkshopPanel";
+import { PHOTO_EDITOR } from "../workshop/workshop";
 import ChipDragGhost from "./components/ChipDragGhost";
 import CoreDisc from "./components/CoreDisc";
 import RingSvg from "./components/RingSvg";
@@ -17,6 +20,7 @@ import { useCompressEstimates } from "./hooks/useCompressEstimates";
 import { useConversion } from "./hooks/useConversion";
 import { useCoreAnchor } from "./hooks/useCoreAnchor";
 import { useCoreGestures } from "./hooks/useCoreGestures";
+import { useEditor } from "./hooks/useEditor";
 import { useFileDrop } from "./hooks/useFileDrop";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useNativeGlass } from "./hooks/useNativeGlass";
@@ -28,8 +32,10 @@ import { useStatus } from "./hooks/useStatus";
 import { useUpdater } from "./hooks/useUpdater";
 import { useWorkshop } from "./hooks/useWorkshop";
 import { useWorkspaces } from "./hooks/useWorkspaces";
+import { STATUS_CLEAR_MS } from "./lib/constants";
 import { coreText } from "./lib/coreText";
 import { GLASS_OPEN, sendGlass } from "./lib/glass";
+import type { Execute } from "./lib/types";
 import "./styles/index.css";
 
 const STAGE_STYLE = {
@@ -53,6 +59,7 @@ export default function App() {
   const nav = useRingNavigation(workspaces.active, aiSupported);
   const selection = useRingSelection({ nav, coreCenter, scale });
   const workshop = useWorkshop({ workspaces, nav, coreCenter, clearHover: () => selection.setHovered(null) });
+  const editor = useEditor({ coreCenter });
   const { chipDrag, startChipDrag } = useChipDrag({
     workspace: workspaces.active,
     ringToEdit: workshop.ringToEdit,
@@ -66,7 +73,7 @@ export default function App() {
   const open = selection.dragging || selection.picking !== null || workshop.open;
   const aiming = open && !workshop.open;
 
-  const nativeGlass = useNativeGlass({ coreCenter, open, workshopOpen: workshop.open });
+  const nativeGlass = useNativeGlass({ coreCenter, open, panelOpen: workshop.open || editor.open });
   const { estimates, sliceSub } = useCompressEstimates({
     enabled: aiming,
     ring: nav.built.rings[nav.ringId],
@@ -74,17 +81,31 @@ export default function App() {
   });
 
   // Input: drag & drop, paste-and-click, Option/Alt, keyboard, the core itself
-  const execute = useConversion(statusActions);
+  const convert = useConversion(statusActions);
+  // The Edit slice opens the photo in the Photo Editor; every other one converts
+  const execute: Execute = (paths, format, toDownloads, preset) => {
+    if (format !== PHOTO_EDITOR) return convert(paths, format, toDownloads, preset);
+    if (workshop.open) workshop.toggle(false, true);
+    editor.openPhoto(paths[0], toDownloads);
+  };
   const paste = useClipboardPaste(selection, statusActions);
-  useFileDrop({ selection, scale, execute });
+  // While the Photo Editor is open, a photo dropped on the window opens in it instead
+  useFileDrop({ selection, scale, execute, enabled: !editor.open });
   useAltPresets({ enabled: aiming, nav, selection });
   useKeyboardShortcuts({
     onQuit: () => invoke("quit_app"),
-    onToggleWorkshop: () => workshop.toggle(),
-    onPaste: () => {
-      if (!selection.dragging && status?.tone !== "busy") paste();
+    // The Photo Editor has its own shortcuts (src/editor/hooks/useEditorShortcuts.ts)
+    onToggleWorkshop: () => {
+      if (!editor.open) workshop.toggle();
     },
-    onEscape: () => (workshop.open ? workshop.toggle(false) : selection.closeRing()),
+    onPaste: () => {
+      if (!editor.open && !selection.dragging && status?.tone !== "busy") paste();
+    },
+    onEscape: () => {
+      if (editor.open) return;
+      if (workshop.open) workshop.toggle(false);
+      else selection.closeRing();
+    },
   });
   const pointer = useRingPointer({
     coreRef,
@@ -104,7 +125,9 @@ export default function App() {
       else if (status?.ai) invoke("summary_show").catch(() => {});
       else if (first) revealItemInDir(first).catch(() => {});
     },
-    onContextMenu: () => workshop.toggle(),
+    onContextMenu: () => {
+      if (!editor.open) workshop.toggle();
+    },
   });
 
   const text = coreText({
@@ -123,13 +146,19 @@ export default function App() {
     settingsSummary,
     activeWorkspace: workspaces.active,
     status,
+    editing: editor.request && photoName(editor.request.path),
   });
   const busy = !open && status?.tone === "busy";
   const aiBusy = busy && !!status?.ai;
 
   return (
     <main
-      className={[selection.picking && selection.hovered && "pick-ready", workshop.open && "workshop-open"]
+      className={[
+        selection.picking && selection.hovered && "pick-ready",
+        // (kept until the panel has left and the window has shrunk)
+        (workshop.open || workshop.panel !== "hidden") && "workshop-open",
+        editor.open && "editor-open",
+      ]
         .filter(Boolean)
         .join(" ")}
       onMouseMove={pointer.onMouseMove}
@@ -159,8 +188,9 @@ export default function App() {
         />
       </div>
 
-      {workshop.open && (
+      {workshop.panel !== "hidden" && (
         <WorkshopPanel
+          leaving={workshop.panel === "leaving"}
           state={workspaces.state}
           activeWorkspace={workspaces.active}
           editingRing={workshop.editingRing}
@@ -169,6 +199,20 @@ export default function App() {
           onWindowResized={() => sendGlass(coreCenter(), GLASS_OPEN).catch(() => {})}
           onCheckUpdate={updater.checkNow}
           onClose={() => workshop.toggle(false)}
+        />
+      )}
+
+      {editor.request && editor.panel !== "hidden" && (
+        <EditorPanel
+          request={editor.request}
+          leaving={editor.panel === "leaving"}
+          onOpen={(path) => editor.openPhoto(path, false)}
+          onWindowResized={editor.onWindowResized}
+          // The circle beside the editor says so; clicking it shows the file
+          onSaved={(output) =>
+            statusActions.show({ title: "Saved", hint: photoName(output), tone: "ok", outputs: [output] }, STATUS_CLEAR_MS.result)
+          }
+          onClose={editor.close}
         />
       )}
 

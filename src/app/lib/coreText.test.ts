@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RINGS } from "../../rings/dropTarget";
-import { AI_SUMMARY, type CatalogEntry, type WorkspaceConfig } from "../../workshop/workshop";
+import { AI_SUMMARY, PHOTO_EDITOR, type CatalogEntry, type WorkspaceConfig } from "../../workshop/workshop";
 import { ALT_KEY, ALT_SUPPORTED, ON_DEVICE } from "./constants";
 import { coreText, type CoreTextInput } from "./coreText";
 
@@ -22,6 +22,7 @@ const input = (overrides: Partial<CoreTextInput> = {}): CoreTextInput => ({
   settingsSummary: null,
   activeWorkspace: allRooms,
   status: null,
+  editing: null,
   ...overrides,
 });
 
@@ -75,6 +76,7 @@ describe("coreText", () => {
 
     it.each([
       ["clean", "Release to strip metadata"],
+      [PHOTO_EDITOR, "Release to open in Photo Editor"],
       ["up-4x", "Release to enlarge with AI"],
       ["tr-srt", "Release to make subtitles with AI"],
       ["tr-txt", "Release to write down what is said"],
@@ -157,6 +159,17 @@ describe("coreText", () => {
 
     it("previews a hovered slice", () => {
       expect(coreText(workshop({ hovered: "png" }))).toMatchObject({ title: "PNG", hint: "Drop to replace" });
+    });
+  });
+
+  describe("the Photo Editor", () => {
+    it("names the photo being edited, without the Workshop badge", () => {
+      expect(coreText(input({ editing: "sunset.jpg" }))).toEqual({ title: "Editing", hint: "sunset.jpg", badge: null });
+    });
+
+    it("shows that it was saved", () => {
+      const status = { title: "Saved", hint: "sunset_edited.jpg", tone: "ok" as const, outputs: ["/a/sunset_edited.jpg"] };
+      expect(coreText(input({ editing: "sunset.jpg", status }))).toEqual({ title: "Saved", hint: "sunset_edited.jpg", badge: null });
     });
   });
 });

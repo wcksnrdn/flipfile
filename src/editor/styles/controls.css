@@ -1,0 +1,389 @@
+/* Under the photo: the tool tabs, then the active tool's controls */
+
+.ed-dock {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ed-dock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Segmented tabs, like the S / M / L presets but roomier */
+.ed-tabs {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* The white pill behind the chosen tab, gliding from one to the next */
+.ed-tab-pill {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  height: calc(100% - 6px);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.38s cubic-bezier(0.3, 1.25, 0.5, 1),
+    width 0.38s cubic-bezier(0.3, 1.25, 0.5, 1);
+}
+
+.ed-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ed-tab svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ed-tab:hover:not(.active) {
+  color: var(--text);
+}
+
+.ed-tab.active {
+  color: var(--accent-text);
+}
+
+.ed-revert {
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ed-revert:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.ed-revert:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The active tool, always the same height so the photo never jumps */
+.ed-controls {
+  height: 118px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  animation: ed-controls-in 0.22s ease both;
+}
+
+@keyframes ed-controls-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ed-controls {
+    animation: none;
+  }
+}
+
+/* ─── Adjust: two sliders a row ─────────────────────────────────────────── */
+
+.ed-adjust {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 26px;
+}
+
+.ed-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.ed-slider-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.ed-slider-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The track shows what the slider does, with a mark at 0 */
+.ed-slider input[type="range"] {
+  --track: linear-gradient(to right, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.15));
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  margin: 6px 0;
+  border-radius: 3px;
+  background:
+    linear-gradient(to right, transparent calc(50% - 1px), rgba(255, 255, 255, 0.85) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)) center / 100% 12px no-repeat,
+    var(--track);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+}
+
+.ed-slider.brightness input {
+  --track: linear-gradient(to right, #15161b, #6b6e78 50%, #ffffff);
+}
+
+.ed-slider.contrast input {
+  --track: linear-gradient(to right, #8a8c94, #8a8c94 45%, #ffffff 50%, #0d0e12);
+}
+
+.ed-slider.saturation input {
+  --track: linear-gradient(to right, #8b8b8b, #c47a6a 50%, #ff3b30 75%, #ff2d95);
+}
+
+.ed-slider.warmth input {
+  --track: linear-gradient(to right, #3a8bff, #9fb7d8 50%, #ffc56b 75%, #ff8a1f);
+}
+
+.ed-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid rgba(20, 22, 30, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.ed-slider input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.1);
+}
+
+.ed-slider input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.22);
+}
+
+.ed-slider-value.changed {
+  padding: 0 7px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--accent-text);
+}
+
+/* ─── Looks: one row of thumbnails ──────────────────────────────────────── */
+
+.ed-looks {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  /* Room for the chosen look's outline, which the strip would otherwise clip */
+  padding: 5px;
+  margin: -5px;
+  scrollbar-width: thin;
+}
+
+.ed-looks::-webkit-scrollbar {
+  height: 4px;
+}
+
+.ed-looks::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.ed-look {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ed-look-thumb {
+  width: 66px;
+  height: 66px;
+  object-fit: cover;
+  border-radius: 14px;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition:
+    outline-color 0.15s ease,
+    transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1),
+    box-shadow 0.2s ease;
+}
+
+.ed-look:hover .ed-look-thumb {
+  outline-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.ed-look.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ed-look.active .ed-look-thumb {
+  outline-color: #ffffff;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    0 0 18px rgba(255, 255, 255, 0.35);
+}
+
+/* ─── Crop: turn and mirror, then shapes ────────────────────────────────── */
+
+.ed-crop-tools {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ed-crop-tools .ed-icon-group {
+  flex-shrink: 0;
+}
+
+.ed-crop-tools .ed-icon {
+  width: 34px;
+  height: 30px;
+}
+
+.ed-crop-tools .ed-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ed-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ed-chip:hover:not(:disabled, .active) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ed-chip.active {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: transparent;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.ed-chip:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.ed-chip-reset {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.ed-chips-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ─── Resize: exact size, then quick sizes ──────────────────────────────── */
+
+.ed-resize {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.ed-size-fields {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ed-size-fields input {
+  width: 78px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-size-fields input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.ed-size-x,
+.ed-size-unit {
+  color: var(--muted);
+  font-size: 11.5px;
+}

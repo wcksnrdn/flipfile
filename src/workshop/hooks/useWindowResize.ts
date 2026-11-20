@@ -1,29 +1,45 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { DEFAULT_PRESET, resizeWorkshopWindow, WINDOW_PRESETS } from "../workshopWindow";
+import { DEFAULT_PRESET, resizePanelWindow, WORKSHOP_SIZING, type PanelSizing, type Size } from "../workshopWindow";
 
 // A second nudge after resizing, for platforms that settle the size a moment later
 const SETTLE_MS = 60;
 
+type Options = {
+  sizing?: PanelSizing;
+  /** The preset shown as chosen at first ("" for a size of the user's own) */
+  initialPreset?: string;
+  /** The window took a size the user chose: a preset's id, or "" from the grip */
+  onSized?: (size: Size, preset: string) => void;
+};
+
 /**
- * Sizing the borderless Workshop window: the S / M / L presets and the corner grip.
- * `onResized` lets the circle recentre its glass disc each time.
+ * Sizing a borderless panel window (the Workshop, the Photo Editor): its S / M / L
+ * presets and the corner grip. `onResized` lets the circle recentre its glass disc each time.
  */
-export function useWindowResize(onResized: () => void) {
-  const [preset, setPreset] = useState<string>(DEFAULT_PRESET);
+export function useWindowResize(
+  onResized: () => void,
+  { sizing = WORKSHOP_SIZING, initialPreset = DEFAULT_PRESET, onSized }: Options = {}
+) {
+  const [preset, setPreset] = useState<string>(initialPreset);
   const stopGrip = useRef<(() => void) | null>(null);
 
   useEffect(() => () => stopGrip.current?.(), []);
 
-  const resize = (width: number, height: number) => {
-    resizeWorkshopWindow(width, height).then(onResized).catch(() => {});
+  const resize = (width: number, height: number, presetId: string) => {
+    resizePanelWindow(width, height, sizing)
+      .then((size) => {
+        onResized();
+        onSized?.(size, presetId);
+      })
+      .catch(() => {});
     window.setTimeout(onResized, SETTLE_MS);
   };
 
   const applyPreset = (id: string) => {
-    const p = WINDOW_PRESETS.find((p) => p.id === id);
+    const p = sizing.presets.find((p) => p.id === id);
     if (!p) return;
     setPreset(id);
-    resize(p.size.width, p.size.height);
+    resize(p.size.width, p.size.height, id);
   };
 
   // Drag the bottom-right corner grip to resize the window smoothly, one frame at a time
@@ -36,7 +52,9 @@ export function useWindowResize(onResized: () => void) {
     let raf = 0;
     const onMove = (ev: PointerEvent) => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => resize(start.width + (ev.screenX - start.x), start.height + (ev.screenY - start.y)));
+      raf = requestAnimationFrame(() =>
+        resize(start.width + (ev.screenX - start.x), start.height + (ev.screenY - start.y), "")
+      );
     };
     const stop = () => {
       cancelAnimationFrame(raf);
@@ -55,5 +73,5 @@ export function useWindowResize(onResized: () => void) {
     window.addEventListener("pointerup", onUp);
   };
 
-  return { preset, applyPreset, onGripDown };
+  return { preset, presets: sizing.presets, applyPreset, onGripDown };
 }

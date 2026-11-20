@@ -1,0 +1,58 @@
+/* A panel beside the circle (the Workshop, the Photo Editor) slides out from it once the
+   window has grown, and slides back before the window shrinks (usePanelWindow.ts).
+
+   Only transform and opacity move: the GPU blends them without redrawing the glass. An
+   animated clip-path or size makes WebKit repaint the blurred panel every frame, which
+   is what stuttered before. */
+
+.workshop {
+  transform-origin: left center;
+  animation: panel-in 0.48s cubic-bezier(0.2, 1.08, 0.32, 1) both;
+}
+
+/* The contents follow a beat later, rising slightly into place */
+.workshop > * {
+  animation: panel-content 0.42s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.workshop.leaving {
+  animation: panel-out 0.26s cubic-bezier(0.45, 0, 0.75, 0.3) both;
+  pointer-events: none;
+}
+
+.workshop.leaving > * {
+  animation: none;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-26px) scale(0.965);
+  }
+  60% {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-out {
+  to {
+    opacity: 0;
+    transform: translateX(-22px) scale(0.975);
+  }
+}
+
+@keyframes panel-content {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workshop,
+  .workshop > *,
+  .workshop.leaving {
+    animation-duration: 0.01s;
+    animation-delay: 0s;
+  }
+}

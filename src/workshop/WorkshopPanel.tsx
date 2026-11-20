@@ -32,6 +32,8 @@ type Props = {
   onWindowResized: () => void;
   onCheckUpdate?: () => void;
   onClose: () => void;
+  /** On its way out, before the window shrinks (panel-out in styles/motion.css) */
+  leaving?: boolean;
 };
 
 /** The Ring Workshop, beside the circle: workspaces, the ring's slots, and the catalog */
@@ -50,6 +52,7 @@ export default function WorkshopPanel({
   onWindowResized,
   onCheckUpdate,
   onClose,
+  leaving = false,
 }: Props) {
   const ring = editableRing(activeWorkspace.mode, editingRing);
   const slots = getSlotsForRing(activeWorkspace, ring);
@@ -67,7 +70,7 @@ export default function WorkshopPanel({
       : (EDITABLE_RINGS.find((r) => r.id === editingRing)?.label ?? editingRing);
 
   return (
-    <section className="workshop glass" aria-label="Ring Workshop">
+    <section className={leaving ? "workshop glass leaving" : "workshop glass"} aria-label="Ring Workshop">
       <WorkshopHeader
         sizePreset={resize.preset}
         onSizePreset={resize.applyPreset}

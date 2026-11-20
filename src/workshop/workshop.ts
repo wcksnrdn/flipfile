@@ -13,6 +13,9 @@ import { IS_MAC } from "../shared/platform";
 /** AI summary of a document by Apple Intelligence (src/summary/SummaryPanel.tsx); macOS only */
 export const AI_SUMMARY = "ai-summary";
 
+/** Opens the photo in the Photo Editor (src/editor) instead of converting it */
+export const PHOTO_EDITOR = "photo-edit";
+
 // Whether this computer can write AI summaries: assumed on macOS until the backend says.
 // Without it the lobby keeps its four rooms and other rings show Summary greyed out.
 let aiSupport = IS_MAC;
@@ -82,6 +85,7 @@ export const CATALOG: CatalogEntry[] = [
   { id: "jpeg", label: "JPEG", title: "JPEG (.jpeg ext)", category: "photo" },
 
   // ─── Photo Smart Tools ────────────────────────────────────────────────────
+  { id: PHOTO_EDITOR, label: "Edit", sub: "studio", title: "Photo Editor (Crop, Adjust, Looks, Resize)", category: "photo-tools" },
   { id: "nobg", label: "Remove", sub: "BG", title: "AI Remove Background", category: "photo-tools", disabled: !IS_MAC },
   { id: "up-2x", label: "Upscale", sub: "2×", title: "AI Upscale 2×", category: "photo-tools" },
   { id: "up-4x", label: "Upscale", sub: "4×", title: "AI Upscale 4×", category: "photo-tools" },
@@ -193,7 +197,7 @@ export const DEFAULT_ROOM_SLOTS: Record<RingId, string[]> = {
   // Summary sits right in the lobby: drop a document on it, no room to enter first
   category: IS_MAC ? ["cat-photo", "cat-office", "cat-video", "cat-music", AI_SUMMARY] : ["cat-photo", "cat-office", "cat-video", "cat-music"],
   custom: ["png", "jpg", "webp", "nobg", "pdf", "docx", "xlsx", "mp4"],
-  photo: ["jpg", "png", "webp", "heic", "pdf", "photo-formats-nav", "photo-tools-nav"],
+  photo: ["jpg", "png", "webp", "heic", "pdf", PHOTO_EDITOR, "photo-formats-nav", "photo-tools-nav"],
   "photo-formats": ["avif", "tiff", "gif", "bmp", "ico", "icns", "photo-pro-nav"],
   "photo-pro": ["jpeg", "tga", "exr", "hdr", "qoi", "ppm", "svg"],
   "photo-tools": ["photo-compress-nav", "nobg", "up-2x", "up-4x", "photo-transform-nav", "square", "gif-anim", "clean"],

@@ -15,16 +15,19 @@ type Options = {
   selection: RingSelection;
   scale: ScaleFactor;
   execute: Execute;
+  /** Off while the Photo Editor is open: a photo dropped there opens in it instead */
+  enabled: boolean;
 };
 
 /** Files dragged in from the OS: the ring follows the cursor, and a drop runs the format under it */
-export function useFileDrop({ selection, scale, execute }: Options) {
+export function useFileDrop({ selection, scale, execute, enabled }: Options) {
   const at = (position: PhysicalPosition) => ({
     point: toCssPoint(position, scale.get()),
     raw: { x: position.x, y: position.y },
   });
 
   const onDragDrop = useEffectEvent((p: DragDropEvent) => {
+    if (!enabled) return;
     switch (p.type) {
       case "enter": {
         scale.refresh();

@@ -1,15 +1,11 @@
-/* Narrow and short windows (size S), and before the window has grown */
+/* Narrow and short windows (size S). The circle never moves or shrinks here: it would
+   jump while the window grows past these widths. */
 
 /* Responsive rules for compact width (Size S / narrow window) and compact height */
 @media (max-width: 880px) {
   main.workshop-open {
-    gap: 8px;
-    padding: 10px 12px 10px 6px;
-  }
-
-  main.workshop-open .stage {
-    transform: scale(0.9);
-    margin: -12px;
+    gap: 10px;
+    padding-right: 12px;
   }
 
   .workshop {
@@ -40,21 +36,5 @@
   .ws-workbench {
     padding: 8px 11px;
     gap: 6px;
-  }
-}
-
-/* Fallback if the window has not expanded past 640px yet: fit cleanly inside the 320x320 viewport */
-@media (max-width: 640px) {
-  .workshop {
-    position: fixed;
-    inset: 6px;
-    height: auto;
-    border-radius: 18px;
-    padding: 12px;
-    gap: 8px;
-  }
-
-  .ws-catalog-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
