@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **macOS**: every conversion that reads a PDF (PDF → Word, Excel, images, …) failed with
+  "The PDF engine is missing. Please reinstall flipfile.", and reinstalling did not help.
+  The app's hardened runtime refused to load the bundled PDF engine; it is now allowed to.
+- When the PDF engine is present but cannot be loaded, the message now says so (with the
+  reason) instead of asking for a reinstall. On Windows, a missing engine now points to
+  antivirus software, and to choosing Retry rather than Ignore in the installer.
+
 ## [0.12.0] - 2026-11-20
 
 ### Added

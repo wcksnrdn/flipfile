@@ -78,6 +78,15 @@ jobs:
           prerelease: false
           args: --target ${{ matrix.target }}
 
+      # Without this entitlement the hardened runtime refuses the bundled PDFium, and
+      # every PDF conversion fails with "the PDF engine is missing"
+      - name: Check the PDF engine can be loaded (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          app=$(echo src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app)
+          codesign -d --entitlements - --xml "$app" | grep -q disable-library-validation
+          test -f "$app/Contents/Resources/pdfium/libpdfium.dylib"
+
       # Proves each installer was built here, from this commit of the public repo.
       # Anyone can check a download with:
       #   gh attestation verify <file> --repo wcksnrdn/flipfile
