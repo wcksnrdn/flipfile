@@ -104,6 +104,7 @@
   line-height: 1.45;
   color: var(--muted);
   white-space: pre-wrap;
+  -webkit-user-select: text;
   user-select: text;
 }
 
