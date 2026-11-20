@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-20
+
 ### Fixed
 
 - **macOS**: every conversion that reads a PDF (PDF → Word, Excel, images, …) failed with
@@ -507,7 +509,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/wcksnrdn/flipfile/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/wcksnrdn/flipfile/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/wcksnrdn/flipfile/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/wcksnrdn/flipfile/compare/v0.9.1...v0.10.0
