@@ -35,14 +35,15 @@ No uploads. No accounts. No waiting.
 
 <br>
 
-## What's new in 0.9
+## What's new in 0.12
 
 > [!TIP]
-> **Compress anything, and see the size before you let go.** Hold <kbd>⌥ Option</kbd> (<kbd>Alt</kbd> on Windows) while dragging and pick **Light · Balanced · Strong · Extreme** for photos, PDFs, videos and recordings. Each level shows the size it will give (`4.2 MB → 610 KB · −85%`) and what it costs, and a result is never larger than the original.
+> **Edit a photo without leaving flipfile.** Drop it on **Edit** (*Photo* ring) and a Photo Editor slides out beside the circle: adjust the light and colour, pick a look, crop, turn, resize, then **Save**. The original is never changed.
 
-- **Compress levels** for photos (camera RAW and PSD too), PDFs (only the pictures inside get smaller; text stays sharp and selectable), **Word, Excel, PowerPoint, OpenDocument and EPUB files**, animated GIFs, MP4 videos and recordings, with a live estimate on every slice. [More ↓](#compress-levels)
-- **Notification bubbles** beside the circle: what a compression **gained** (space saved, which upload limit it now fits) and **cost** (format change, softer detail), and what failed and why, file by file, with **Show in Finder / Explorer**.
-- **Sharper transcripts**: every word is timed within about a third of a second of its sound, silence and music are cut out before Whisper listens (no made-up sentences over a quiet room), and voice-overs come out punctuated, in readable paragraphs.
+- **Photo Editor**: brightness, contrast, saturation and warmth, nine one-tap looks, crop to any shape, rotate and flip, resize to an exact size, undo and redo, hold <kbd>\\</kbd> to compare. It saves `photo_edited.jpg` next to the original, in full resolution and its own format (HEIC opens too; camera RAW and PSD, on macOS and Windows, are saved as JPG). [More ↓](#photo-editor)
+- **Smoother panels**: the Ring Workshop and the Photo Editor slide out from the circle and back, and the circle stays exactly where it is. Size them with **S · M · L** or the corner grip.
+- **Text stays put**: labels can no longer be selected or dragged out of the window by accident.
+- Since 0.11: **compress Word, Excel, PowerPoint, OpenDocument and EPUB files**, animated GIFs that stay animated, and camera RAW. [More ↓](#compress-levels)
 
 Full details in the [CHANGELOG](CHANGELOG.md).
 
@@ -181,6 +182,7 @@ MIT-licensed, built in public by GitHub Actions, with checksums and signed build
 | ✦ | [**AI Summary**](#ai-summary) | Any document or recording explained: headline, key points, figures, to-dos; ask it questions | macOS 26 with Apple Intelligence |
 | 📄 | [**Office**](#office-word-excel-powerpoint) | Word ⇄ PDF, Excel → PDF, PowerPoint ⇄ PDF/Word/images, anything → slides | macOS · Windows · Linux |
 | 🔤 | [**WORD OCR**](#office-word-excel-powerpoint) | Scans and photos of documents → editable Word | macOS · Windows |
+| 🎨 | [**Photo Editor**](#photo-editor) | Adjust, looks, crop, rotate, flip and resize a photo beside the circle, saved in full resolution | macOS · Windows · Linux |
 | 🖼️ | [**Photos**](#photos) | 19 image formats incl. HEIC, AVIF, EXR, RAW; remove background, transform, square, GIF, ICO/ICNS | macOS · Windows · Linux |
 | 🎬 | [**Video & audio**](#video--audio) | MP4, MOV, WEBM, MKV, AVI, FLV, GIF clips; mute, extract audio, 1080p/720p; 11 audio formats | macOS · Windows · Linux *(some need `ffmpeg`)* |
 | 🧩 | [**Ring Workshop**](#make-it-yours) | Rearrange the rings, build your own, switch workspace profiles | macOS · Windows · Linux |
@@ -266,6 +268,20 @@ Microsoft Office or LibreOffice are used when installed; otherwise flipfile's ow
 - **Compress to a target** (1 MB · 500 KB · 200 KB · 100 KB) or **losslessly**, **transform** (rotate, flip, grayscale), **Square 1:1** (white behind JPG/BMP, transparent otherwise), **animated GIF** from several photos, **Slides** from photos, **Clean EXIF** (GPS and camera data removed, losslessly for JPG and PNG).
 - **Colours stay right**: Display P3 photos (iPhone, Mac screenshots) are converted to sRGB so they look the same everywhere.
 
+### Photo Editor
+
+Drop a photo on **Edit** (*Photo* ring) and it opens in a card beside the circle.
+
+- **Adjust**: brightness, contrast, saturation and warmth, each on a track that shows what it does. Double-click a slider to reset it.
+- **Looks**: Vivid, Bright, Warm, Cool, Dramatic, Fade, Mono and Noir, each previewed on your photo. A look sets the sliders, so you can fine-tune it.
+- **Crop & Rotate**: drag the corners, or lock a shape (Square, 4:5, 3:4, 2:3, 9:16, 4:3, 3:2, 16:9, the original's); turn and flip, and the crop follows.
+- **Resize**: an exact width or height, 75 / 50 / 25 %, or the longest side (3840 · 2560 · 1920 · 1280 · 1080 px). The photo shrinks on screen to show its new size, and is never enlarged.
+- **Undo / redo** (<kbd>⌘ Z</kbd> / <kbd>⇧ ⌘ Z</kbd>), hold <kbd>\\</kbd> or **Hold to compare** to see it before its adjustments, **Cancel** asks before throwing edits away.
+- **Save** writes `photo_edited.jpg` next to the original, at full resolution and in its own format (HEIC, PNG with transparency, WebP...; camera RAW and PSD become JPG); the circle says **Saved**, click it to show the file. <kbd>⌘ S</kbd> saves and keeps editing.
+- **S · M · L** and the corner grip size the editor, and the size is remembered.
+
+The preview is computed with the same arithmetic as the saved photo, so what you see is what you get.
+
 ### Video & audio
 
 - **Video**: MP4, MOV, WEBM, MKV, AVI, FLV, and **GIF clips**; **Mute**, **extract audio**, **1080p / 720p**, **Compress**, **Subtitles**.
@@ -346,7 +362,7 @@ Hold <kbd>⌥ Option</kbd> / <kbd>Alt</kbd> while dragging for the **compress le
 | Ring | Slices |
 |---|---|
 | **Lobby** | **Photo** · **Office** · **Video** · **Music** · **AI ✦** *(summary, macOS)* |
-| **Photo** | JPG · PNG · WEBP · HEIC · PDF · **Formats •••** · **Tools ✦** · Back ‹ |
+| **Photo** | JPG · PNG · WEBP · HEIC · PDF · **Edit** *(Photo Editor)* · **Formats •••** · **Tools ✦** · Back ‹ |
 | **Photo → Formats** | AVIF · TIFF · GIF · BMP · ICO *(multi)* · ICNS *(macOS)* · **Pro / 3D •••** · Back ‹ |
 | **Photo → Formats → Pro / 3D** | JPEG · TGA *(game)* · EXR *(32f HDR)* · HDR *(RGBE)* · QOI *(fast)* · PPM *(netpbm)* · SVG *(embed)* · Back ‹ |
 | **Photo → Tools** | **Compress** *(target size)* · **Remove BG** *(macOS)* · **Upscale 2×** · **Upscale 4×** · **Transform** · **Square 1:1** · **GIF anim** · **Slides** *(pptx)* · **Clean EXIF** · Back ‹ |
@@ -375,7 +391,7 @@ The ring only switches when you *enter* a slice, so it never flips back and fort
 | <kbd>⌘ ,</kbd> / <kbd>Ctrl ,</kbd> | Open / close the Ring Workshop |
 | <kbd>⌘ V</kbd> / <kbd>Ctrl V</kbd> | Paste an image or copied files |
 | <kbd>⌥ Option</kbd> / <kbd>Alt</kbd> *(hold while dragging)* | Compress levels (with their size) and size presets |
-| <kbd>Esc</kbd> | Cancel a paste or close the Ring Workshop |
+| <kbd>Esc</kbd> | Cancel a paste, close the Ring Workshop, or cancel the Photo Editor |
 | <kbd>⌘ Q</kbd> / <kbd>Ctrl Q</kbd> | Quit |
 
 </details>
