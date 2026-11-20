@@ -6,6 +6,46 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-20
+
+### Added
+
+- **Photo Editor**: drop a photo on the new **Edit** slice (Photo ring; also in the Ring
+  Workshop's catalog under Photo Tools) and it opens in a glass card beside the circle.
+  - **Adjust**: brightness, contrast, saturation and warmth, on tracks coloured by what
+    they do; double-click a slider to reset it.
+  - **Looks**: Vivid, Bright, Warm, Cool, Dramatic, Fade, Mono and Noir, each previewed on
+    the photo itself; a look sets the sliders, which can fine-tune it.
+  - **Crop & Rotate**: drag the corners and edges or lock a shape (Square, 4:5, 3:4, 2:3,
+    9:16, 4:3, 3:2, 16:9, the photo's own); turns and flips carry the crop with them.
+  - **Resize**: an exact width or height, 75/50/25 %, or the longest side (3840 to
+    1080 px), never enlarged; the photo shrinks on screen inside the outline of its old
+    size and is drawn no sharper than it will be saved.
+  - Undo and redo (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z), hold `\` or **Hold to compare** to see
+    the photo before its adjustments, a glow of the photo's own colours behind it.
+  - **Cancel** asks before throwing edits away; **Save** writes `name_edited.ext` next to
+    the original (Downloads for a pasted image) at full resolution and in its own format,
+    and the circle says **Saved** (click it to show the file). Camera RAW, PSD and
+    JPEG 2000 are saved as JPG (PNG with transparency). Cmd/Ctrl+S saves and keeps editing.
+  - **S · M · L** and the corner grip size the editor; the size chosen is remembered.
+  - The photo is opened with the converter's own decoder (HEIC, RAW, colour profiles) and
+    edited as a preview of at most 2048 px; saving applies the same edits, in the same
+    order and with the same arithmetic, to the full-resolution photo.
+
+### Changed
+
+- **Panels slide in and out smoothly**: the Ring Workshop and the Photo Editor slide out
+  from the circle once the window has grown, and back before it shrinks.
+- **The circle no longer jumps** when a panel opens or closes, or while it is resized: it
+  stays at the same spot in every mode, and the window grows from its top-left corner.
+- ONNX Runtime (the AI Upscale engine on Windows and Linux) is now downloaded from
+  Microsoft's NuGet packages: its GitHub repository went away. The Linux libraries are
+  byte for byte the same as before.
+
+### Fixed
+
+- Text could be selected and dragged out of the window like a copy (on macOS and Linux).
+
 ## [0.11.0] - 2026-11-16
 
 ### Added
@@ -458,7 +498,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/wcksnrdn/flipfile/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/wcksnrdn/flipfile/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/wcksnrdn/flipfile/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/wcksnrdn/flipfile/compare/v0.9.0...v0.9.1
