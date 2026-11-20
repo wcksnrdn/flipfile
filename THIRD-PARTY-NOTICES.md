@@ -408,11 +408,11 @@ Used unmodified for Opus audio decoding (WhatsApp voice notes, OGG/WebM).
 ### ONNX Runtime (Windows and Linux)
 
 Authors: Microsoft  
-Source: https://github.com/microsoft/onnxruntime  
+Source: https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime (Windows: Microsoft.ML.OnnxRuntime.DirectML)  
 Version: 1.24.4  
 License: **MIT**
 
-Used unmodified from Microsoft's official release, verified by SHA-256
+Used unmodified from Microsoft's official NuGet packages, verified by SHA-256
 (`scripts/fetch-onnxruntime.mjs`). License and third-party notices ship inside the
 application bundle alongside the library (`onnxruntime/LICENSE-onnxruntime.txt` and
 `ThirdPartyNotices-onnxruntime.txt`).
