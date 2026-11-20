@@ -34,7 +34,8 @@ const SOURCE_ONLY: &[&str] = &[
 ];
 
 /// True for a camera RAW, Photoshop or JPEG 2000 file, on a system that reads them
-pub(super) fn is_source_only(path: &Path) -> bool {
+/// (also the Photo Editor's test for what it saves as JPG, convert/edit.rs)
+pub(in crate::convert) fn is_source_only(path: &Path) -> bool {
     let ext = path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
     cfg!(any(target_os = "macos", windows)) && SOURCE_ONLY.contains(&ext.as_str())
 }
