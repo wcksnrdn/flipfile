@@ -11,6 +11,7 @@
 // - tools:  background removal, transforms, square pad, target-size compress, animated GIF
 // - transcribe: the speech in a recording or video as subtitles or a transcript
 // - compress: the Option/Alt ring's levels (Light to Extreme) for photos, PDFs, video, audio
+// - edit:   the Photo Editor's open / save (src/editor)
 // - output: unique output paths
 // - memory: the memory budget that decides how many files convert at once
 
@@ -18,6 +19,7 @@
 mod bench;
 mod clean;
 pub mod compress;
+pub mod edit;
 mod encode;
 mod faces;
 mod input;

@@ -1,0 +1,87 @@
+/* The crop box over the photo: dimmed outside, thirds inside, handles on its edges */
+
+.ed-crop {
+  position: absolute;
+  inset: 0;
+}
+
+/* The dimming is clipped to the photo; the handles are not, so they can be grabbed at its edges */
+.ed-crop-shade {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.ed-crop-shade span {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(10, 11, 16, 0.6);
+}
+
+.ed-crop-box {
+  position: absolute;
+  cursor: move;
+  outline: 1.5px solid rgba(255, 255, 255, 0.95);
+  touch-action: none;
+}
+
+.ed-crop-thirds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  --line: rgba(255, 255, 255, 0.32);
+  background:
+    linear-gradient(to right, transparent calc(33.333% - 0.5px), var(--line) 0 calc(33.333% + 0.5px), transparent 0 calc(66.666% - 0.5px), var(--line) 0 calc(66.666% + 0.5px), transparent 0),
+    linear-gradient(to bottom, transparent calc(33.333% - 0.5px), var(--line) 0 calc(33.333% + 0.5px), transparent 0 calc(66.666% - 0.5px), var(--line) 0 calc(66.666% + 0.5px), transparent 0);
+}
+
+.ed-crop-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  touch-action: none;
+}
+
+.ed-crop-handle::after {
+  content: "";
+  position: absolute;
+  background: #ffffff;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* Corners: round knobs; edges: short bars */
+.ed-crop-handle.nw::after,
+.ed-crop-handle.ne::after,
+.ed-crop-handle.sw::after,
+.ed-crop-handle.se::after {
+  inset: 6px;
+  border-radius: 50%;
+}
+
+.ed-crop-handle.n::after,
+.ed-crop-handle.s::after {
+  left: 2px;
+  right: 2px;
+  top: 10px;
+  height: 4px;
+}
+
+.ed-crop-handle.e::after,
+.ed-crop-handle.w::after {
+  top: 2px;
+  bottom: 2px;
+  left: 10px;
+  width: 4px;
+}
+
+.ed-crop-handle.nw { left: 0; top: 0; cursor: nwse-resize; }
+.ed-crop-handle.n { left: 50%; top: 0; cursor: ns-resize; }
+.ed-crop-handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
+.ed-crop-handle.e { left: 100%; top: 50%; cursor: ew-resize; }
+.ed-crop-handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
+.ed-crop-handle.s { left: 50%; top: 100%; cursor: ns-resize; }
+.ed-crop-handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
+.ed-crop-handle.w { left: 0; top: 50%; cursor: ew-resize; }

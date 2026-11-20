@@ -1,6 +1,6 @@
 import { COMPRESS_LEVELS, isCategoryRing, labelOf, type Ring, type RingId } from "../../rings/dropTarget";
 import { formatBytes } from "../../toast/toast";
-import { AI_SUMMARY, type WorkspaceConfig } from "../../workshop/workshop";
+import { AI_SUMMARY, PHOTO_EDITOR, type WorkspaceConfig } from "../../workshop/workshop";
 import { ALT_KEY, ALT_SUPPORTED, CATEGORY_LABELS, ON_DEVICE } from "./constants";
 import type { ChipDrag, Estimate, Picking, Status } from "./types";
 import { plural } from "./utils";
@@ -24,6 +24,8 @@ export type CoreTextInput = {
   settingsSummary: string | null;
   activeWorkspace: WorkspaceConfig;
   status: Status | null;
+  /** The name of the photo open in the Photo Editor beside the circle */
+  editing: string | null;
 };
 
 type Hand = { fileCount: number; mergeable: boolean };
@@ -40,6 +42,7 @@ const merging = ({ fileCount, mergeable }: Hand) => fileCount > 1 && mergeable;
 
 // What releasing (or clicking) on a slice does, after "Release"/"Click". First match wins.
 const ACTION_HINTS: { when: (id: string, hand: Hand) => boolean; does: string }[] = [
+  { when: is(PHOTO_EDITOR), does: "to open in Photo Editor" },
   { when: is("clean"), does: "to strip metadata" },
   { when: is("nobg"), does: "to remove background" },
   { when: startsWith("up-"), does: "to enlarge with AI" },
@@ -146,8 +149,10 @@ function aimingText(input: CoreTextInput): CoreText {
 
 /** Works out what the core says for the current interaction, most specific state first */
 export function coreText(input: CoreTextInput): CoreText {
-  const { open, workshopOpen, hovered, ringId, status, estimates, settingsSummary, activeWorkspace } = input;
+  const { open, workshopOpen, hovered, ringId, status, estimates, settingsSummary, activeWorkspace, editing } = input;
   if (workshopOpen) return workshopText(input);
+  // Beside the Photo Editor: what is being edited, or that it was just saved (click to show it)
+  if (editing !== null) return status ? { title: status.title, hint: status.hint, badge: null } : { title: "Editing", hint: editing, badge: null };
   if (open && hovered && COMPRESS_LEVELS.includes(hovered)) return compressLevelText(hovered, estimates[hovered]);
   if (open && ringId === "size") return presetRingText(input);
   if (open) return aimingText(input);

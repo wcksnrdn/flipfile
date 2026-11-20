@@ -9,12 +9,12 @@ type Options = {
   coreCenter: () => Point;
   /** The ring is showing: the disc grows to cover it */
   open: boolean;
-  /** The Workshop is open: the window can be resized, so the disc follows its center */
-  workshopOpen: boolean;
+  /** A panel is open beside the circle (the Workshop, the Photo Editor): the window can be resized, so the disc follows its center */
+  panelOpen: boolean;
 };
 
 /** The native glass disc behind the ring (macOS only); returns whether it is in use */
-export function useNativeGlass({ coreCenter, open, workshopOpen }: Options) {
+export function useNativeGlass({ coreCenter, open, panelOpen }: Options) {
   const [nativeGlass, setNativeGlass] = useState(false);
   const size = useRef(GLASS_IDLE);
 
@@ -46,13 +46,13 @@ export function useNativeGlass({ coreCenter, open, workshopOpen }: Options) {
     return () => cancelAnimationFrame(frame);
   }, [open, nativeGlass, coreCenter]);
 
-  // Keep the disc aligned with the ring center whenever the Workshop window is resized
+  // Keep the disc aligned with the ring center whenever the panel's window is resized
   useEffect(() => {
-    if (!workshopOpen) return;
-    const onResize = () => sendGlass(coreCenter(), GLASS_OPEN).catch(() => {});
+    if (!panelOpen) return;
+    const onResize = () => sendGlass(coreCenter(), size.current).catch(() => {});
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [workshopOpen, coreCenter]);
+  }, [panelOpen, coreCenter]);
 
   return nativeGlass;
 }

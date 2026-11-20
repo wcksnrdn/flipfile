@@ -46,11 +46,16 @@ body,
   overflow: hidden;
 }
 
+/* The circle sits at the same spot in every mode: centred in the bare 320 px window, and
+   kept there when a panel (the Workshop, the Photo Editor) widens the window from its
+   top-left corner. Centring it in the window instead would make it jump while the window
+   grows and shrinks. (10 px = (COMPACT_SIZE - STAGE_SIZE) / 2) */
 main {
   height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 10px;
 }
 
 /* Choosing a format for a pasted file: the hovered segment is clickable */

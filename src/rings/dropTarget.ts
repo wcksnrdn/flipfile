@@ -80,6 +80,7 @@ const PHOTO = ring(
     { id: "webp", label: "WEBP" },
     { id: "heic", label: "HEIC", disabled: !IS_MAC },
     { id: "pdf", label: "PDF" },
+    { id: "photo-edit", label: "Edit", sub: "studio" },
     { id: "photo-formats-nav", label: "Formats", sub: "•••", nav: "photo-formats" },
     { id: "photo-tools-nav", label: "Tools", sub: "✦", nav: "photo-tools" },
     { id: "back", label: "Back", sub: "‹", nav: "category" },
@@ -368,6 +369,7 @@ export const DEFAULT_RING: RingId = "category";
 const CUSTOM_LABELS: Record<string, string> = {
   "docx-ocr": "WORD OCR",
   nobg: "Remove BG",
+  "photo-edit": "Photo Editor",
   "up-2x": "Upscale 2×",
   "up-4x": "Upscale 4×",
   "gif-anim": "Animated GIF",

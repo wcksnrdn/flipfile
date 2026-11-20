@@ -1,0 +1,204 @@
+/* The window while the editor is open: the circle on the left, the card beside it */
+
+main.editor-open {
+  align-items: stretch;
+  gap: 16px;
+  padding: 10px 16px 10px 10px;
+}
+
+/* The circle stays where it was before the editor opened (see main in base.css) */
+main.editor-open .stage {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+/* The card: .workshop's glass, with the photo given the room */
+.ed {
+  gap: 10px;
+  padding: 14px 16px 12px;
+}
+
+.ed-header {
+  align-items: center;
+  padding-bottom: 10px;
+}
+
+.ed-title-group {
+  min-width: 0;
+}
+
+/* The photo's name, with a small picture of it */
+.ed-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 230px;
+  padding-left: 3px;
+}
+
+.ed-file-thumb {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.ed-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Cancel and Save / Done: the way out is always plain */
+.ed-cancel {
+  min-width: 70px;
+}
+
+.ed-finish {
+  min-width: 74px;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.18);
+}
+
+.ed-finish.saving,
+.ed-finish.saving:disabled {
+  opacity: 1;
+  cursor: progress;
+  background: linear-gradient(90deg, #ffffff 0%, #d9dce3 50%, #ffffff 100%) 0 0 / 200% 100%;
+  animation: ed-shimmer 1s linear infinite;
+}
+
+@keyframes ed-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Everything pressable gives a little under the finger */
+.ed .ws-btn:active:not(:disabled),
+.ed-chip:active:not(:disabled),
+.ed-tab:active,
+.ed-icon:active:not(:disabled),
+.ed-look:active {
+  transform: scale(0.96);
+}
+
+.ed-detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-detail b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ed-saved {
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--ok);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ed-saved:hover {
+  text-decoration: underline;
+}
+
+.ws-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+}
+
+/* (.ws-btn too: the Workshop's buttons.css is also loaded after this file) */
+.ws-btn.ed-danger {
+  color: var(--err);
+  border-color: rgba(255, 69, 58, 0.45);
+}
+
+.ws-btn.ed-danger:hover {
+  background: rgba(255, 69, 58, 0.16);
+}
+
+/* Small square icon buttons, grouped like the S / M / L presets */
+.ed-icon-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ed-icon {
+  width: 28px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.ed-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ed-icon:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.ed-icon:disabled {
+  color: rgba(255, 255, 255, 0.28);
+  cursor: default;
+}
+
+/* A question under the header: unsaved edits, a failed save */
+.ed-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  background: rgba(255, 214, 10, 0.12);
+  border: 1px solid rgba(255, 214, 10, 0.28);
+}
+
+.ed-banner span {
+  flex: 1;
+}
+
+.ed-banner.error {
+  background: rgba(255, 69, 58, 0.14);
+  border-color: rgba(255, 69, 58, 0.3);
+}
+
+/* Narrow editor (size S): a little less room around the card; the circle stays put */
+@media (max-width: 960px) {
+  main.editor-open {
+    gap: 10px;
+    padding-right: 12px;
+  }
+
+  .ed-file {
+    max-width: 150px;
+  }
+}
