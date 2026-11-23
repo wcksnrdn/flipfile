@@ -178,7 +178,7 @@ MIT-licensed, built in public by GitHub Actions, with checksums and signed build
 |---|---|---|---|
 | 🗜️ | [**Compress levels**](#compress-levels) | Photos, PDFs, Word/Excel/PowerPoint, OpenDocument, EPUB, GIFs, videos and recordings, four levels, size shown before the drop | macOS · Windows *(Linux: tray presets)* |
 | 🎙️ | [**Transcribe**](#transcribe) | Recordings and videos → SRT/VTT subtitles or TXT, Word, Markdown transcripts, 99 languages | macOS · Windows · Linux |
-| 🔍 | [**AI Upscale**](#ai-upscale) | Small, blurry or old photos redrawn 2× or 4×, every face in HD | macOS · Windows · Linux |
+| 🔍 | [**AI Upscale**](#ai-upscale) | Photos 2× or 4× with colours fixed, B&W coloured and faces in HD; documents and screenshots with crisp retyped text | macOS · Windows · Linux |
 | ✦ | [**AI Summary**](#ai-summary) | Any document or recording explained: headline, key points, figures, to-dos; ask it questions | macOS 26 with Apple Intelligence |
 | 📄 | [**Office**](#office-word-excel-powerpoint) | Word ⇄ PDF, Excel → PDF, PowerPoint ⇄ PDF/Word/images, anything → slides | macOS · Windows · Linux |
 | 🔤 | [**WORD OCR**](#office-word-excel-powerpoint) | Scans and photos of documents → editable Word | macOS · Windows |
@@ -225,15 +225,22 @@ Drop a lecture, a meeting, a WhatsApp voice note or a video on **Music → Trans
 
 ### AI Upscale
 
-Drop a small, blurry or old photo on **Upscale 2×** or **Upscale 4×** (*Photo → Tools*) and flipfile redraws it two or four times larger. Faces get their own AI, so people keep their own face.
+Drop a picture on **Upscale** (*Photo → Tools*) and pick what it is. Photos and writing need opposite things: a photo wants detail drawn, writing wants no letter invented. So there are three:
 
-- **Faces in HD**: each face is found (Vision on the Mac, [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) elsewhere) and drawn by [4xFaceUpSharpLDAT](https://github.com/Phhofm/models/releases/tag/4xFaceUpDAT_Series), an upscaler trained on faces: sharp eyes, lashes, brows, hair and skin, while glasses, jewellery and features stay as they are. Small or damaged faces are first restored by [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus).
-- **Everything else, sharper**: [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) brings back natural detail; edges and text come out crisp, JPEG blocks and noise disappear.
-- **Old photos too**: a picture that is large but blurry is recognised and read at the size its detail really has, so it comes back sharper, not just bigger.
-- **Your format**: `photo_2x.jpg` stays a JPG, `logo_4x.png` keeps its transparency. Results up to **200 MP** (a 50 MP photo at 2×, a 12.5 MP one at 4×).
-- **On your hardware**: the Neural Engine on a Mac, any DirectX 12 GPU on Windows (DirectML), the processor on Linux. flipfile measures how quick your computer is and picks the detailed model only where it finishes in reasonable time.
+- **Photo 2× · 4×**: a photo made larger *and* better.
+  - **Colours back**: a faded or colour-cast photo (an old slide gone magenta, a yellowed print) gets its whites, blacks and neutral greys back; a photo already right is hardly touched.
+  - **Black-and-white in colour**: a black-and-white or sepia photo is coloured by [DDColor](https://github.com/piddnad/DDColor), keeping its own light and shade.
+  - **Real texture**: [4xNomos2](https://huggingface.co/Phips/4xNomos2_realplksr_dysample) draws skin, fabric, brick and foliage instead of a painted look, and cleans JPEG compression; a blurry photo (enlarged, out of focus, an old scan) is sharpened by [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) instead.
+  - **Faces in HD**: each face is found (Vision on the Mac, [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) elsewhere) and drawn by [4xFaceUpSharpLDAT](https://github.com/Phhofm/models/releases/tag/4xFaceUpDAT_Series): sharp eyes, lashes, brows, hair and skin, while glasses, jewellery and features stay as they are. Small or damaged faces are first restored by [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus).
+  - A fine grain keeps smooth areas looking like a photo, not plastic.
+- **Text 2× · 4×**: documents, screenshots, chats and posters. The writing is read (Vision on the Mac, Windows' own OCR) and every word read with certainty is **typed again**, crisp, in the closest font, size, weight and ink colour, on the picture's own background (a blue table row stays blue). JPEG speckle is cleaned first ([FBCNN](https://github.com/jiaxi-jiang/FBCNN)); shapes and rules are enlarged faithfully. A word is retyped only when two readings agree and it is a real word (or a number, date, address); doubtful words, styled lettering and very small text keep their own pixels, sharpened. No word is ever invented.
+- **Plain 2× · 4×**: larger only, with texture and faces, the colours as they are.
 
-It draws plausible detail rather than recovering what the camera never captured.
+Same format as the original (`photo_2x.jpg` stays a JPG, `logo_4x.png` keeps its transparency), results up to **200 MP**. It runs on your hardware: the Neural Engine and GPU on a Mac, any DirectX 12 GPU on Windows (DirectML), the processor on Linux.
+
+Upscale Photo draws plausible detail rather than recovering what the camera never captured; Upscale Text retypes words, so the font is the closest open or system font, not always the original.
+
+<sub>Upscale Text retypes words on macOS and Windows; on Linux (no system OCR yet) it enlarges writing faithfully and cleans it.</sub>
 
 ### AI Summary
 
@@ -365,7 +372,7 @@ Hold <kbd>⌥ Option</kbd> / <kbd>Alt</kbd> while dragging for the **compress le
 | **Photo** | JPG · PNG · WEBP · HEIC · PDF · **Edit** *(Photo Editor)* · **Formats •••** · **Tools ✦** · Back ‹ |
 | **Photo → Formats** | AVIF · TIFF · GIF · BMP · ICO *(multi)* · ICNS *(macOS)* · **Pro / 3D •••** · Back ‹ |
 | **Photo → Formats → Pro / 3D** | JPEG · TGA *(game)* · EXR *(32f HDR)* · HDR *(RGBE)* · QOI *(fast)* · PPM *(netpbm)* · SVG *(embed)* · Back ‹ |
-| **Photo → Tools** | **Compress** *(target size)* · **Remove BG** *(macOS)* · **Upscale 2×** · **Upscale 4×** · **Transform** · **Square 1:1** · **GIF anim** · **Slides** *(pptx)* · **Clean EXIF** · Back ‹ |
+| **Photo → Tools** | **Compress** *(target size)* · **Remove BG** *(macOS)* · **Upscale** *(Photo · Text · Plain, 2× / 4×)* · **Transform** · **Square 1:1** · **GIF anim** · **Slides** *(pptx)* · **Clean EXIF** · Back ‹ |
 | **Photo → Tools → Compress** | Auto · 1 MB max · 500 KB max · 200 KB max · 100 KB max · Lossless · Back ‹ |
 | **Photo → Tools → Transform** | Rotate 90° › · Rotate ‹ 90° · Rotate 180° · Flip horiz · Flip vert · B&W gray · Back ‹ |
 | **Office** | PDF · WORD *(docx)* · **WORD OCR** · EXCEL *(xlsx)* · **SLIDES** *(pptx)* · CSV · **Docs •••** · **Data •••** · Back ‹ |
@@ -473,7 +480,7 @@ Over **100 formats, tools and conversions**, all processed on your machine.
 | **Compress levels** | ⌥ / Alt ring | Light · Balanced · Strong · Extreme, with the size shown before the drop |
 | **Target-size compress** | `1 MB` · `500 KB` · `200 KB` · `100 KB` | Fits strictly under the size, lowering quality and then resolution as needed |
 | **Lossless / Auto** | `Lossless` · `Auto` | `oxipng` / lossless WebP / Deflate without changing a pixel, or an automatic smaller file |
-| **AI Upscale** | `Upscale 2×` · `Upscale 4×` | Real-ESRGAN with face restoration, same format, up to 200 MP |
+| **AI Upscale** | `Upscale ›` `Photo` · `Text` · `Plain` (2× / 4×) | Photo: colours fixed, B&W coloured, texture and faces; Text: writing read and retyped crisp; Plain: larger only. Same format, up to 200 MP |
 | **Remove background** | `Remove BG` *(macOS 14+)* | Subject on a transparent PNG via macOS Vision |
 | **Transform** | `Rotate` · `Flip` · `B&W` | Rotate 90°/180°, flip, grayscale, in the file's own format |
 | **Square 1:1** | `Square 1:1` | Pads to a square without cropping (white behind JPG/BMP, transparent otherwise) |
@@ -565,7 +572,8 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 | Remove BG | macOS 14+ | — | — |
 | WORD OCR | Vision | Windows.Media.Ocr | — |
 | AI Summary | macOS 26 + Apple Intelligence | — | — |
-| AI Upscale | Neural Engine | DirectX 12 GPU (DirectML) | CPU |
+| AI Upscale | Neural Engine + GPU | DirectX 12 GPU (DirectML) | CPU |
+| Upscale Text retyping | Vision OCR | Windows.Media.Ocr | — (enlarged faithfully) |
 | Transcribe | GPU on Apple silicon | CPU | CPU (AVX2) |
 | Glass effect | Native Liquid Glass (macOS 26+), blur before | CSS glass | CSS glass |
 
@@ -715,7 +723,7 @@ PDFIUM_PLATFORM=mac-x64 npm run fetch-pdfium
 npm run tauri build
 ```
 
-The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb`/`.rpm` on Linux). Most of their size is the bundled models: Whisper `small` for transcription (`ggml-small-q5_1.bin`, 190 MB, from the whisper.cpp project on Hugging Face), Silero VAD (about 1 MB), and the upscaling and face models (about 140 MB, from this repo's `models-2` release: Core ML on macOS, ONNX elsewhere; `scripts/upscale-model/` rebuilds them from the original weights). On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`. To test that engine on a Mac, run with `FLIPFILE_ONNX=1`. Licences are in `src-tauri/models/LICENSES.md`.
+The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb`/`.rpm` on Linux). Most of their size is the bundled models: Whisper `small` for transcription (`ggml-small-q5_1.bin`, 190 MB, from the whisper.cpp project on Hugging Face), Silero VAD (about 1 MB), the upscaling and face models (about 140 MB, from this repo's `models-2` release) and the Upscale Photo / Text models (about 300 MB: Nomos2, RealESRNet, FBCNN and DDColor, from the `models-3` release, with the open fonts and word list Upscale Text uses) — Core ML on macOS, ONNX elsewhere; `scripts/upscale-model/` rebuilds them from the original weights. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`. To test that engine on a Mac, run with `FLIPFILE_ONNX=1`. Licences are in `src-tauri/models/LICENSES.md`.
 
 ### App icon
 
@@ -791,7 +799,7 @@ Shows a red dot where flipfile thinks the cursor is, with the raw Tauri position
 │   ├── fetch-pdfium.mjs       # downloads & SHA-256-verifies PDFium
 │   ├── fetch-models.mjs       # downloads & SHA-256-verifies the AI models (upscaling, Whisper, VAD)
 │   ├── fetch-onnxruntime.mjs  # downloads & SHA-256-verifies ONNX Runtime (Windows, Linux)
-│   ├── upscale-model/         # builds the upscaling models (Real-ESRGAN, RestoreFormer++, FaceUp DAT)
+│   ├── upscale-model/         # builds the upscaling models (Real-ESRGAN, Nomos2, FBCNN, DDColor, RestoreFormer++, FaceUp DAT)
 │   ├── install.sh             # one-line installer for macOS & Linux
 │   └── install.ps1            # one-line installer for Windows PowerShell
 ├── src/                       # UI (React + TypeScript)
