@@ -42,6 +42,7 @@ export const CATEGORY_LABELS: Partial<Record<RingId, string>> = {
   "photo-pro": "Pro / 3D",
   "photo-tools": "Tools",
   "photo-compress": "Compress",
+  "photo-upscale": "Upscale",
   "photo-transform": "Transform",
   office: "Office",
   "office-docs": "Docs",

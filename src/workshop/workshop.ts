@@ -87,8 +87,12 @@ export const CATALOG: CatalogEntry[] = [
   // ─── Photo Smart Tools ────────────────────────────────────────────────────
   { id: PHOTO_EDITOR, label: "Edit", sub: "studio", title: "Photo Editor (Crop, Adjust, Looks, Resize)", category: "photo-tools" },
   { id: "nobg", label: "Remove", sub: "BG", title: "AI Remove Background", category: "photo-tools", disabled: !IS_MAC },
-  { id: "up-2x", label: "Upscale", sub: "2×", title: "AI Upscale 2×", category: "photo-tools" },
-  { id: "up-4x", label: "Upscale", sub: "4×", title: "AI Upscale 4×", category: "photo-tools" },
+  { id: "up-2x", label: "Photo", sub: "2×", title: "AI Upscale Photo 2× (colour, texture, faces)", category: "photo-tools" },
+  { id: "up-4x", label: "Photo", sub: "4×", title: "AI Upscale Photo 4× (colour, texture, faces)", category: "photo-tools" },
+  { id: "up-text-2x", label: "Text", sub: "2×", title: "AI Upscale Text 2× (documents, screenshots, chats)", category: "photo-tools" },
+  { id: "up-text-4x", label: "Text", sub: "4×", title: "AI Upscale Text 4× (documents, screenshots, chats)", category: "photo-tools" },
+  { id: "up-plain-2x", label: "Plain", sub: "2×", title: "AI Upscale 2×, colours untouched", category: "photo-tools" },
+  { id: "up-plain-4x", label: "Plain", sub: "4×", title: "AI Upscale 4×, colours untouched", category: "photo-tools" },
   { id: "clean", label: "Clean", sub: "EXIF", title: "Strip EXIF & GPS Metadata", category: "photo-tools" },
   { id: "square", label: "Square", sub: "1:1", title: "Pad to 1:1 Square", category: "photo-tools" },
   { id: "gif-anim", label: "GIF", sub: "anim", title: "Combine Photos → Animated GIF", category: "photo-tools" },
@@ -177,6 +181,7 @@ export const CATALOG: CatalogEntry[] = [
   { id: "photo-pro-nav", label: "Pro / 3D", sub: "•••", nav: "photo-pro", title: "Open Photo Pro / 3D Ring", category: "nav" },
   { id: "photo-tools-nav", label: "Tools", sub: "✦", nav: "photo-tools", title: "Open Photo Tools Ring", category: "nav" },
   { id: "photo-compress-nav", label: "Compress", sub: "size", nav: "photo-compress", title: "Open Photo Compress Ring", category: "nav" },
+  { id: "photo-upscale-nav", label: "Upscale", sub: "AI ✦", nav: "photo-upscale", title: "Open Photo Upscale Ring", category: "nav" },
   { id: "photo-transform-nav", label: "Transform", sub: "↻", nav: "photo-transform", title: "Open Photo Transform Ring", category: "nav" },
   { id: "office-docs-nav", label: "Docs", sub: "•••", nav: "office-docs", title: "Open Office Docs Ring", category: "nav" },
   { id: "office-data-nav", label: "Data", sub: "•••", nav: "office-data", title: "Open Office Data Ring", category: "nav" },
@@ -200,8 +205,9 @@ export const DEFAULT_ROOM_SLOTS: Record<RingId, string[]> = {
   photo: ["jpg", "png", "webp", "heic", "pdf", PHOTO_EDITOR, "photo-formats-nav", "photo-tools-nav"],
   "photo-formats": ["avif", "tiff", "gif", "bmp", "ico", "icns", "photo-pro-nav"],
   "photo-pro": ["jpeg", "tga", "exr", "hdr", "qoi", "ppm", "svg"],
-  "photo-tools": ["photo-compress-nav", "nobg", "up-2x", "up-4x", "photo-transform-nav", "square", "gif-anim", "clean"],
+  "photo-tools": ["photo-compress-nav", "nobg", "photo-upscale-nav", "photo-transform-nav", "square", "gif-anim", "clean"],
   "photo-compress": ["cmp-auto", "cmp-1m", "cmp-500k", "cmp-200k", "cmp-100k", "cmp-lossless"],
+  "photo-upscale": ["up-2x", "up-4x", "up-text-2x", "up-text-4x", "up-plain-2x", "up-plain-4x"],
   "photo-transform": ["rot-r", "rot-l", "rot-180", "flip-h", "flip-v", "grayscale"],
   office: ["pdf", "docx", "docx-ocr", "xlsx", "pptx", "csv", "office-docs-nav", "office-data-nav"],
   "office-docs": ["md", "txt", "html", "rtf", "epub", "odt"],
@@ -403,6 +409,7 @@ export function buildWorkspaceRings(ws: WorkspaceConfig): BuiltWorkspaceRings {
   const photoPro = makeSub("photo-pro", photoFormats, "photo-formats");
   const photoTools = makeSub("photo-tools", photo, "photo");
   const photoCompress = makeSub("photo-compress", photoTools, "photo-tools");
+  const photoUpscale = makeSub("photo-upscale", photoTools, "photo-tools");
   const photoTransform = makeSub("photo-transform", photoTools, "photo-tools");
 
   const officeDocs = makeSub("office-docs", office, "office");
@@ -420,6 +427,7 @@ export function buildWorkspaceRings(ws: WorkspaceConfig): BuiltWorkspaceRings {
     "photo-pro": photoPro,
     "photo-tools": photoTools,
     "photo-compress": photoCompress,
+    "photo-upscale": photoUpscale,
     "photo-transform": photoTransform,
     office,
     "office-docs": officeDocs,
