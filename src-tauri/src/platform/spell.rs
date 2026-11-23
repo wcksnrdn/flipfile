@@ -48,30 +48,46 @@ fn in_list(word: &str) -> bool {
 }
 
 /// The Mac's own spelling dictionaries, in whichever of Indonesian and English it has.
-/// Asked about a language it has no dictionary for, the checker finds every word right,
-/// so only the ones it lists are asked.
+/// A checker that can't check finds every word right: asked about a language it has no
+/// dictionary for, or with no spelling service to ask (as on a headless build machine).
+/// So it is only asked about languages it lists, once it has shown it rejects nonsense.
 #[cfg(target_os = "macos")]
 fn in_system_dictionaries(word: &str) -> bool {
+    use std::sync::OnceLock;
+
+    static LANGUAGES: OnceLock<Vec<&'static str>> = OnceLock::new();
+    let languages = LANGUAGES.get_or_init(|| {
+        objc2::rc::autoreleasepool(|_| {
+            let available: Vec<String> =
+                objc2_app_kit::NSSpellChecker::sharedSpellChecker().availableLanguages().iter().map(|l| l.to_string()).collect();
+            ["id", "en"]
+                .into_iter()
+                .filter(|language| available.iter().any(|a| a == language))
+                .filter(|language| !spelled_right("qzxvbjkwt", language))
+                .collect()
+        })
+    });
+    languages.iter().any(|language| spelled_right(word, language))
+}
+
+/// Whether the system's checker finds `word` spelled right in `language`
+#[cfg(target_os = "macos")]
+fn spelled_right(word: &str, language: &str) -> bool {
     use objc2_app_kit::NSSpellChecker;
     use objc2_foundation::{NSNotFound, NSString};
 
     objc2::rc::autoreleasepool(|_| {
-        let checker = NSSpellChecker::sharedSpellChecker();
-        let available: Vec<String> = checker.availableLanguages().iter().map(|l| l.to_string()).collect();
-        let text = NSString::from_str(word);
-        ["id", "en"].iter().filter(|language| available.iter().any(|a| a == *language)).any(|language| {
-            let wrong = unsafe {
-                checker.checkSpellingOfString_startingAt_language_wrap_inSpellDocumentWithTag_wordCount(
-                    &text,
-                    0,
-                    Some(&NSString::from_str(language)),
-                    false,
-                    0,
-                    std::ptr::null_mut(),
-                )
-            };
-            wrong.location == NSNotFound as usize
-        })
+        let wrong = unsafe {
+            NSSpellChecker::sharedSpellChecker().checkSpellingOfString_startingAt_language_wrap_inSpellDocumentWithTag_wordCount(
+                &NSString::from_str(word),
+                0,
+                Some(&NSString::from_str(language)),
+                false,
+                0,
+                std::ptr::null_mut(),
+            )
+        };
+        wrong.location == NSNotFound as usize
     })
 }
 
@@ -103,8 +119,8 @@ mod tests {
         }
     }
 
-    /// A Mac without the Indonesian dictionary (as on CI's) must not take every word for
-    /// a real one
+    /// A Mac whose checker can't check (no dictionary, no spelling service, as on CI's)
+    /// must not take every word for a real one
     #[cfg(target_os = "macos")]
     #[test]
     fn a_missing_dictionary_trusts_nothing() {
