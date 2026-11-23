@@ -1,5 +1,5 @@
-words.txt: the Indonesian and English words Upscale Text accepts as real words on Windows
-and Linux (macOS uses its own spelling dictionaries).
+words.txt: the Indonesian and English words Upscale Text accepts as real words (macOS
+also asks its own spelling dictionaries).
 
 Made from the word frequency lists of the Leipzig Corpora Collection, corpora
 ind_mixed_2013_1M (Indonesian, mixed sources) and eng_news_2024_1M (English, news):

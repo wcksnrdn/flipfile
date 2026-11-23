@@ -342,14 +342,14 @@ Reserved Font Name. Each licence is in `models/fonts/LICENSE-<family>.txt`.
 
 ---
 
-### Word list for Upscale Text (words.txt, Windows and Linux only)
+### Word list for Upscale Text (words.txt)
 
 Source: Leipzig Corpora Collection, corpora `ind_mixed_2013_1M` and `eng_news_2024_1M`  
 © Universität Leipzig / Sächsische Akademie der Wissenschaften / InfAI  
 License: **Creative Commons Attribution (CC BY)**, https://wortschatz.uni-leipzig.de/en/usage
 
 Only words made of letters and used at least three times were kept, lowercased, without
-their counts; macOS uses its own spelling dictionaries instead.
+their counts; macOS also asks its own spelling dictionaries.
 
 ---
 
@@ -516,7 +516,7 @@ bundle at `Resources/models/` (macOS) or alongside the executable (Windows/Linux
 - `LICENSE-Nomos2.txt` — CC BY 4.0
 - `LICENSE-FBCNN.txt` — Apache 2.0
 - `LICENSE-DDColor.txt` — Apache 2.0
-- `LICENSE-words.txt` — CC BY (Windows and Linux)
+- `LICENSE-words.txt` — CC BY
 - `fonts/LICENSE-*.txt` — SIL Open Font License 1.1, Bitstream Vera
 - `LICENSE-YuNet.txt` — MIT
 - `LICENSE-Whisper.txt` — MIT
