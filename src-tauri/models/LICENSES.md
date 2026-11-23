@@ -47,6 +47,29 @@ instead of YuNet.
   (W. Wu, H. Peng, S. Yu, "YuNet: A Tiny Millisecond-level Face Detector", Machine
   Intelligence Research 2023)
 
+### Upscale Text
+
+Upscale Text reads a picture's writing with the operating system's own text recognition
+(Vision on macOS, Windows.Media.Ocr on Windows) and types each word it is sure of again
+in the closest of these open fonts, bundled in `fonts/` with their licences:
+
+| Fonts | Licence |
+|---|---|
+| Liberation Sans, Serif and Mono 2.1.5 (Red Hat; metric twins of Arial, Times New Roman and Courier New) | SIL OFL 1.1, [`fonts/LICENSE-Liberation.txt`](fonts/LICENSE-Liberation.txt) |
+| Gelasio (a metric twin of Georgia) | SIL OFL 1.1, [`fonts/LICENSE-Gelasio.txt`](fonts/LICENSE-Gelasio.txt) |
+| Carlito and Caladea (metric twins of Calibri and Cambria) | SIL OFL 1.1, [`fonts/LICENSE-Carlito.txt`](fonts/LICENSE-Carlito.txt), [`fonts/LICENSE-Caladea.txt`](fonts/LICENSE-Caladea.txt) |
+| DejaVu Sans 2.37 | Bitstream Vera licence, [`fonts/LICENSE-DejaVu.txt`](fonts/LICENSE-DejaVu.txt) |
+| Inter 4.1, Roboto 3, Noto Sans, Open Sans | SIL OFL 1.1, [`fonts/LICENSE-Inter.txt`](fonts/LICENSE-Inter.txt), [`fonts/LICENSE-Roboto.txt`](fonts/LICENSE-Roboto.txt), [`fonts/LICENSE-NotoSans.txt`](fonts/LICENSE-NotoSans.txt), [`fonts/LICENSE-OpenSans.txt`](fonts/LICENSE-OpenSans.txt) |
+
+Gelasio, Noto Sans and Open Sans are static Regular and Bold instances of their published
+variable fonts (fontTools); the others are unchanged. Where the system has them, its own
+Arial, Helvetica, Georgia, Times New Roman, Verdana, Tahoma, Trebuchet MS, Courier New,
+Segoe UI and Calibri are used too (read, not bundled).
+
+On Windows and Linux a word must also be in `words.txt`, Indonesian and English words
+from the Leipzig Corpora Collection (CC BY, [`LICENSE-words.txt`](LICENSE-words.txt));
+macOS checks words with its own spelling dictionaries.
+
 ### The upscaling engine on Windows and Linux
 
 ONNX Runtime 1.24.4 (Microsoft, MIT licence; `onnxruntime/LICENSE-onnxruntime.txt` and

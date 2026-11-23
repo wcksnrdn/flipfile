@@ -7,14 +7,15 @@ are reproduced below and, where required, inside the distributed application bun
 
 ## AI Models
 
-### Real-ESRGAN (upscale.mlmodelc / upscale.onnx, upscale-large.mlmodelc / upscale-large.onnx)
+### Real-ESRGAN (upscale.mlmodelc / upscale.onnx, upscale-large.mlmodelc / upscale-large.onnx, upscale-text.mlmodelc / upscale-text.onnx)
 
 Authors: Xintao Wang et al.  
 Source: https://github.com/xinntao/Real-ESRGAN  
 License: **BSD 3-Clause**
 
 The weights were converted to Core ML and ONNX; the compact upscaler is an even blend of
-`realesr-general-x4v3` and `realesr-general-wdn-x4v3`; x4plus is stored in float16.
+`realesr-general-x4v3` and `realesr-general-wdn-x4v3`; x4plus and RealESRNet x4plus
+(`upscale-text`, Upscale Text's shapes) are stored in float16.
 
 ```
 BSD 3-Clause License
@@ -277,6 +278,81 @@ SOFTWARE.
 
 ---
 
+### 4xNomos2_realplksr_dysample — Upscale Photo's detailed upscaler (upscale-photo.mlmodelc / upscale-photo.onnx)
+
+Author: Philip Hofmann (Phhofm)  
+Source: https://huggingface.co/Phips/4xNomos2_realplksr_dysample  
+Network: RealPLKSR — D. Lee, S. Yun, Y. Ro, "Partial Large Kernel CNNs for Efficient
+Super-Resolution", 2024, with DySample — W. Liu et al., "Learning to Upsample by Learning
+to Sample", ICCV 2023  
+License: **Creative Commons Attribution 4.0 International (CC BY 4.0)**  
+https://creativecommons.org/licenses/by/4.0/
+
+Copyright (c) 2024 Philip Hofmann (Phhofm)
+
+Changes made for flipfile: the released weights (`4xNomos2_realplksr_dysample.safetensors`)
+were converted to Core ML (`upscale-photo.mlmodelc`) and ONNX (`upscale-photo.onnx`) for
+256 px tiles, with the weights stored in float16; the network was reimplemented for this
+in `scripts/upscale-model/realplksr.py`.
+
+---
+
+### FBCNN — JPEG artefact removal for Upscale Text (dejpeg.mlmodelc / dejpeg.onnx)
+
+Authors: Jiaxi Jiang, Kai Zhang, Radu Timofte  
+Source: https://github.com/jiaxi-jiang/FBCNN  
+Paper: "Towards Flexible Blind JPEG Artifacts Removal", ICCV 2021  
+License: **Apache 2.0** (full text in `LICENSE-FBCNN.txt`)
+
+The published `fbcnn_color` weights were converted to Core ML and ONNX for 256 px tiles
+and stored in float16; no source code of FBCNN is included in the app.
+
+---
+
+### DDColor — colours black-and-white photos (colorize.mlmodelc / colorize.onnx)
+
+Authors: Xiaoyang Kang, Tao Yang, Wenqi Ouyang, Peiran Ren, Lingzhi Li, Xuansong Xie  
+Source: https://github.com/piddnad/DDColor  
+Paper: "DDColor: Towards Photo-Realistic Image Colorization via Dual Decoders", ICCV 2023  
+License: **Apache 2.0** (full text in `LICENSE-DDColor.txt`)
+
+The published `ddcolor_paper_tiny` weights were converted to Core ML and ONNX for a
+512 x 512 input and stored in float16; no source code of DDColor is included in the app.
+
+---
+
+### Fonts for Upscale Text (models/fonts)
+
+Upscale Text types words again in the open font closest to the picture's. All are used
+unchanged, except Gelasio, Noto Sans and Open Sans, whose Regular and Bold were made
+from the published variable fonts (fontTools instancer); none of them declares a
+Reserved Font Name. Each licence is in `models/fonts/LICENSE-<family>.txt`.
+
+| Fonts | Authors | License |
+|---|---|---|
+| Liberation Sans, Serif, Mono 2.1.5 | Red Hat, Inc. (digitized data Google) | SIL Open Font License 1.1 |
+| Gelasio | The Gelasio Project Authors | SIL Open Font License 1.1 |
+| Carlito | The Carlito Project Authors | SIL Open Font License 1.1 |
+| Caladea | The Caladea Project Authors | SIL Open Font License 1.1 |
+| DejaVu Sans 2.37 | DejaVu fonts team, Bitstream | Bitstream Vera Fonts licence (permissive) |
+| Inter 4.1 | The Inter Project Authors | SIL Open Font License 1.1 |
+| Roboto 3 | The Roboto Project Authors | SIL Open Font License 1.1 |
+| Noto Sans | The Noto Project Authors | SIL Open Font License 1.1 |
+| Open Sans | The Open Sans Project Authors | SIL Open Font License 1.1 |
+
+---
+
+### Word list for Upscale Text (words.txt, Windows and Linux only)
+
+Source: Leipzig Corpora Collection, corpora `ind_mixed_2013_1M` and `eng_news_2024_1M`  
+© Universität Leipzig / Sächsische Akademie der Wissenschaften / InfAI  
+License: **Creative Commons Attribution (CC BY)**, https://wortschatz.uni-leipzig.de/en/usage
+
+Only words made of letters and used at least three times were kept, lowercased, without
+their counts; macOS uses its own spelling dictionaries instead.
+
+---
+
 ### Whisper (whisper-small.bin)
 
 Authors: Alec Radford, Jong Wook Kim, Tao Xu, Greg Brockman, Christine McLeavey,
@@ -437,6 +513,11 @@ bundle at `Resources/models/` (macOS) or alongside the executable (Windows/Linux
 - `LICENSE-Real-ESRGAN.txt` — BSD 3-Clause
 - `LICENSE-RestoreFormerPlusPlus.txt` — Apache 2.0
 - `LICENSE-FaceUp.txt` — CC BY 4.0
+- `LICENSE-Nomos2.txt` — CC BY 4.0
+- `LICENSE-FBCNN.txt` — Apache 2.0
+- `LICENSE-DDColor.txt` — Apache 2.0
+- `LICENSE-words.txt` — CC BY (Windows and Linux)
+- `fonts/LICENSE-*.txt` — SIL Open Font License 1.1, Bitstream Vera
 - `LICENSE-YuNet.txt` — MIT
 - `LICENSE-Whisper.txt` — MIT
 - `LICENSE-Silero-VAD.txt` — MIT

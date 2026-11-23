@@ -6,13 +6,17 @@
 // - Windows and Linux: ONNX Runtime (src/platform/onnx.rs) runs the same models, exported
 //   by scripts/upscale-model/export_onnx.py; on Windows on the GPU (DirectML).
 //
-// Four models, all reading and writing planar RGB floats (all red values, then green,
-// then blue):
-// - three upscalers of a square tile, SCALE times larger, values 0 to 1: a fast one
-//   (Real-ESRGAN compact) and a detailed one (Real-ESRGAN x4plus, about ten times slower)
-//   of TILE x TILE tiles, and one for faces (4xFaceUpSharpLDAT) of FACE_TILE x FACE_TILE;
+// The models all read and write planar floats (all red values, then green, then blue):
+// - five upscalers of a square tile, SCALE times larger, values 0 to 1: a fast one
+//   (Real-ESRGAN compact), a detailed one for sharp photos (4xNomos2 RealPLKSR, real
+//   texture), one for soft photos (Real-ESRGAN x4plus, which sharpens what Nomos2 keeps
+//   soft) and one for documents (RealESRNet, which draws nothing it can't see) of TILE x
+//   TILE tiles, and one for faces (4xFaceUpSharpLDAT) of FACE_TILE x FACE_TILE;
 // - a face restorer of a FACE x FACE face aligned to a template, values -1 to 1
-//   (RestoreFormer++).
+//   (RestoreFormer++);
+// - a JPEG cleaner of a TILE x TILE tile, same size (FBCNN), for Upscale Text;
+// - a colourer of a black-and-white photo (DDColor): its lightness as a grey COLORIZE x
+//   COLORIZE picture in, the Lab a and b channels out (two planes).
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -25,14 +29,21 @@ pub const FACE_TILE: usize = 128;
 pub const SCALE: usize = 4;
 /// The side of the aligned face the face model reads and returns
 pub const FACE: usize = 512;
+/// The side of the grey picture the colouring model reads, and of its colour planes
+pub const COLORIZE: usize = 512;
 
 /// Which upscaler reads a tile
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Upscaler {
     /// Real-ESRGAN compact: quick, for large pictures and for detail already restored
     Fast,
-    /// Real-ESRGAN x4plus: natural detail on photos, for small pictures
+    /// 4xNomos2 (RealPLKSR): real texture on sharp photos (skin, fabric, foliage), for
+    /// small pictures. It keeps soft what is soft (depth of field)
     Detailed,
+    /// Real-ESRGAN x4plus: sharpens a soft photo (enlarged, out of focus, a blurry scan)
+    Sharp,
+    /// RealESRNet: faithful, for a document's shapes, rules and panels
+    Text,
     /// 4xFaceUpSharpLDAT: trained on faces, draws sharp eyes, lashes, brows, hair and skin
     Face,
 }
@@ -41,7 +52,7 @@ impl Upscaler {
     /// The side of the tile it reads
     pub fn tile(self) -> usize {
         match self {
-            Upscaler::Fast | Upscaler::Detailed => TILE,
+            Upscaler::Fast | Upscaler::Detailed | Upscaler::Sharp | Upscaler::Text => TILE,
             Upscaler::Face => FACE_TILE,
         }
     }
@@ -67,19 +78,22 @@ pub(crate) fn model_path(file: &str) -> Option<PathBuf> {
 
 /// What each step takes here before any has been measured, in seconds: a tile of the
 /// fast upscaler, a tile of the detailed one, a face restored, a tile of the face
-/// upscaler. (On Windows, this loads the fast model to learn whether there is a GPU.)
-pub fn expected_seconds() -> [f32; 4] {
+/// upscaler, a tile of the text upscaler, a tile cleaned of JPEG artefacts, a tile of the
+/// sharpening upscaler. (On Windows, this loads the fast model to learn whether there is
+/// a GPU.)
+pub fn expected_seconds() -> [f32; 7] {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        // Neural Engine (M1 Pro); faces on the CPU, the face upscaler on the GPU
-        [0.027, 0.3, 0.5, 0.55]
+        // M1 Pro: Neural Engine, but the detailed upscaler and the face upscaler on the
+        // GPU and faces on the CPU
+        [0.027, 0.32, 0.5, 0.55, 0.3, 0.05, 0.3]
     } else if cfg!(target_os = "macos") {
         // Intel: the GPU, at best
-        [0.2, 3.0, 2.0, 3.0]
+        [0.2, 2.0, 2.0, 3.0, 3.0, 0.6, 3.0]
     } else {
         #[cfg(not(target_os = "macos"))]
         return onnx_models::expected_seconds();
         #[allow(unreachable_code)]
-        [0.6, 15.0, 4.0, 4.0]
+        [0.6, 5.0, 4.0, 4.0, 15.0, 2.0, 15.0]
     }
 }
 
@@ -89,8 +103,23 @@ pub fn upscale_tile(upscaler: Upscaler, tile: &[f32]) -> Result<Vec<f32>, String
     match upscaler {
         Upscaler::Fast => coreml::FAST.run(tile),
         Upscaler::Detailed => coreml::DETAILED.run(tile),
+        Upscaler::Sharp => coreml::SHARP.run(tile),
+        Upscaler::Text => coreml::TEXT.run(tile),
         Upscaler::Face => coreml::FACE_UP.run(tile),
     }
+}
+
+/// One tile (3 x TILE x TILE values, 0 to 1) cleaned of JPEG artefacts, same size
+#[cfg(target_os = "macos")]
+pub fn dejpeg_tile(tile: &[f32]) -> Result<Vec<f32>, String> {
+    coreml::DEJPEG.run(tile)
+}
+
+/// The colours of a black-and-white photo: its lightness as a grey picture (3 x COLORIZE
+/// x COLORIZE values, 0 to 1) in, the Lab a and b planes (2 x COLORIZE x COLORIZE) out
+#[cfg(target_os = "macos")]
+pub fn colorize(grey: &[f32]) -> Result<Vec<f32>, String> {
+    coreml::COLOURS.run(grey)
 }
 
 /// Restores one aligned face (3 x FACE x FACE values, -1 to 1), same size and range
@@ -107,7 +136,7 @@ pub fn prepare_faces() {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub use onnx_models::{prepare_faces, restore_face, upscale_tile};
+pub use onnx_models::{colorize, dejpeg_tile, prepare_faces, restore_face, upscale_tile};
 
 /// Lets go of the models after a batch: on Windows and Linux they load again in a
 /// fraction of a second and hold a lot of memory. (Core ML models take seconds to load
@@ -124,26 +153,40 @@ pub fn release() {
 /// engine has been fetched there)
 #[cfg(any(not(target_os = "macos"), test))]
 pub mod onnx_models {
-    use super::{Upscaler, FACE, SCALE};
+    use super::{Upscaler, COLORIZE, FACE, SCALE, TILE};
     use crate::platform::onnx::{Device, Model};
 
     static FAST: Model = Model::new("upscale.onnx", true);
-    static DETAILED: Model = Model::new("upscale-large.onnx", true);
+    static DETAILED: Model = Model::new("upscale-photo.onnx", true);
+    static SHARP: Model = Model::new("upscale-large.onnx", true);
+    static TEXT: Model = Model::new("upscale-text.onnx", true);
     static FACES: Model = Model::new("faces.onnx", true);
     static FACE_UP: Model = Model::new("faces-upscale.onnx", true);
+    static DEJPEG: Model = Model::new("dejpeg.onnx", true);
+    static COLOURS: Model = Model::new("colorize.onnx", true);
 
     pub fn upscale_tile(upscaler: Upscaler, tile: &[f32]) -> Result<Vec<f32>, String> {
         let model = match upscaler {
             Upscaler::Fast => &FAST,
             Upscaler::Detailed => &DETAILED,
+            Upscaler::Sharp => &SHARP,
+            Upscaler::Text => &TEXT,
             Upscaler::Face => &FACE_UP,
         };
         let side = upscaler.tile();
-        planar(model.run("image", &[1, 3, side, side], tile, &["upscaled"])?, side * SCALE)
+        planar(model.run("image", &[1, 3, side, side], tile, &["upscaled"])?, 3, side * SCALE)
+    }
+
+    pub fn dejpeg_tile(tile: &[f32]) -> Result<Vec<f32>, String> {
+        planar(DEJPEG.run("image", &[1, 3, TILE, TILE], tile, &["cleaned"])?, 3, TILE)
+    }
+
+    pub fn colorize(grey: &[f32]) -> Result<Vec<f32>, String> {
+        planar(COLOURS.run("image", &[1, 3, COLORIZE, COLORIZE], grey, &["ab"])?, 2, COLORIZE)
     }
 
     pub fn restore_face(face: &[f32]) -> Result<Vec<f32>, String> {
-        let run = || planar(FACES.run("face", &[1, 3, FACE, FACE], face, &["restored"])?, FACE);
+        let run = || planar(FACES.run("face", &[1, 3, FACE, FACE], face, &["restored"])?, 3, FACE);
         let restored = run()?;
         // A GPU that computes it wrongly gives a flat image (as the Neural Engine does
         // with this model on a Mac): then the CPU does it
@@ -162,24 +205,24 @@ pub mod onnx_models {
 
     #[cfg_attr(test, allow(dead_code))]
     pub fn release() {
-        for model in [&FAST, &DETAILED, &FACES, &FACE_UP] {
+        for model in [&FAST, &DETAILED, &SHARP, &TEXT, &FACES, &FACE_UP, &DEJPEG, &COLOURS] {
             model.release();
         }
     }
 
     /// See super::expected_seconds: measured with ONNX Runtime on an M1 Pro's CPU; a
     /// GPU's guessed (integrated GPUs, the slowest likely, take about a tenth)
-    pub fn expected_seconds() -> [f32; 4] {
+    pub fn expected_seconds() -> [f32; 7] {
         match FAST.prepare() {
-            Some(Device::Gpu) => [0.1, 1.5, 0.8, 1.0],
-            _ => [0.6, 15.0, 4.0, 3.6],
+            Some(Device::Gpu) => [0.1, 0.6, 0.8, 1.0, 1.5, 0.3, 1.5],
+            _ => [0.6, 5.0, 4.0, 3.6, 15.0, 2.0, 15.0],
         }
     }
 
-    /// The values of the one output, checked to be 3 planes of `side` x `side`
-    fn planar(mut outputs: Vec<crate::platform::onnx::Output>, side: usize) -> Result<Vec<f32>, String> {
+    /// The values of the one output, checked to be `planes` planes of `side` x `side`
+    fn planar(mut outputs: Vec<crate::platform::onnx::Output>, planes: usize, side: usize) -> Result<Vec<f32>, String> {
         let (shape, values) = outputs.pop().ok_or("the AI model gave no image")?;
-        if shape != [1, 3, side, side] || values.len() != 3 * side * side {
+        if shape != [1, planes, side, side] || values.len() != planes * side * side {
             return Err(format!("the AI model gave an unexpected output {shape:?}"));
         }
         Ok(values)
@@ -208,15 +251,16 @@ mod coreml {
     };
     use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString, NSURL};
 
-    use super::{model_path, FACE, FACE_TILE, SCALE, TILE};
+    use super::{model_path, COLORIZE, FACE, FACE_TILE, SCALE, TILE};
 
-    /// One bundled model: its file, its input and output (planar RGB squares), where it
-    /// runs, and the model itself once loaded. Loading takes a moment, so a model stays
-    /// loaded; it runs one input at a time (its hardware does one at a time anyway).
+    /// One bundled model: its file, its input (a planar RGB square) and output (planes of
+    /// a square: name, side, planes), where it runs, and the model itself once loaded.
+    /// Loading takes a moment, so a model stays loaded; it runs one input at a time (its
+    /// hardware does one at a time anyway).
     pub struct Spec {
         file: &'static str,
         input: (&'static str, usize),
-        output: (&'static str, usize),
+        output: (&'static str, usize, usize),
         units: MLComputeUnits,
         model: Mutex<Option<Model>>,
     }
@@ -225,23 +269,33 @@ mod coreml {
     // Only ever used while its Spec's lock is held
     unsafe impl Send for Model {}
 
-    pub static FAST: Spec = Spec::new("upscale.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE), MLComputeUnits::All);
+    pub static FAST: Spec = Spec::new("upscale.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::All);
+    // On the GPU: the Neural Engine is slower on this one and loses accuracy in its
+    // sampling (0.3 s a tile on an M1 Pro's GPU)
     pub static DETAILED: Spec =
-        Spec::new("upscale-large.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE), MLComputeUnits::All);
+        Spec::new("upscale-photo.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::CPUAndGPU);
+    pub static SHARP: Spec =
+        Spec::new("upscale-large.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::All);
+    pub static TEXT: Spec =
+        Spec::new("upscale-text.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::All);
+    pub static DEJPEG: Spec = Spec::new("dejpeg.mlmodelc", ("image", TILE), ("cleaned", TILE, 3), MLComputeUnits::All);
+    // On the CPU (0.16 s): the Neural Engine ruins its colours
+    pub static COLOURS: Spec =
+        Spec::new("colorize.mlmodelc", ("image", COLORIZE), ("ab", COLORIZE, 2), MLComputeUnits::CPUOnly);
     // 8-bit weights: on the Neural Engine this model returns a flat grey image. On the
     // CPU it loads in 0.8 s (the GPU compiles for 4.8 s, every launch) and needs 270 MB
     // less memory, for 0.5 s a face instead of 0.2 s.
-    pub static FACES: Spec = Spec::new("faces.mlmodelc", ("face", FACE), ("restored", FACE), MLComputeUnits::CPUOnly);
+    pub static FACES: Spec = Spec::new("faces.mlmodelc", ("face", FACE), ("restored", FACE, 3), MLComputeUnits::CPUOnly);
     // Float32 arithmetic on the GPU, 0.5 s a tile: the Neural Engine's compiler takes over
     // 20 minutes on this transformer
     pub static FACE_UP: Spec =
-        Spec::new("faces-upscale.mlmodelc", ("image", FACE_TILE), ("upscaled", FACE_TILE * SCALE), MLComputeUnits::CPUAndGPU);
+        Spec::new("faces-upscale.mlmodelc", ("image", FACE_TILE), ("upscaled", FACE_TILE * SCALE, 3), MLComputeUnits::CPUAndGPU);
 
     impl Spec {
         const fn new(
             file: &'static str,
             input: (&'static str, usize),
-            output: (&'static str, usize),
+            output: (&'static str, usize, usize),
             units: MLComputeUnits,
         ) -> Spec {
             Spec { file, input, output, units, model: Mutex::new(None) }
@@ -315,7 +369,7 @@ mod coreml {
             let output = unsafe { result.featureValueForName(&NSString::from_str(self.output.0)) }
                 .and_then(|value| unsafe { value.multiArrayValue() })
                 .ok_or("the AI model gave no image")?;
-            read(&output, self.output.1)
+            read(&output, self.output.2, self.output.1)
         }
     }
 
@@ -335,11 +389,11 @@ mod coreml {
         NSArray::from_retained_slice(&values)
     }
 
-    /// The output as planar floats, whatever layout Core ML chose (the Neural Engine may
-    /// pad its rows, or answer in half precision)
-    fn read(output: &MLMultiArray, side: usize) -> Result<Vec<f32>, String> {
+    /// The output (`planes` planes of `side` x `side`) as planar floats, whatever layout
+    /// Core ML chose (the Neural Engine may pad its rows, or answer in half precision)
+    fn read(output: &MLMultiArray, planes: usize, side: usize) -> Result<Vec<f32>, String> {
         let shape: Vec<usize> = unsafe { output.shape() }.iter().map(|n| n.as_usize()).collect();
-        if shape != [1, 3, side, side] {
+        if shape != [1, planes, side, side] {
             return Err(format!("the AI model gave an unexpected output {shape:?}"));
         }
         let strides: Vec<usize> = unsafe { output.strides() }.iter().map(|n| n.as_usize()).collect();
@@ -352,11 +406,11 @@ mod coreml {
             return Err("the AI model gave an unexpected output type".into());
         };
         // Filled inside the handler, which Objective-C may only call, not mutate
-        let out = std::cell::RefCell::new(vec![0f32; 3 * side * side]);
+        let out = std::cell::RefCell::new(vec![0f32; planes * side * side]);
         let copy = RcBlock::new(|bytes: NonNull<std::ffi::c_void>, _size: isize| {
             let at = |c: usize, y: usize, x: usize| c * strides[1] + y * strides[2] + x * strides[3];
             let mut out = out.borrow_mut();
-            for c in 0..3 {
+            for c in 0..planes {
                 for y in 0..side {
                     let row = &mut out[(c * side + y) * side..][..side];
                     for (x, value) in row.iter_mut().enumerate() {

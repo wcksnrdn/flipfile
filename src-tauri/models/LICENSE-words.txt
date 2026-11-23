@@ -1,0 +1,16 @@
+words.txt: the Indonesian and English words Upscale Text accepts as real words on Windows
+and Linux (macOS uses its own spelling dictionaries).
+
+Made from the word frequency lists of the Leipzig Corpora Collection, corpora
+ind_mixed_2013_1M (Indonesian, mixed sources) and eng_news_2024_1M (English, news):
+https://wortschatz.uni-leipzig.de/en/download
+
+D. Goldhahn, T. Eckart, U. Quasthoff: "Building Large Monolingual Dictionaries at the
+Leipzig Corpora Collection: From 100 to 200 Languages", Proceedings of LREC 2012.
+
+© Universität Leipzig / Sächsische Akademie der Wissenschaften / InfAI.
+The corpora offered for download are licensed under Creative Commons Attribution (CC BY),
+https://wortschatz.uni-leipzig.de/en/usage and https://creativecommons.org/licenses/by/4.0/
+
+Changes made for flipfile: only words made of letters and used at least three times
+were kept, lowercased, without their counts, and the two lists merged and sorted.
