@@ -16,6 +16,7 @@ No uploads. No accounts. No waiting.
 [![Homebrew](https://img.shields.io/badge/Homebrew-wcksnrdn%2Ftap-f5f5f7?logo=homebrew&logoColor=1d1d1f&style=for-the-badge)](https://github.com/wcksnrdn/homebrew-tap)
 [![Winget](https://img.shields.io/badge/Winget-wcksnrdn.flipfile-f5f5f7?logo=windows&logoColor=0078d4&style=for-the-badge)](https://github.com/microsoft/winget-pkgs/pull/471276)
 [![License: MIT](https://img.shields.io/badge/license-MIT-6e6e73?style=for-the-badge)](LICENSE)
+[![Featured in Open Source macOS Apps](https://img.shields.io/badge/featured%20in-Open%20Source%20macOS%20Apps-f5f5f7?logo=awesomelists&logoColor=fc60a8&style=for-the-badge)](https://github.com/serhii-londar/open-source-mac-os-apps)
 
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%26%20Intel-f5f5f7?logo=apple&logoColor=1d1d1f)
 ![Windows](https://img.shields.io/badge/Windows-10%20%26%2011-f5f5f7?logo=windows&logoColor=0078d4)
