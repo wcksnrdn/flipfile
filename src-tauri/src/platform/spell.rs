@@ -1,9 +1,10 @@
 // Whether a word is a real word, in Indonesian or English: Upscale Text types a word
 // again only when it is (src/convert/retype), so a misread ("paliog") is never drawn
 // crisp. Numbers, dates and addresses are judged by the caller.
-// - macOS: the system's own spelling dictionaries (NSSpellChecker), which know both.
-// - Windows and Linux: the bundled word list (models/words.txt), the words used at least
-//   a few times in a million sentences of each language (Leipzig Corpora Collection).
+// - Everywhere: the bundled word list (models/words.txt), the words used at least a few
+//   times in a million sentences of each language (Leipzig Corpora Collection).
+// - macOS also asks its own spelling dictionaries (NSSpellChecker), for the languages it
+//   has one for.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -26,15 +27,39 @@ pub fn known(word: &str) -> bool {
     known
 }
 
-#[cfg(target_os = "macos")]
 fn look_up(word: &str) -> bool {
+    in_list(word) || in_system_dictionaries(word)
+}
+
+/// The bundled list: lowercase words, one a line
+fn in_list(word: &str) -> bool {
+    use std::collections::HashSet;
+    use std::sync::OnceLock;
+
+    static WORDS: OnceLock<HashSet<String>> = OnceLock::new();
+    WORDS
+        .get_or_init(|| {
+            super::upscale::model_path("words.txt")
+                .and_then(|path| std::fs::read_to_string(path).ok())
+                .map(|list| list.lines().map(str::to_string).collect())
+                .unwrap_or_default()
+        })
+        .contains(&word.to_lowercase())
+}
+
+/// The Mac's own spelling dictionaries, in whichever of Indonesian and English it has.
+/// Asked about a language it has no dictionary for, the checker finds every word right,
+/// so only the ones it lists are asked.
+#[cfg(target_os = "macos")]
+fn in_system_dictionaries(word: &str) -> bool {
     use objc2_app_kit::NSSpellChecker;
     use objc2_foundation::{NSNotFound, NSString};
 
     objc2::rc::autoreleasepool(|_| {
         let checker = NSSpellChecker::sharedSpellChecker();
+        let available: Vec<String> = checker.availableLanguages().iter().map(|l| l.to_string()).collect();
         let text = NSString::from_str(word);
-        ["id", "en"].iter().any(|language| {
+        ["id", "en"].iter().filter(|language| available.iter().any(|a| a == *language)).any(|language| {
             let wrong = unsafe {
                 checker.checkSpellingOfString_startingAt_language_wrap_inSpellDocumentWithTag_wordCount(
                     &text,
@@ -51,24 +76,12 @@ fn look_up(word: &str) -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn look_up(word: &str) -> bool {
-    use std::collections::HashSet;
-    use std::sync::OnceLock;
-
-    static WORDS: OnceLock<HashSet<String>> = OnceLock::new();
-    WORDS
-        .get_or_init(|| {
-            super::upscale::model_path("words.txt")
-                .and_then(|path| std::fs::read_to_string(path).ok())
-                .map(|list| list.lines().map(str::to_string).collect())
-                .unwrap_or_default()
-        })
-        .contains(&word.to_lowercase())
+fn in_system_dictionaries(_word: &str) -> bool {
+    false
 }
 
 #[cfg(test)]
 mod tests {
-    #[cfg(target_os = "macos")]
     #[test]
     fn real_words_and_misreadings() {
         for word in ["paling", "kecil", "nilai", "Catatan", "diumumkan", "mahasiswa", "Desember", "the", "Following"] {
@@ -77,5 +90,24 @@ mod tests {
         for word in ["paliog", "nitai", "Calatan", "Desembcr", "tcrlambat", "xqzv"] {
             assert!(!super::known(word), "{word}");
         }
+    }
+
+    /// The bundled list alone (all Windows and Linux have; a Mac without dictionaries)
+    #[test]
+    fn the_word_list_alone_tells_them_apart() {
+        for word in ["paling", "kecil", "nilai", "Catatan", "diumumkan", "mahasiswa", "Desember", "Following"] {
+            assert!(super::in_list(word), "{word}");
+        }
+        for word in ["paliog", "nitai", "Calatan", "Desembcr", "tcrlambat"] {
+            assert!(!super::in_list(word), "{word}");
+        }
+    }
+
+    /// A Mac without the Indonesian dictionary (as on CI's) must not take every word for
+    /// a real one
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_missing_dictionary_trusts_nothing() {
+        assert!(!super::in_system_dictionaries("xqzvbt"));
     }
 }

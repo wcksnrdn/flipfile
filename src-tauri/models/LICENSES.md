@@ -66,9 +66,9 @@ variable fonts (fontTools); the others are unchanged. Where the system has them,
 Arial, Helvetica, Georgia, Times New Roman, Verdana, Tahoma, Trebuchet MS, Courier New,
 Segoe UI and Calibri are used too (read, not bundled).
 
-On Windows and Linux a word must also be in `words.txt`, Indonesian and English words
-from the Leipzig Corpora Collection (CC BY, [`LICENSE-words.txt`](LICENSE-words.txt));
-macOS checks words with its own spelling dictionaries.
+A word must also be a real word: in `words.txt`, Indonesian and English words from the
+Leipzig Corpora Collection (CC BY, [`LICENSE-words.txt`](LICENSE-words.txt)), or, on a
+Mac, in its own spelling dictionaries.
 
 ### The upscaling engine on Windows and Linux
 
