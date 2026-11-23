@@ -77,8 +77,8 @@ fn forwarded_notice() -> DynamicImage {
                 let (px_, py) = (60 + drawn.left + x as i32, baseline + drawn.top + y as i32);
                 let a = drawn.coverage[y * drawn.w + x];
                 let p = page.get_pixel_mut(px_ as u32, py as u32);
-                for c in 0..3 {
-                    p.0[c] = (f32::from(p.0[c]) * (1.0 - a) + 25.0 * a) as u8;
+                for v in &mut p.0 {
+                    *v = (f32::from(*v) * (1.0 - a) + 25.0 * a) as u8;
                 }
             }
         }
