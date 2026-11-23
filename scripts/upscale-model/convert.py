@@ -3,8 +3,20 @@
 - upscale.mlmodelc (2.4 MB): Real-ESRGAN's compact general model (realesr-general-x4v3),
   blended half and half with its no-denoise twin, Real-ESRGAN's own "denoise strength
   0.5". Fast; used for large pictures. Float16, Neural Engine.
-- upscale-large.mlmodelc (33 MB): Real-ESRGAN x4plus (ESRGAN's RRDBNet, rrdbnet.py).
-  Far more natural detail on photos; used for small pictures. Float16, Neural Engine.
+- upscale-photo.mlmodelc (15 MB): 4xNomos2_realplksr_dysample (RealPLKSR, realplksr.py),
+  Upscale Photo's detailed upscaler: draws real texture (skin, fabric, foliage) and
+  cleans JPEG compression. Float16, on the GPU (the Neural Engine is slower and loses
+  accuracy on its sampling).
+- upscale-large.mlmodelc (33 MB): Real-ESRGAN x4plus (rrdbnet.py), Upscale Photo's
+  sharpener: Nomos2 keeps a soft photo soft, x4plus sharpens it. Float16, Neural Engine.
+- upscale-text.mlmodelc (33 MB): RealESRNet x4plus (rrdbnet.py), Real-ESRGAN's network
+  before its GAN training: it draws nothing it can't see. Upscale Text enlarges a
+  document's shapes, rules and panels with it (its letters are typed again). Float16,
+  Neural Engine.
+- dejpeg.mlmodelc (137 MB): FBCNN (fbcnn.py), removes JPEG artefacts from a 256 px tile
+  before Upscale Text reads it. Float16, Neural Engine.
+- colorize.mlmodelc (116 MB): DDColor tiny (ddcolor.py), colours a black-and-white photo
+  from its 512 x 512 lightness. Float16, on the CPU (the Neural Engine ruins it).
 - faces.mlmodelc (71 MB): RestoreFormer++ (restoreformer.py), redraws a face aligned to a
   512 x 512 template from a dictionary of high-quality face parts while keeping the
   person's identity. 8-bit weights: flipfile runs it on the CPU (on the Neural Engine the
@@ -14,17 +26,21 @@
   8-bit weights, float32 arithmetic (in float16 its attention overflows), on the GPU (the
   Neural Engine's compiler takes over 20 minutes on it).
 
-The two upscalers read a fixed 256 x 256 tile; flipfile cuts images into such tiles
-(src-tauri/src/convert/upscale.rs). Licences: Real-ESRGAN BSD-3-Clause (Xintao Wang),
-RestoreFormer++ Apache-2.0 (Zhouxia Wang et al.), 4xFaceUpSharpLDAT CC-BY-4.0 (Philip
-Hofmann); see src-tauri/models/LICENSES.md.
+The upscalers and dejpeg read a fixed 256 x 256 tile; flipfile cuts images into such
+tiles (src-tauri/src/convert/upscale.rs). Licences: Real-ESRGAN BSD-3-Clause (Xintao
+Wang), RestoreFormer++ Apache-2.0 (Zhouxia Wang et al.), 4xFaceUpSharpLDAT and
+4xNomos2_realplksr_dysample CC-BY-4.0 (Philip Hofmann), FBCNN Apache-2.0 (Jiaxi Jiang et
+al.), DDColor Apache-2.0 (Xiaoyang Kang et al.); see src-tauri/models/LICENSES.md.
 
 Weights are read with `weights_only=True`: tensors only, no code in the checkpoints runs.
 
-    python3.11 -m venv venv && ./venv/bin/pip install torch coremltools numpy
+    python3.11 -m venv venv && ./venv/bin/pip install torch==2.7.0 coremltools==9.0 numpy safetensors
     curl -LO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth
     curl -LO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth
     curl -LO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+    curl -LO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth
+    curl -LO https://huggingface.co/Phips/4xNomos2_realplksr_dysample/resolve/main/4xNomos2_realplksr_dysample.safetensors
+    (DDColor and FBCNN: see ddcolor.py and fbcnn.py)
     curl -L -o RestoreFormerPlusPlus.ckpt https://github.com/wzhouxiff/RestoreFormerPlusPlus/releases/download/v1.0.0/RestoreFormer++.ckpt
     curl -LO https://github.com/Phhofm/models/releases/download/4xFaceUpDAT_Series/4xFaceUpSharpLDAT.safetensors
     ./venv/bin/python convert.py ../../src-tauri/models [model names, e.g. faces-upscale; all by default]
@@ -43,6 +59,9 @@ import torch
 
 import compact
 import dat
+import ddcolor
+import fbcnn
+import realplksr
 import restoreformer
 import rrdbnet
 
@@ -106,10 +125,36 @@ def main(out_dir: Path, only):
         model = convert(net, tile, "upscale", "image", "upscaled", "Real-ESRGAN general x4v3 (denoise 0.5): 4x of a 256 px tile", bsd)
         check(net, tile, save(model, out_dir, "upscale"), "image", "upscaled", ct.ComputeUnit.ALL)
 
+    if wanted("upscale-photo"):
+        net = realplksr.load("4xNomos2_realplksr_dysample.safetensors", TILE)
+        model = convert(net, tile, "upscale-photo", "image", "upscaled",
+                        "4xNomos2_realplksr_dysample (RealPLKSR): 4x of a 256 px tile of a photo",
+                        "CC-BY-4.0, 4xNomos2_realplksr_dysample by Philip Hofmann (Phhofm)")
+        check(net, tile, save(model, out_dir, "upscale-photo"), "image", "upscaled", ct.ComputeUnit.CPU_AND_GPU)
+
     if wanted("upscale-large"):
         net = rrdbnet.load("RealESRGAN_x4plus.pth")
         model = convert(net, tile, "upscale-large", "image", "upscaled", "Real-ESRGAN x4plus: 4x of a 256 px tile", bsd)
         check(net, tile, save(model, out_dir, "upscale-large"), "image", "upscaled", ct.ComputeUnit.ALL)
+
+    if wanted("upscale-text"):
+        net = rrdbnet.load("RealESRNet_x4plus.pth")
+        model = convert(net, tile, "upscale-text", "image", "upscaled", "RealESRNet x4plus: 4x of a 256 px tile", bsd)
+        check(net, tile, save(model, out_dir, "upscale-text"), "image", "upscaled", ct.ComputeUnit.ALL)
+
+    if wanted("dejpeg"):
+        net = fbcnn.load("fbcnn_color.pth")
+        model = convert(net, tile, "dejpeg", "image", "cleaned", "FBCNN: JPEG artefacts removed from a 256 px tile",
+                        "Apache-2.0, FBCNN by Jiaxi Jiang, Kai Zhang and Radu Timofte")
+        check(net, tile, save(model, out_dir, "dejpeg"), "image", "cleaned", ct.ComputeUnit.ALL)
+
+    if wanted("colorize"):
+        net = ddcolor.load("ddcolor_paper_tiny.pth")
+        grey = torch.rand(1, 1, 512, 512).expand(1, 3, 512, 512).contiguous()
+        model = convert(net, grey, "colorize", "image", "ab",
+                        "DDColor tiny: the Lab a and b of a grey 512 x 512 photo (0 to 1 in, Lab units out)",
+                        "Apache-2.0, DDColor by Xiaoyang Kang et al.")
+        check(net, grey, save(model, out_dir, "colorize"), "image", "ab", ct.ComputeUnit.CPU_ONLY)
 
     if wanted("faces"):
         net = restoreformer.load("RestoreFormerPlusPlus.ckpt")

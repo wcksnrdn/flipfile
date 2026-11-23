@@ -3,7 +3,11 @@ Runtime runs them (src-tauri/src/platform/onnx.rs). The same networks and weight
 Core ML models of macOS (convert.py), so the results match:
 
 - upscale.onnx (2.4 MB): Real-ESRGAN's compact general model, denoise 0.5 (compact.py).
-- upscale-large.onnx (33 MB): Real-ESRGAN x4plus (rrdbnet.py).
+- upscale-photo.onnx (15 MB): 4xNomos2_realplksr_dysample (realplksr.py), Upscale Photo.
+- upscale-large.onnx (33 MB): Real-ESRGAN x4plus (rrdbnet.py), Upscale Photo's sharpener.
+- upscale-text.onnx (33 MB): RealESRNet x4plus (rrdbnet.py), Upscale Text's shapes.
+- dejpeg.onnx (144 MB): FBCNN (fbcnn.py), JPEG artefacts removed before Upscale Text.
+- colorize.onnx (147 MB): DDColor tiny (ddcolor.py), colours black-and-white photos.
 - faces.onnx (71 MB): RestoreFormer++ (restoreformer.py).
 - faces-upscale.onnx (33 MB): 4xFaceUpSharpLDAT (dat.py), the face upscaler, on 128 px tiles.
 - yunet.onnx (0.2 MB): YuNet, the face detector (MIT, Shiqi Yu; OpenCV Zoo's
@@ -12,14 +16,14 @@ Core ML models of macOS (convert.py), so the results match:
 Every model reads and writes planar RGB floats at a fixed size, as the Core ML ones do.
 Weights are stored smaller than PyTorch's float32 and widened back when a model is
 loaded or run, so all arithmetic stays float32 (ONNX Runtime's CPU engine is slow in
-float16): the upscalers as float16 (one Cast each), the face model as 8-bit integers
+float16): the upscalers, dejpeg and colorize as float16 (one Cast each), the face model as 8-bit integers
 with one scale per output channel (one DequantizeLinear each), as on macOS; so is the
 face upscaler.
 
 Weights are read with `weights_only=True`: tensors only, no code in the checkpoints runs.
 
-    python3.11 -m venv venv && ./venv/bin/pip install torch onnx onnxruntime numpy
-    (download the four checkpoints as in convert.py, and face_detection_yunet_2026may.onnx from
+    python3.11 -m venv venv && ./venv/bin/pip install torch==2.7.0 onnx onnxruntime numpy safetensors
+    (download the checkpoints as in convert.py, and face_detection_yunet_2026may.onnx from
     https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
     ./venv/bin/python export_onnx.py ../../src-tauri/models [model names; all by default]
 """
@@ -36,6 +40,9 @@ from onnx import helper, numpy_helper
 
 import compact
 import dat
+import ddcolor
+import fbcnn
+import realplksr
 import restoreformer
 import rrdbnet
 
@@ -134,41 +141,44 @@ def main(out_dir: Path, weights: Path, only):
     bsd = "BSD-3-Clause, Copyright (c) 2021 Xintao Wang"
     wanted = lambda name: not only or name in only
 
+    def build(name, net, example, inputs, outputs, mode, description, licence):
+        path = out_dir / f"{name}.onnx"
+        export(net, example, path, inputs, outputs)
+        shrink(path, mode)
+        describe(path, description, licence)
+        check(net, example, path, inputs, outputs)
+
     if wanted("faces-upscale"):
-        net = dat.load("4xFaceUpSharpLDAT.safetensors", FACE_TILE)
-        face_tile = torch.rand(1, 3, FACE_TILE, FACE_TILE)
-        path = out_dir / "faces-upscale.onnx"
-        export(net, face_tile, path, "image", "upscaled")
-        shrink(path, "int8")
-        describe(path, "4xFaceUpSharpLDAT (DAT): 4x of a 128 px tile of a face", "CC-BY-4.0, 4xFaceUpSharpLDAT by Philip Hofmann (Phhofm)")
-        check(net, face_tile, path, "image", "upscaled")
-    if only and not only - {"faces-upscale"}:
-        return
-
-    net = compact.load()
-    path = out_dir / "upscale.onnx"
-    export(net, tile, path, "image", "upscaled")
-    shrink(path, "half")
-    describe(path, "Real-ESRGAN general x4v3 (denoise 0.5): 4x of a 256 px tile", bsd)
-    check(net, tile, path, "image", "upscaled")
-
-    net = rrdbnet.load("RealESRGAN_x4plus.pth")
-    path = out_dir / "upscale-large.onnx"
-    export(net, tile, path, "image", "upscaled")
-    shrink(path, "half")
-    describe(path, "Real-ESRGAN x4plus: 4x of a 256 px tile", bsd)
-    check(net, tile, path, "image", "upscaled")
-
-    net = restoreformer.load("RestoreFormerPlusPlus.ckpt")
-    face = torch.rand(1, 3, FACE, FACE) * 2 - 1
-    path = out_dir / "faces.onnx"
-    export(net, face, path, "face", "restored")
-    shrink(path, "int8")
-    describe(path, "RestoreFormer++: restores a face aligned to the FFHQ 512 template, [-1, 1] in and out",
-             "Apache-2.0, Copyright (c) 2023 Zhouxia Wang et al.")
-    check(net, face, path, "face", "restored")
-
-    shutil.copyfile(weights / "face_detection_yunet_2026may.onnx", out_dir / "yunet.onnx")
+        build("faces-upscale", dat.load("4xFaceUpSharpLDAT.safetensors", FACE_TILE), torch.rand(1, 3, FACE_TILE, FACE_TILE),
+              "image", "upscaled", "int8", "4xFaceUpSharpLDAT (DAT): 4x of a 128 px tile of a face",
+              "CC-BY-4.0, 4xFaceUpSharpLDAT by Philip Hofmann (Phhofm)")
+    if wanted("upscale"):
+        build("upscale", compact.load(), tile, "image", "upscaled", "half",
+              "Real-ESRGAN general x4v3 (denoise 0.5): 4x of a 256 px tile", bsd)
+    if wanted("upscale-photo"):
+        build("upscale-photo", realplksr.load("4xNomos2_realplksr_dysample.safetensors", TILE), tile, "image", "upscaled", "half",
+              "4xNomos2_realplksr_dysample (RealPLKSR): 4x of a 256 px tile of a photo",
+              "CC-BY-4.0, 4xNomos2_realplksr_dysample by Philip Hofmann (Phhofm)")
+    if wanted("upscale-large"):
+        build("upscale-large", rrdbnet.load("RealESRGAN_x4plus.pth"), tile, "image", "upscaled", "half",
+              "Real-ESRGAN x4plus: 4x of a 256 px tile", bsd)
+    if wanted("upscale-text"):
+        build("upscale-text", rrdbnet.load("RealESRNet_x4plus.pth"), tile, "image", "upscaled", "half",
+              "RealESRNet x4plus: 4x of a 256 px tile", bsd)
+    if wanted("dejpeg"):
+        build("dejpeg", fbcnn.load("fbcnn_color.pth"), tile, "image", "cleaned", "half",
+              "FBCNN: JPEG artefacts removed from a 256 px tile", "Apache-2.0, FBCNN by Jiaxi Jiang, Kai Zhang and Radu Timofte")
+    if wanted("colorize"):
+        grey = torch.rand(1, 1, 512, 512).expand(1, 3, 512, 512).contiguous()
+        build("colorize", ddcolor.load("ddcolor_paper_tiny.pth"), grey, "image", "ab", "half",
+              "DDColor tiny: the Lab a and b of a grey 512 x 512 photo (0 to 1 in, Lab units out)",
+              "Apache-2.0, DDColor by Xiaoyang Kang et al.")
+    if wanted("faces"):
+        build("faces", restoreformer.load("RestoreFormerPlusPlus.ckpt"), torch.rand(1, 3, FACE, FACE) * 2 - 1, "face", "restored",
+              "int8", "RestoreFormer++: restores a face aligned to the FFHQ 512 template, [-1, 1] in and out",
+              "Apache-2.0, Copyright (c) 2023 Zhouxia Wang et al.")
+    if wanted("yunet"):
+        shutil.copyfile(weights / "face_detection_yunet_2026may.onnx", out_dir / "yunet.onnx")
 
 
 if __name__ == "__main__":
