@@ -12,6 +12,7 @@ export type RingId =
   | "photo-pro"
   | "photo-tools"
   | "photo-compress"
+  | "photo-upscale"
   | "photo-transform"
   | "office"
   | "office-docs"
@@ -130,8 +131,7 @@ const PHOTO_TOOLS = alignedSubRing(
   [
     { id: "photo-compress-nav", label: "Compress", sub: "size", nav: "photo-compress" },
     { id: "nobg", label: "Remove", sub: "BG", disabled: !IS_MAC },
-    { id: "up-2x", label: "Upscale", sub: "2×" },
-    { id: "up-4x", label: "Upscale", sub: "4×" },
+    { id: "photo-upscale-nav", label: "Upscale", sub: "AI ✦", nav: "photo-upscale" },
     { id: "photo-transform-nav", label: "Transform", sub: "↻", nav: "photo-transform" },
     { id: "square", label: "Square", sub: "1:1" },
     { id: "gif-anim", label: "GIF", sub: "anim" },
@@ -158,6 +158,23 @@ const PHOTO_COMPRESS = alignedSubRing(
   ],
   PHOTO_TOOLS,
   "photo-compress",
+  "photo-tools"
+);
+
+// ─── Photo > Tools > Upscale (photos, documents, or just larger) ──────────
+const PHOTO_UPSCALE = alignedSubRing(
+  "photo-upscale",
+  [
+    { id: "up-2x", label: "Photo", sub: "2×" },
+    { id: "up-4x", label: "Photo", sub: "4×" },
+    { id: "up-text-2x", label: "Text", sub: "2×" },
+    { id: "up-text-4x", label: "Text", sub: "4×" },
+    { id: "up-plain-2x", label: "Plain", sub: "2×" },
+    { id: "up-plain-4x", label: "Plain", sub: "4×" },
+    { id: "back", label: "Back", sub: "‹", nav: "photo-tools" },
+  ],
+  PHOTO_TOOLS,
+  "photo-upscale",
   "photo-tools"
 );
 
@@ -350,6 +367,7 @@ export const RINGS: Record<RingId, Ring> = {
   "photo-pro": PHOTO_PRO,
   "photo-tools": PHOTO_TOOLS,
   "photo-compress": PHOTO_COMPRESS,
+  "photo-upscale": PHOTO_UPSCALE,
   "photo-transform": PHOTO_TRANSFORM,
   office: OFFICE,
   "office-docs": OFFICE_DOCS,
@@ -370,8 +388,12 @@ const CUSTOM_LABELS: Record<string, string> = {
   "docx-ocr": "WORD OCR",
   nobg: "Remove BG",
   "photo-edit": "Photo Editor",
-  "up-2x": "Upscale 2×",
-  "up-4x": "Upscale 4×",
+  "up-2x": "Upscale Photo 2×",
+  "up-4x": "Upscale Photo 4×",
+  "up-text-2x": "Upscale Text 2×",
+  "up-text-4x": "Upscale Text 4×",
+  "up-plain-2x": "Upscale Plain 2×",
+  "up-plain-4x": "Upscale Plain 4×",
   "gif-anim": "Animated GIF",
   "cmp-auto": "Auto Compress",
   "cmp-light": "Compress · Light",
