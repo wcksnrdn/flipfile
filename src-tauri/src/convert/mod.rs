@@ -35,6 +35,8 @@ mod strip;
 pub mod text;
 mod tools;
 pub mod transcribe;
+mod colour;
+mod retype;
 mod upscale;
 mod word;
 #[cfg(test)]

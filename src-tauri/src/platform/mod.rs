@@ -11,6 +11,8 @@ pub mod keys;
 // AI upscaling's engine on Windows and Linux (tested on a Mac too)
 #[cfg(any(not(target_os = "macos"), test))]
 pub mod onnx;
+// Whether a word is a real word (Upscale Text)
+pub mod spell;
 pub mod system_codec;
 pub mod tray;
 pub mod upscale;

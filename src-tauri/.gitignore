@@ -20,3 +20,5 @@
 /models/*.partial/
 # Downloaded by scripts/fetch-onnxruntime.mjs
 /onnxruntime/
+/models/fonts/
+/models/words.txt

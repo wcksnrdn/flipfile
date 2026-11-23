@@ -42,6 +42,9 @@ roxmltree = "0.21.1"
 typst-layout = "0.15"
 # Font metrics (Word line heights); already part of the build through Typst
 ttf-parser = "0.25"
+# Drawing glyph outlines with anti-aliasing (Upscale Text types words again,
+# src/convert/retype); already part of the build through Typst
+tiny-skia = "0.12"
 # Fonts are memory-mapped, not read whole (src/office/typeset.rs); already part of the
 # build through Typst's font scanning
 memmap2 = "0.9"
@@ -100,6 +103,8 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   # the light/dark Dock icon (src/platform/appearance.rs)
   "NSApplication",
   "NSImage",
+  # whether Upscale Text may type a word again (src/platform/spell.rs)
+  "NSSpellChecker",
 ] }
 objc2-core-foundation = "0.3"
 # Decoding into / encoding from plain pixel buffers (src/platform/system_codec.rs), and

@@ -17,6 +17,7 @@ use super::input::{file_name, header, open_oriented, same_format_ext};
 use super::memory;
 use super::output::{save_err, unique_output_path};
 use super::strip::strip_jpeg;
+use super::retype;
 use super::upscale::{self, MAX_PIXELS};
 use super::{isolate, par_map, BatchResult, Converted, OnPage, Progress};
 use crate::pdf::render as pdf_render;
@@ -34,6 +35,10 @@ pub(super) fn is_tool(format: &str) -> bool {
         "nobg"
             | "up-2x"
             | "up-4x"
+            | "up-plain-2x"
+            | "up-plain-4x"
+            | "up-text-2x"
+            | "up-text-4x"
             | "rot-r"
             | "rot-l"
             | "rot-180"
@@ -53,7 +58,7 @@ pub(super) fn is_tool(format: &str) -> bool {
 
 /// True for the AI upscaling tools, which report their progress in steps
 pub(super) fn is_upscale(format: &str) -> bool {
-    matches!(format, "up-2x" | "up-4x")
+    matches!(format, "up-2x" | "up-4x" | "up-plain-2x" | "up-plain-4x" | "up-text-2x" | "up-text-4x")
 }
 
 /// Runs a single-file photo tool on `input`; `on_step` hears an upscale's progress.
@@ -71,8 +76,12 @@ pub(super) fn run_tool(
 
     match tool {
         "nobg" => remove_bg_file(input, out_dir, options),
-        "up-2x" => upscale_file(input, 2, out_dir, options, on_step),
-        "up-4x" => upscale_file(input, 4, out_dir, options, on_step),
+        "up-2x" => upscale_file(input, 2, upscale::Engine::Photo, out_dir, options, on_step),
+        "up-4x" => upscale_file(input, 4, upscale::Engine::Photo, out_dir, options, on_step),
+        "up-plain-2x" => upscale_file(input, 2, upscale::Engine::Plain, out_dir, options, on_step),
+        "up-plain-4x" => upscale_file(input, 4, upscale::Engine::Plain, out_dir, options, on_step),
+        "up-text-2x" => upscale_text_file(input, 2, out_dir, options, on_step),
+        "up-text-4x" => upscale_text_file(input, 4, out_dir, options, on_step),
         "rot-r" | "rot-l" | "rot-180" | "flip-h" | "flip-v" | "grayscale" => {
             transform_file(input, tool, out_dir, options)
         }
@@ -100,9 +109,59 @@ fn remove_bg_file(input: &Path, out_dir: Option<&Path>, options: &Options) -> Re
 }
 
 /// Enlarges a photo 2x or 4x with the AI models (src/convert/upscale.rs), restoring its
-/// faces, keeping the file's own format: `photo_2x.jpg`. The size presets don't apply:
-/// the size is the point.
-fn upscale_file(input: &Path, factor: u32, out_dir: Option<&Path>, options: &Options, on_step: OnPage) -> Result<Converted, String> {
+/// faces and, for Upscale Photo, its colours, keeping the file's own format:
+/// `photo_2x.jpg`. The size presets don't apply: the size is the point.
+fn upscale_file(
+    input: &Path,
+    factor: u32,
+    engine: upscale::Engine,
+    out_dir: Option<&Path>,
+    options: &Options,
+    on_step: OnPage,
+) -> Result<Converted, String> {
+    let (img, ext) = open_to_upscale(input, factor)?;
+    let (larger, done) = upscale::upscale(&img, factor, engine, &mut upscale::Bundled, on_step)?;
+    let output = unique_output_path(input, out_dir, &format!("{factor}x"), &ext);
+    encode(&larger, &ext, &output, options.quality)?;
+    let mut converted = Converted::file(input, &output);
+    let mut notes = vec![];
+    if done.colorized {
+        notes.push("colorized".to_string());
+    }
+    match done.faces {
+        0 => {}
+        1 => notes.push("1 face restored".into()),
+        n => notes.push(format!("{n} faces restored")),
+    }
+    // Writing upscales better as a document: worth saying when the picture is mostly text
+    if mostly_text(&img) {
+        notes.push("lots of text: Upscale › Text keeps it sharp".into());
+    }
+    converted.note = (!notes.is_empty()).then(|| notes.join(", "));
+    Ok(converted)
+}
+
+/// Enlarges a document, screenshot or chat 2x or 4x with Upscale Text
+/// (src/convert/retype): its writing typed again crisp where it is read with certainty.
+/// Keeps the file's own format: `notice_4x.png`.
+fn upscale_text_file(input: &Path, factor: u32, out_dir: Option<&Path>, options: &Options, on_step: OnPage) -> Result<Converted, String> {
+    let (img, ext) = open_to_upscale(input, factor)?;
+    let (larger, typed) = retype::upscale_text(&img, factor, &mut upscale::Bundled, on_step)?;
+    let output = unique_output_path(input, out_dir, &format!("{factor}x"), &ext);
+    encode(&larger, &ext, &output, options.quality)?;
+    let mut converted = Converted::file(input, &output);
+    converted.note = match typed.words {
+        0 if typed.lines == 0 => Some("no text found: enlarged faithfully".into()),
+        0 => Some("text too small to retype: enlarged faithfully".into()),
+        1 => Some("1 word retyped".into()),
+        n => Some(format!("{n} words retyped")),
+    };
+    Ok(converted)
+}
+
+/// A picture to upscale, and the format to keep (PNG for those that can't hold a large
+/// image); refused when the result would be too large
+fn open_to_upscale(input: &Path, factor: u32) -> Result<(DynamicImage, String), String> {
     let name = file_name(input);
     let mut ext = same_format_ext(input)?;
     // Icons can't hold a large image, and an animated GIF would keep only its first frame
@@ -118,16 +177,15 @@ fn upscale_file(input: &Path, factor: u32, out_dir: Option<&Path>, options: &Opt
             pixels / 1_000_000
         ));
     }
-    let (larger, faces) = upscale::upscale(&img, factor, &mut upscale::Bundled, on_step)?;
-    let output = unique_output_path(input, out_dir, &format!("{factor}x"), &ext);
-    encode(&larger, &ext, &output, options.quality)?;
-    let mut converted = Converted::file(input, &output);
-    converted.note = match faces {
-        0 => None,
-        1 => Some("1 face restored".into()),
-        n => Some(format!("{n} faces restored")),
-    };
-    Ok(converted)
+    Ok((img, ext))
+}
+
+/// Whether text covers much of a picture (a document, a screenshot, a chat): its lines'
+/// boxes, as the OCR finds them, over 8% of the picture
+fn mostly_text(img: &DynamicImage) -> bool {
+    let Ok(lines) = crate::office::ocr::recognize(&img.to_rgba8()) else { return false };
+    let area: f32 = lines.iter().map(|l| (l.rect[2] - l.rect[0]) * (l.rect[3] - l.rect[1])).sum();
+    area > 0.08
 }
 
 /// Rotates, flips, or converts to grayscale while keeping the file's own format.

@@ -1878,6 +1878,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "tiff",
+ "tiny-skia",
  "trash",
  "ttf-parser",
  "typst",

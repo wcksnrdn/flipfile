@@ -82,6 +82,12 @@ pub(super) fn cost(path: &str, format: &str) -> u64 {
             // The photo and its enlargement
             "up-2x" => u64::from(w) * u64::from(h) * 5,
             "up-4x" => u64::from(w) * u64::from(h) * 17,
+            "up-plain-2x" => u64::from(w) * u64::from(h) * 5,
+            "up-plain-4x" => u64::from(w) * u64::from(h) * 17,
+            // The result with its faithful and plain enlargements and a few maps of its
+            // size: some 20 bytes a pixel of the result (counted here in 8-byte units)
+            "up-text-2x" => u64::from(w) * u64::from(h) * 10,
+            "up-text-4x" => u64::from(w) * u64::from(h) * 40,
             _ => u64::from(w) * u64::from(h),
         })
         // HEIC holds about 1/24 of its pixels' size

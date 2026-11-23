@@ -25,18 +25,26 @@ pub struct TextLine {
 #[cfg(target_os = "macos")]
 static ACCURATE_BROKEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-#[cfg(target_os = "macos")]
 pub fn recognize(image: &image::RgbaImage) -> Result<Vec<TextLine>, String> {
+    recognize_with(image, true)
+}
+
+/// `recognize`, with the engine's language correction (`corrected`: words fitted to the
+/// languages' dictionaries) or without it (what the letters look like). Upscale Text
+/// reads a picture both ways and trusts a word only where they agree. Windows' engine
+/// has no such choice: both are its one reading.
+#[cfg(target_os = "macos")]
+pub fn recognize_with(image: &image::RgbaImage, corrected: bool) -> Result<Vec<TextLine>, String> {
     use std::sync::atomic::Ordering;
     // Conversions run on worker threads, which have no autorelease pool of their own
     objc2::rc::autoreleasepool(|_| {
         if ACCURATE_BROKEN.load(Ordering::Relaxed) {
-            return recognize_in_pool(image, false);
+            return recognize_in_pool(image, false, corrected);
         }
-        let accurate = recognize_in_pool(image, true);
+        let accurate = recognize_in_pool(image, true, corrected);
         let Err(e) = accurate else { return accurate };
         // The same image read by the fast recogniser tells a broken engine from a bad image
-        let fast = recognize_in_pool(image, false).map_err(|_| e.clone())?;
+        let fast = recognize_in_pool(image, false, corrected).map_err(|_| e.clone())?;
         eprintln!("[flipfile] accurate text recognition failed ({e}); using the fast recogniser from now on");
         ACCURATE_BROKEN.store(true, Ordering::Relaxed);
         Ok(fast)
@@ -44,7 +52,7 @@ pub fn recognize(image: &image::RgbaImage) -> Result<Vec<TextLine>, String> {
 }
 
 #[cfg(target_os = "macos")]
-fn recognize_in_pool(image: &image::RgbaImage, accurate: bool) -> Result<Vec<TextLine>, String> {
+fn recognize_in_pool(image: &image::RgbaImage, accurate: bool, corrected: bool) -> Result<Vec<TextLine>, String> {
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2::AnyThread;
@@ -64,7 +72,7 @@ fn recognize_in_pool(image: &image::RgbaImage, accurate: bool) -> Result<Vec<Tex
     } else {
         VNRequestTextRecognitionLevel::Fast
     });
-    request.setUsesLanguageCorrection(true);
+    request.setUsesLanguageCorrection(corrected);
     // Indonesian and English first when this macOS knows them, else its own choice
     let wanted = ["id-ID", "en-US"];
     if let Ok(supported) = unsafe { request.supportedRecognitionLanguagesAndReturnError() } {
@@ -116,7 +124,7 @@ fn recognize_in_pool(image: &image::RgbaImage, accurate: bool) -> Result<Vec<Tex
 }
 
 #[cfg(windows)]
-pub fn recognize(image: &image::RgbaImage) -> Result<Vec<TextLine>, String> {
+pub fn recognize_with(image: &image::RgbaImage, _corrected: bool) -> Result<Vec<TextLine>, String> {
     use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
     use windows::Media::Ocr::OcrEngine;
     use windows::Security::Cryptography::CryptographicBuffer;
@@ -174,7 +182,7 @@ pub fn recognize(image: &image::RgbaImage) -> Result<Vec<TextLine>, String> {
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]
-pub fn recognize(_image: &image::RgbaImage) -> Result<Vec<TextLine>, String> {
+pub fn recognize_with(_image: &image::RgbaImage, _corrected: bool) -> Result<Vec<TextLine>, String> {
     Err("text recognition (OCR) is not available on Linux yet".into())
 }
 
