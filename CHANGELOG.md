@@ -6,6 +6,31 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Upscale is now three tools** (*Photo → Tools → Upscale ›*), each 2× or 4×:
+  - **Photo**: a photo made larger and better. Faded or colour-cast photos get their
+    colours back (an old slide gone magenta, a yellowed print); a photo already right is
+    hardly touched. Black-and-white and sepia photos are coloured (DDColor). Sharp photos
+    get real texture (4xNomos2: skin, fabric, brick, foliage instead of a painted look);
+    blurry ones are still sharpened by Real-ESRGAN. Faces are restored as before, and a
+    fine grain keeps smooth areas from looking plastic.
+  - **Text**: documents, screenshots, chats and posters. The writing is read by the
+    system's OCR and every word read with certainty is typed again, crisp, in the closest
+    font, size, weight and ink colour, on the picture's own background. JPEG speckle is
+    cleaned first (FBCNN). Doubtful words, styled lettering and very small text keep their
+    own pixels, sharpened: no word is ever invented. Retyping works on macOS and Windows;
+    Linux enlarges writing faithfully.
+  - **Plain**: larger only, with texture and faces, the colours untouched.
+- Upscaling a picture that is mostly text as a photo now suggests Upscale › Text.
+
+### Changed
+
+- AI Upscale used to redraw small text as other words ("Catatan kecil" came back as
+  "Cafatan kook"); Upscale Text fixes that, and Upscale Photo no longer holds back for text.
+- The installers are about 300 MB larger: the new models (from the `models-3` release),
+  the open fonts Upscale Text types in, and its word list.
+
 ## [0.12.1] - 2026-11-20
 
 ### Fixed
