@@ -77,7 +77,7 @@ No upload, no queue, no "your download will start in 30 seconds". Drag onto the 
 <td width="33%" valign="top">
 
 ### ✦ AI on your machine
-**Transcribe** (Whisper), **AI Upscale** (Real-ESRGAN + face restoration) and **AI Summary** (Apple Intelligence) run locally. No credits, no cloud, no watermark.
+**Transcribe** (Whisper), **AI Upscale** (Real-ESRGAN-based + face restoration) and **AI Summary** (Apple Intelligence) run locally. No credits, no cloud, no watermark.
 
 </td>
 <td width="33%" valign="top">
@@ -230,7 +230,7 @@ Drop a picture on **Upscale** (*Photo → Tools*) and pick what it is. Photos an
 
 - **Photo 2× · 4×**: a photo made larger *and* better, in its own colours.
   - **Its own colours, a little fresher**: the colours stay the photo's; dull ones get a little more life and the picture a touch more clarity, never a different hue.
-  - **Real texture**: [4xNomos2](https://huggingface.co/Phips/4xNomos2_realplksr_dysample) draws skin, fabric, brick and foliage instead of a painted look, and cleans JPEG compression; a blurry photo (enlarged, out of focus, an old scan) is sharpened by [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) instead.
+  - **Crisp and natural up close**: [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) x4plus blended with [4xNomos8kSC](https://github.com/Phhofm/models/releases/tag/4xNomos8kSC) (x4plus trained further on real photos): leaves, fabric and skin stay sharp and still look like a photo when you zoom in, JPEG compression is cleaned and slightly blurry photos are sharpened.
   - **Faces in HD**: each face is found (Vision on the Mac, [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) elsewhere) and drawn by [4xFaceUpSharpLDAT](https://github.com/Phhofm/models/releases/tag/4xFaceUpDAT_Series): sharp eyes, lashes, brows, hair and skin, while glasses, jewellery and features stay as they are. Small or damaged faces are first restored by [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus).
 - **Text 2× · 4×**: documents, screenshots, chats and posters. The writing is read (Vision on the Mac, Windows' own OCR) and every word read with certainty is **typed again**, crisp, in the closest font, size, weight and ink colour, on the picture's own background (a blue table row stays blue). JPEG speckle is cleaned first ([FBCNN](https://github.com/jiaxi-jiang/FBCNN)); shapes and rules are enlarged faithfully. A word is retyped only when two readings agree and it is a real word (or a number, date, address); doubtful words, styled lettering and very small text keep their own pixels, sharpened. No word is ever invented.
 - **Plain 2× · 4×**: larger only, with texture and faces, the colours exactly as they are.
@@ -725,7 +725,7 @@ PDFIUM_PLATFORM=mac-x64 npm run fetch-pdfium
 npm run tauri build
 ```
 
-The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb`/`.rpm` on Linux). Most of their size is the bundled models: Whisper `small` for transcription (`ggml-small-q5_1.bin`, 190 MB, from the whisper.cpp project on Hugging Face), Silero VAD (about 1 MB), the upscaling and face models (about 140 MB, from this repo's `models-2` release) and the Upscale Photo / Text models (about 300 MB: Nomos2, RealESRNet, FBCNN and DDColor, from the `models-3` release, with the open fonts and word list Upscale Text uses) — Core ML on macOS, ONNX elsewhere; `scripts/upscale-model/` rebuilds them from the original weights. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`. To test that engine on a Mac, run with `FLIPFILE_ONNX=1`. Licences are in `src-tauri/models/LICENSES.md`.
+The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb`/`.rpm` on Linux). Most of their size is the bundled models: Whisper `small` for transcription (`ggml-small-q5_1.bin`, 190 MB, from the whisper.cpp project on Hugging Face), Silero VAD (about 1 MB), the upscaling and face models (about 140 MB, from this repo's `models-2` release) and the Upscale Photo / Text and Colorize models (about 300 MB: the photo upscaler from the `models-4` release; RealESRNet, FBCNN and DDColor from `models-3`, with the open fonts and word list Upscale Text uses) — Core ML on macOS, ONNX elsewhere; `scripts/upscale-model/` rebuilds them from the original weights. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`. To test that engine on a Mac, run with `FLIPFILE_ONNX=1`. Licences are in `src-tauri/models/LICENSES.md`.
 
 ### App icon
 
@@ -801,7 +801,7 @@ Shows a red dot where flipfile thinks the cursor is, with the raw Tauri position
 │   ├── fetch-pdfium.mjs       # downloads & SHA-256-verifies PDFium
 │   ├── fetch-models.mjs       # downloads & SHA-256-verifies the AI models (upscaling, Whisper, VAD)
 │   ├── fetch-onnxruntime.mjs  # downloads & SHA-256-verifies ONNX Runtime (Windows, Linux)
-│   ├── upscale-model/         # builds the upscaling models (Real-ESRGAN, Nomos2, FBCNN, DDColor, RestoreFormer++, FaceUp DAT)
+│   ├── upscale-model/         # builds the upscaling models (Real-ESRGAN, Nomos8kSC, FBCNN, DDColor, RestoreFormer++, FaceUp DAT)
 │   ├── install.sh             # one-line installer for macOS & Linux
 │   └── install.ps1            # one-line installer for Windows PowerShell
 ├── src/                       # UI (React + TypeScript)
