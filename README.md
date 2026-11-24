@@ -178,7 +178,7 @@ MIT-licensed, built in public by GitHub Actions, with checksums and signed build
 |---|---|---|---|
 | 🗜️ | [**Compress levels**](#compress-levels) | Photos, PDFs, Word/Excel/PowerPoint, OpenDocument, EPUB, GIFs, videos and recordings, four levels, size shown before the drop | macOS · Windows *(Linux: tray presets)* |
 | 🎙️ | [**Transcribe**](#transcribe) | Recordings and videos → SRT/VTT subtitles or TXT, Word, Markdown transcripts, 99 languages | macOS · Windows · Linux |
-| 🔍 | [**AI Upscale**](#ai-upscale) | Photos 2× or 4× with colours fixed, B&W coloured and faces in HD; documents and screenshots with crisp retyped text | macOS · Windows · Linux |
+| 🔍 | [**AI Upscale**](#ai-upscale) | Photos 2× or 4× with real texture and faces in HD, their own colours; documents and screenshots with crisp retyped text; black-and-white photos coloured | macOS · Windows · Linux |
 | ✦ | [**AI Summary**](#ai-summary) | Any document or recording explained: headline, key points, figures, to-dos; ask it questions | macOS 26 with Apple Intelligence |
 | 📄 | [**Office**](#office-word-excel-powerpoint) | Word ⇄ PDF, Excel → PDF, PowerPoint ⇄ PDF/Word/images, anything → slides | macOS · Windows · Linux |
 | 🔤 | [**WORD OCR**](#office-word-excel-powerpoint) | Scans and photos of documents → editable Word | macOS · Windows |
@@ -227,14 +227,14 @@ Drop a lecture, a meeting, a WhatsApp voice note or a video on **Music → Trans
 
 Drop a picture on **Upscale** (*Photo → Tools*) and pick what it is. Photos and writing need opposite things: a photo wants detail drawn, writing wants no letter invented. So there are three:
 
-- **Photo 2× · 4×**: a photo made larger *and* better.
-  - **Colours back**: a faded or colour-cast photo (an old slide gone magenta, a yellowed print) gets its whites, blacks and neutral greys back; a photo already right is hardly touched.
-  - **Black-and-white in colour**: a black-and-white or sepia photo is coloured by [DDColor](https://github.com/piddnad/DDColor), keeping its own light and shade.
+- **Photo 2× · 4×**: a photo made larger *and* better, in its own colours.
+  - **Its own colours, a little fresher**: the colours stay the photo's; dull ones get a little more life and the picture a touch more clarity, never a different hue.
   - **Real texture**: [4xNomos2](https://huggingface.co/Phips/4xNomos2_realplksr_dysample) draws skin, fabric, brick and foliage instead of a painted look, and cleans JPEG compression; a blurry photo (enlarged, out of focus, an old scan) is sharpened by [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) instead.
   - **Faces in HD**: each face is found (Vision on the Mac, [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) elsewhere) and drawn by [4xFaceUpSharpLDAT](https://github.com/Phhofm/models/releases/tag/4xFaceUpDAT_Series): sharp eyes, lashes, brows, hair and skin, while glasses, jewellery and features stay as they are. Small or damaged faces are first restored by [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus).
-  - A fine grain keeps smooth areas looking like a photo, not plastic.
 - **Text 2× · 4×**: documents, screenshots, chats and posters. The writing is read (Vision on the Mac, Windows' own OCR) and every word read with certainty is **typed again**, crisp, in the closest font, size, weight and ink colour, on the picture's own background (a blue table row stays blue). JPEG speckle is cleaned first ([FBCNN](https://github.com/jiaxi-jiang/FBCNN)); shapes and rules are enlarged faithfully. A word is retyped only when two readings agree and it is a real word (or a number, date, address); doubtful words, styled lettering and very small text keep their own pixels, sharpened. No word is ever invented.
-- **Plain 2× · 4×**: larger only, with texture and faces, the colours as they are.
+- **Plain 2× · 4×**: larger only, with texture and faces, the colours exactly as they are.
+
+To colour a black-and-white or sepia photo, drop it on **Colorize** (*Photo → Tools*): [DDColor](https://github.com/piddnad/DDColor) adds the colours and the photo keeps its own light, shade and detail. A photo already in colour is left alone.
 
 Same format as the original (`photo_2x.jpg` stays a JPG, `logo_4x.png` keeps its transparency), results up to **200 MP**. It runs on your hardware: the Neural Engine and GPU on a Mac, any DirectX 12 GPU on Windows (DirectML), the processor on Linux.
 
@@ -372,7 +372,7 @@ Hold <kbd>⌥ Option</kbd> / <kbd>Alt</kbd> while dragging for the **compress le
 | **Photo** | JPG · PNG · WEBP · HEIC · PDF · **Edit** *(Photo Editor)* · **Formats •••** · **Tools ✦** · Back ‹ |
 | **Photo → Formats** | AVIF · TIFF · GIF · BMP · ICO *(multi)* · ICNS *(macOS)* · **Pro / 3D •••** · Back ‹ |
 | **Photo → Formats → Pro / 3D** | JPEG · TGA *(game)* · EXR *(32f HDR)* · HDR *(RGBE)* · QOI *(fast)* · PPM *(netpbm)* · SVG *(embed)* · Back ‹ |
-| **Photo → Tools** | **Compress** *(target size)* · **Remove BG** *(macOS)* · **Upscale** *(Photo · Text · Plain, 2× / 4×)* · **Transform** · **Square 1:1** · **GIF anim** · **Slides** *(pptx)* · **Clean EXIF** · Back ‹ |
+| **Photo → Tools** | **Compress** *(target size)* · **Remove BG** *(macOS)* · **Upscale** *(Photo · Text · Plain, 2× / 4×)* · **Colorize** *(B&W)* · **Transform** · **Square 1:1** · **GIF anim** · **Slides** *(pptx)* · **Clean EXIF** · Back ‹ |
 | **Photo → Tools → Compress** | Auto · 1 MB max · 500 KB max · 200 KB max · 100 KB max · Lossless · Back ‹ |
 | **Photo → Tools → Transform** | Rotate 90° › · Rotate ‹ 90° · Rotate 180° · Flip horiz · Flip vert · B&W gray · Back ‹ |
 | **Office** | PDF · WORD *(docx)* · **WORD OCR** · EXCEL *(xlsx)* · **SLIDES** *(pptx)* · CSV · **Docs •••** · **Data •••** · Back ‹ |
@@ -480,7 +480,8 @@ Over **100 formats, tools and conversions**, all processed on your machine.
 | **Compress levels** | ⌥ / Alt ring | Light · Balanced · Strong · Extreme, with the size shown before the drop |
 | **Target-size compress** | `1 MB` · `500 KB` · `200 KB` · `100 KB` | Fits strictly under the size, lowering quality and then resolution as needed |
 | **Lossless / Auto** | `Lossless` · `Auto` | `oxipng` / lossless WebP / Deflate without changing a pixel, or an automatic smaller file |
-| **AI Upscale** | `Upscale ›` `Photo` · `Text` · `Plain` (2× / 4×) | Photo: colours fixed, B&W coloured, texture and faces; Text: writing read and retyped crisp; Plain: larger only. Same format, up to 200 MP |
+| **AI Upscale** | `Upscale ›` `Photo` · `Text` · `Plain` (2× / 4×) | Photo: texture and faces, its own colours a little fresher; Text: writing read and retyped crisp; Plain: larger only. Same format, up to 200 MP |
+| **AI Colorize** | `Colorize` | A black-and-white or sepia photo coloured (DDColor), same size and format |
 | **Remove background** | `Remove BG` *(macOS 14+)* | Subject on a transparent PNG via macOS Vision |
 | **Transform** | `Rotate` · `Flip` · `B&W` | Rotate 90°/180°, flip, grayscale, in the file's own format |
 | **Square 1:1** | `Square 1:1` | Pads to a square without cropping (white behind JPG/BMP, transparent otherwise) |

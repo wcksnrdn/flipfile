@@ -9,12 +9,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Upscale is now three tools** (*Photo → Tools → Upscale ›*), each 2× or 4×:
-  - **Photo**: a photo made larger and better. Faded or colour-cast photos get their
-    colours back (an old slide gone magenta, a yellowed print); a photo already right is
-    hardly touched. Black-and-white and sepia photos are coloured (DDColor). Sharp photos
-    get real texture (4xNomos2: skin, fabric, brick, foliage instead of a painted look);
-    blurry ones are still sharpened by Real-ESRGAN. Faces are restored as before, and a
-    fine grain keeps smooth areas from looking plastic.
+  - **Photo**: a photo made larger and better, in its own colours: dull colours get a
+    little more life and the picture a touch more clarity, never a different hue. Sharp
+    photos get real texture (4xNomos2: skin, fabric, brick, foliage instead of a painted
+    look); blurry ones are still sharpened by Real-ESRGAN. Faces are restored as before.
   - **Text**: documents, screenshots, chats and posters. The writing is read by the
     system's OCR and every word read with certainty is typed again, crisp, in the closest
     font, size, weight and ink colour, on the picture's own background. JPEG speckle is
@@ -22,6 +20,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
     own pixels, sharpened: no word is ever invented. Retyping works on macOS and Windows;
     Linux enlarges writing faithfully.
   - **Plain**: larger only, with texture and faces, the colours untouched.
+- **Colorize** (*Photo → Tools*): a black-and-white or sepia photo coloured by DDColor,
+  keeping its own light, shade and detail, same size and format (`photo_colorized.jpg`).
+  A photo already in colour is left alone.
 - Upscaling a picture that is mostly text as a photo now suggests Upscale › Text.
 
 ### Changed
