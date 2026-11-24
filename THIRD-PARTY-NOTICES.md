@@ -7,15 +7,15 @@ are reproduced below and, where required, inside the distributed application bun
 
 ## AI Models
 
-### Real-ESRGAN (upscale.mlmodelc / upscale.onnx, upscale-large.mlmodelc / upscale-large.onnx, upscale-text.mlmodelc / upscale-text.onnx)
+### Real-ESRGAN (upscale.mlmodelc / upscale.onnx, upscale-text.mlmodelc / upscale-text.onnx, 70% of upscale-photo.mlmodelc / upscale-photo.onnx)
 
 Authors: Xintao Wang et al.  
 Source: https://github.com/xinntao/Real-ESRGAN  
 License: **BSD 3-Clause**
 
 The weights were converted to Core ML and ONNX; the compact upscaler is an even blend of
-`realesr-general-x4v3` and `realesr-general-wdn-x4v3`; x4plus and RealESRNet x4plus
-(`upscale-text`, Upscale Text's shapes) are stored in float16.
+`realesr-general-x4v3` and `realesr-general-wdn-x4v3`; RealESRNet x4plus
+(`upscale-text`, Upscale Text's shapes) is stored in float16.
 
 ```
 BSD 3-Clause License
@@ -278,22 +278,21 @@ SOFTWARE.
 
 ---
 
-### 4xNomos2_realplksr_dysample — Upscale Photo's detailed upscaler (upscale-photo.mlmodelc / upscale-photo.onnx)
+### 4xNomos8kSC — 30% of Upscale Photo's detailed upscaler (upscale-photo.mlmodelc / upscale-photo.onnx)
 
 Author: Philip Hofmann (Phhofm)  
-Source: https://huggingface.co/Phips/4xNomos2_realplksr_dysample  
-Network: RealPLKSR — D. Lee, S. Yun, Y. Ro, "Partial Large Kernel CNNs for Efficient
-Super-Resolution", 2024, with DySample — W. Liu et al., "Learning to Upsample by Learning
-to Sample", ICCV 2023  
+Source: https://github.com/Phhofm/models/releases/tag/4xNomos8kSC  
+Network: RRDBNet (Real-ESRGAN, X. Wang et al., ICCVW 2021), trained further on the
+Nomos8k dataset with JPEG compression and slight blur  
 License: **Creative Commons Attribution 4.0 International (CC BY 4.0)**  
 https://creativecommons.org/licenses/by/4.0/
 
-Copyright (c) 2024 Philip Hofmann (Phhofm)
+Copyright (c) 2023 Philip Hofmann (Phhofm)
 
-Changes made for flipfile: the released weights (`4xNomos2_realplksr_dysample.safetensors`)
-were converted to Core ML (`upscale-photo.mlmodelc`) and ONNX (`upscale-photo.onnx`) for
-256 px tiles, with the weights stored in float16; the network was reimplemented for this
-in `scripts/upscale-model/realplksr.py`.
+Changes made for flipfile: the released weights (`4xNomos8kSC.safetensors`) were blended
+30% with 70% of Real-ESRGAN x4plus's weights (network interpolation), and the result
+converted to Core ML (`upscale-photo.mlmodelc`) and ONNX (`upscale-photo.onnx`) for
+256 px tiles, with the weights stored in float16.
 
 ---
 
@@ -513,7 +512,7 @@ bundle at `Resources/models/` (macOS) or alongside the executable (Windows/Linux
 - `LICENSE-Real-ESRGAN.txt` — BSD 3-Clause
 - `LICENSE-RestoreFormerPlusPlus.txt` — Apache 2.0
 - `LICENSE-FaceUp.txt` — CC BY 4.0
-- `LICENSE-Nomos2.txt` — CC BY 4.0
+- `LICENSE-Nomos8kSC.txt` — CC BY 4.0
 - `LICENSE-FBCNN.txt` — Apache 2.0
 - `LICENSE-DDColor.txt` — Apache 2.0
 - `LICENSE-words.txt` — CC BY

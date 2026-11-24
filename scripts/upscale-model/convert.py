@@ -3,12 +3,10 @@
 - upscale.mlmodelc (2.4 MB): Real-ESRGAN's compact general model (realesr-general-x4v3),
   blended half and half with its no-denoise twin, Real-ESRGAN's own "denoise strength
   0.5". Fast; used for large pictures. Float16, Neural Engine.
-- upscale-photo.mlmodelc (15 MB): 4xNomos2_realplksr_dysample (RealPLKSR, realplksr.py),
-  Upscale Photo's detailed upscaler: draws real texture (skin, fabric, foliage) and
-  cleans JPEG compression. Float16, on the GPU (the Neural Engine is slower and loses
-  accuracy on its sampling).
-- upscale-large.mlmodelc (33 MB): Real-ESRGAN x4plus (rrdbnet.py), Upscale Photo's
-  sharpener: Nomos2 keeps a soft photo soft, x4plus sharpens it. Float16, Neural Engine.
+- upscale-photo.mlmodelc (33 MB): Upscale Photo's and Plain's detailed upscaler, one
+  RRDBNet (rrdbnet.py) whose weights are 70% Real-ESRGAN x4plus and 30% 4xNomos8kSC
+  (x4plus trained further on photos with JPEG compression and slight blur): x4plus's
+  crisp detail with calmer, more natural texture. Float16, Neural Engine.
 - upscale-text.mlmodelc (33 MB): RealESRNet x4plus (rrdbnet.py), Real-ESRGAN's network
   before its GAN training: it draws nothing it can't see. Upscale Text enlarges a
   document's shapes, rules and panels with it (its letters are typed again). Float16,
@@ -29,7 +27,7 @@
 The upscalers and dejpeg read a fixed 256 x 256 tile; flipfile cuts images into such
 tiles (src-tauri/src/convert/upscale.rs). Licences: Real-ESRGAN BSD-3-Clause (Xintao
 Wang), RestoreFormer++ Apache-2.0 (Zhouxia Wang et al.), 4xFaceUpSharpLDAT and
-4xNomos2_realplksr_dysample CC-BY-4.0 (Philip Hofmann), FBCNN Apache-2.0 (Jiaxi Jiang et
+4xNomos8kSC (blended into the photo upscaler) CC-BY-4.0 (Philip Hofmann), FBCNN Apache-2.0 (Jiaxi Jiang et
 al.), DDColor Apache-2.0 (Xiaoyang Kang et al.); see src-tauri/models/LICENSES.md.
 
 Weights are read with `weights_only=True`: tensors only, no code in the checkpoints runs.
@@ -39,7 +37,7 @@ Weights are read with `weights_only=True`: tensors only, no code in the checkpoi
     curl -LO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth
     curl -LO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
     curl -LO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth
-    curl -LO https://huggingface.co/Phips/4xNomos2_realplksr_dysample/resolve/main/4xNomos2_realplksr_dysample.safetensors
+    curl -LO https://github.com/Phhofm/models/releases/download/4xNomos8kSC/4xNomos8kSC.safetensors
     (DDColor and FBCNN: see ddcolor.py and fbcnn.py)
     curl -L -o RestoreFormerPlusPlus.ckpt https://github.com/wzhouxiff/RestoreFormerPlusPlus/releases/download/v1.0.0/RestoreFormer++.ckpt
     curl -LO https://github.com/Phhofm/models/releases/download/4xFaceUpDAT_Series/4xFaceUpSharpLDAT.safetensors
@@ -61,11 +59,13 @@ import compact
 import dat
 import ddcolor
 import fbcnn
-import realplksr
 import restoreformer
 import rrdbnet
 
 TILE = 256
+# Upscale Photo's upscaler: x4plus's crisp detail, with 4xNomos8kSC's (x4plus trained
+# further on real photos) more natural texture and calmer JPEG handling
+PHOTO = [("RealESRGAN_x4plus.pth", 0.7), ("4xNomos8kSC.safetensors", 0.3)]
 # The face upscaler's tile: its window attention keeps memory and time in check at 128
 FACE_TILE = 128
 
@@ -126,16 +126,10 @@ def main(out_dir: Path, only):
         check(net, tile, save(model, out_dir, "upscale"), "image", "upscaled", ct.ComputeUnit.ALL)
 
     if wanted("upscale-photo"):
-        net = realplksr.load("4xNomos2_realplksr_dysample.safetensors", TILE)
-        model = convert(net, tile, "upscale-photo", "image", "upscaled",
-                        "4xNomos2_realplksr_dysample (RealPLKSR): 4x of a 256 px tile of a photo",
-                        "CC-BY-4.0, 4xNomos2_realplksr_dysample by Philip Hofmann (Phhofm)")
-        check(net, tile, save(model, out_dir, "upscale-photo"), "image", "upscaled", ct.ComputeUnit.CPU_AND_GPU)
-
-    if wanted("upscale-large"):
-        net = rrdbnet.load("RealESRGAN_x4plus.pth")
-        model = convert(net, tile, "upscale-large", "image", "upscaled", "Real-ESRGAN x4plus: 4x of a 256 px tile", bsd)
-        check(net, tile, save(model, out_dir, "upscale-large"), "image", "upscaled", ct.ComputeUnit.ALL)
+        net = rrdbnet.blend(PHOTO)
+        model = convert(net, tile, "upscale-photo", "image", "upscaled", "Real-ESRGAN x4plus 70% + 4xNomos8kSC 30% (RRDBNet): 4x of a 256 px tile of a photo",
+                        "BSD-3-Clause, Real-ESRGAN by Xintao Wang; CC-BY-4.0, 4xNomos8kSC by Philip Hofmann (Phhofm)")
+        check(net, tile, save(model, out_dir, "upscale-photo"), "image", "upscaled", ct.ComputeUnit.ALL)
 
     if wanted("upscale-text"):
         net = rrdbnet.load("RealESRNet_x4plus.pth")

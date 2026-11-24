@@ -15,10 +15,10 @@
 // the detailed upscaler turns out far slower than guessed, the picture starts over with
 // the fast one after a few tiles.
 //
-// The upscalers sharpen detail a pixel or two across. A picture that is large but blurry
-// (an old photo shown bigger than it was taken, a screenshot of one, an enlarged image)
-// has its detail spread over several pixels, and comes back hardly changed; such a
-// picture is halved first, so the model reads it at the size its detail really has.
+// A blurry picture (an old photo shown bigger than it was taken, a screenshot of one) is
+// read at its own size too: the detailed upscaler sharpens it there. (It used to be halved first and enlarged the rest of the way by Lanczos,
+// which left blocky, paper-like surfaces when looked at closely.) Its faces are treated
+// as blurry ones (faces.rs).
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -59,7 +59,7 @@ pub(super) fn tile_count(w: usize, h: usize, upscaler: Upscaler) -> usize {
     w.div_ceil(step) * h.div_ceil(step)
 }
 
-/// Below this, a picture counts as blurry (see `softness`). Measured: enlarged or
+/// Below this, a picture counts as blurry (see `softness`), and so do its faces. Measured: enlarged or
 /// out-of-focus photos 0.20-0.27; photos at their own size, AI images, screenshots,
 /// charts and icons 0.34-0.51; pictures enlarged only 1.5x (still detailed) 0.34-0.37.
 const SOFT: f64 = 0.29;
@@ -98,15 +98,13 @@ pub(super) struct Timings {
     pub(super) text: f32,
     /// A tile cleaned of JPEG artefacts
     pub(super) dejpeg: f32,
-    /// A tile of the sharpening upscaler
-    sharp: f32,
     /// How long the detailed upscaler may take on a picture
     budget: f32,
 }
 
-impl From<[f32; 7]> for Timings {
-    fn from([fast, detailed, face, face_tile, text, dejpeg, sharp]: [f32; 7]) -> Self {
-        Timings { fast, detailed, face, face_tile, text, dejpeg, sharp, budget: DETAILED_SECONDS }
+impl From<[f32; 6]> for Timings {
+    fn from([fast, detailed, face, face_tile, text, dejpeg]: [f32; 6]) -> Self {
+        Timings { fast, detailed, face, face_tile, text, dejpeg, budget: DETAILED_SECONDS }
     }
 }
 
@@ -160,10 +158,10 @@ pub(super) struct Work<'a> {
     /// What a tile of the fast and of the detailed upscaler, a face restored, a tile of
     /// the face upscaler, of the text upscaler and a tile cleaned of JPEG artefacts count
     /// for in `total`, as planned
-    costs: [usize; 7],
+    costs: [usize; 6],
     pub(super) timings: Timings,
     /// Tiles of each upscaler, faces restored and tiles cleaned, done so far (indexed as `costs`)
-    seen: [usize; 7],
+    seen: [usize; 6],
 }
 
 /// Where an upscaler's tiles are counted in `Work::costs` and `seen`
@@ -173,13 +171,12 @@ fn kind(upscaler: Upscaler) -> usize {
         Upscaler::Detailed => 1,
         Upscaler::Face => 3,
         Upscaler::Text => 4,
-        Upscaler::Sharp => 6,
     }
 }
 
 impl<'a> Work<'a> {
     pub(super) fn new(timings: Timings, report: &'a dyn Fn(usize, usize)) -> Self {
-        Work { done: 0, total: 0, report, costs: [0; 7], timings, seen: [0; 7] }
+        Work { done: 0, total: 0, report, costs: [0; 6], timings, seen: [0; 6] }
     }
 
     /// What is left: `tiles` of `upscaler`, then `faces` restored, and `face_tiles` of
@@ -199,7 +196,6 @@ impl<'a> Work<'a> {
             millis(t.face_tile),
             millis(t.text),
             millis(t.dejpeg),
-            millis(t.sharp),
         ];
         self.total = self.done
             + tiles.iter().map(|&(upscaler, n)| n * self.costs[kind(upscaler)]).sum::<usize>()
@@ -220,7 +216,6 @@ impl<'a> Work<'a> {
             Upscaler::Detailed => &mut self.timings.detailed,
             Upscaler::Face => &mut self.timings.face_tile,
             Upscaler::Text => &mut self.timings.text,
-            Upscaler::Sharp => &mut self.timings.sharp,
         };
         learn(slot, &mut self.seen[kind], took);
         self.step(self.costs[kind]);
@@ -236,11 +231,10 @@ impl<'a> Work<'a> {
         (seconds / self.timings.face_tile.max(0.001)) as usize
     }
 
-    /// Whether `upscaler` (the detailed or the sharpening one), as timed on the tiles
-    /// done, would take far longer than it may on `tiles`
-    fn too_slow(&self, upscaler: Upscaler, tiles: usize) -> bool {
-        let per_tile = if upscaler == Upscaler::Sharp { self.timings.sharp } else { self.timings.detailed };
-        self.seen[kind(upscaler)] >= 3 && per_tile * tiles as f32 > 2.0 * self.timings.budget
+    /// Whether the detailed upscaler, as timed on the tiles done, would take far longer
+    /// than it may on `tiles`
+    fn too_slow(&self, tiles: usize) -> bool {
+        self.seen[1] >= 3 && self.timings.detailed * tiles as f32 > 2.0 * self.timings.budget
     }
 
     fn step(&mut self, cost: usize) {
@@ -309,16 +303,11 @@ pub(super) fn upscale(
     let (w, h) = rgb.dimensions();
     let (out_w, out_h) = (w * factor, h * factor);
     let soft = softness(&rgb).is_some_and(|soft| soft < SOFT);
-    let half = soft.then(|| resize_exact(&DynamicImage::ImageRgb8(rgb.clone()), (w / 2).max(1), (h / 2).max(1)).to_rgb8());
-    let source = half.as_ref().unwrap_or(&rgb);
-    let pixels = u64::from(source.width()) * u64::from(source.height());
-    let tiles = tile_count(source.width() as usize, source.height() as usize, Upscaler::Detailed);
+    let pixels = u64::from(w) * u64::from(h);
+    let tiles = tile_count(w as usize, h as usize, Upscaler::Detailed);
     let timings = models.timings();
-    // A soft picture needs sharpening (x4plus); a sharp one texture (Nomos2, which keeps
-    // what is soft soft)
-    let (careful, per_tile) = if soft { (Upscaler::Sharp, timings.sharp) } else { (Upscaler::Detailed, timings.detailed) };
-    let detailed = pixels <= DETAILED_PIXELS && tiles as f32 * per_tile <= timings.budget;
-    let upscaler = if detailed { careful } else { Upscaler::Fast };
+    let detailed = pixels <= DETAILED_PIXELS && tiles as f32 * timings.detailed <= timings.budget;
+    let upscaler = if detailed { Upscaler::Detailed } else { Upscaler::Fast };
 
     let mut work = Work::new(timings, report);
     let found = models.find_faces(&rgb);
@@ -338,27 +327,18 @@ pub(super) fn upscale(
         models.prepare_faces();
     }
     work.plan(upscaler, tiles, restoring, face_tiles);
-    let factor_read = if half.is_some() { 4 } else { factor as usize };
-    let result = match enlarge(source, factor_read, upscaler, models, &mut work, true) {
+    let result = match enlarge(&rgb, factor as usize, upscaler, models, &mut work, true) {
         Err(Stop::TooSlow) => {
             work.plan(Upscaler::Fast, tiles, restoring, face_tiles);
-            enlarge(source, factor_read, Upscaler::Fast, models, &mut work, false)
+            enlarge(&rgb, factor as usize, Upscaler::Fast, models, &mut work, false)
         }
         result => result,
     };
-    let enlarged = result.map_err(|stop| match stop {
+    let mut larger = result.map_err(|stop| match stop {
         Stop::Failed(message) => message,
         Stop::TooSlow => unreachable!("the fast upscaler is never given up on"),
     })?;
-
-    // A halved picture read 4x is the original at 2x. For 4x, the rest of the way is
-    // Lanczos (another pass of a model makes it look painted); an odd width or height
-    // also lost its last pixel when halved.
-    let mut larger = if enlarged.dimensions() == (out_w, out_h) {
-        enlarged
-    } else {
-        resize_exact(&DynamicImage::ImageRgb8(enlarged), out_w, out_h).to_rgb8()
-    };
+    debug_assert_eq!(larger.dimensions(), (out_w, out_h));
 
     done.faces = faces::restore(&rgb, &mut larger, &found, &treatments, factor, models, &mut work)?;
     models.learned(work.timings);
@@ -506,7 +486,7 @@ fn enlarge(
                 }
             }
             work.tile_done(upscaler, took);
-            if give_up && matches!(upscaler, Upscaler::Detailed | Upscaler::Sharp) && work.too_slow(upscaler, tiles) {
+            if give_up && upscaler == Upscaler::Detailed && work.too_slow(tiles) {
                 return Err(Stop::TooSlow);
             }
         }
@@ -590,7 +570,7 @@ mod tests {
 
     /// As guessed for a Mac with a Neural Engine
     const MAC: Timings =
-        Timings { fast: 0.027, detailed: 0.3, face: 0.5, face_tile: 0.55, text: 0.3, dejpeg: 0.05, sharp: 0.3, budget: DETAILED_SECONDS };
+        Timings { fast: 0.027, detailed: 0.3, face: 0.5, face_tile: 0.55, text: 0.3, dejpeg: 0.05, budget: DETAILED_SECONDS };
 
     impl Default for Nearest {
         fn default() -> Self {
@@ -734,17 +714,15 @@ mod tests {
     }
 
     #[test]
-    fn blurry_pictures_are_halved_first() {
+    fn blurry_pictures_are_read_at_their_own_size() {
         let soft = DynamicImage::ImageRgb8(resize_exact(&DynamicImage::ImageRgb8(texture(150, 101)), 451, 303).to_rgb8());
         let mut models = Nearest::default();
         for factor in [2, 4] {
             let (up, _) = upscale(&soft, factor, Engine::Plain, &mut models, &|_, _| {}).unwrap();
             assert_eq!((up.width(), up.height()), (451 * factor, 303 * factor), "{factor}x keeps the exact size");
         }
-        // The sharpening upscaler (a soft picture needs sharpening, not texture) over the
-        // halved picture (225 x 151: 2 tiles), for 2x and for 4x; Lanczos does the rest
-        // of the way to 4x
-        assert_eq!(models.tiles, [Upscaler::Sharp; 4]);
+        // The detailed upscaler over the whole picture (451 x 303: 6 tiles), for 2x and 4x
+        assert_eq!(models.tiles, [Upscaler::Detailed; 12]);
     }
 
     #[test]
@@ -817,7 +795,7 @@ mod tests {
     fn a_slow_computer_gets_the_fast_upscaler() {
         // Guessed quick enough for the detailed upscaler, but its tiles turn out to take
         // 20 ms: 9 tiles would be 0.18 s, far beyond the 0.03 s it may take
-        let timings = Timings { fast: 0.0001, detailed: 0.001, face: 0.001, face_tile: 0.001, text: 0.001, dejpeg: 0.001, sharp: 0.001, budget: 0.03 };
+        let timings = Timings { fast: 0.0001, detailed: 0.001, face: 0.001, face_tile: 0.001, text: 0.001, dejpeg: 0.001, budget: 0.03 };
         let mut models = Nearest { timings, detailed: Duration::from_millis(20), ..Default::default() };
         let steps = std::cell::RefCell::new(vec![]);
         let img = DynamicImage::ImageRgb8(texture(600, 600));

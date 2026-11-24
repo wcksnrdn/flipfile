@@ -3,8 +3,7 @@ Runtime runs them (src-tauri/src/platform/onnx.rs). The same networks and weight
 Core ML models of macOS (convert.py), so the results match:
 
 - upscale.onnx (2.4 MB): Real-ESRGAN's compact general model, denoise 0.5 (compact.py).
-- upscale-photo.onnx (15 MB): 4xNomos2_realplksr_dysample (realplksr.py), Upscale Photo.
-- upscale-large.onnx (33 MB): Real-ESRGAN x4plus (rrdbnet.py), Upscale Photo's sharpener.
+- upscale-photo.onnx (33 MB): x4plus 70% + 4xNomos8kSC 30% (rrdbnet.py), Upscale Photo's and Plain's.
 - upscale-text.onnx (33 MB): RealESRNet x4plus (rrdbnet.py), Upscale Text's shapes.
 - dejpeg.onnx (144 MB): FBCNN (fbcnn.py), JPEG artefacts removed before Upscale Text.
 - colorize.onnx (147 MB): DDColor tiny (ddcolor.py), colours black-and-white photos.
@@ -42,11 +41,13 @@ import compact
 import dat
 import ddcolor
 import fbcnn
-import realplksr
 import restoreformer
 import rrdbnet
 
 TILE = 256
+# Upscale Photo's upscaler: x4plus's crisp detail, with 4xNomos8kSC's (x4plus trained
+# further on real photos) more natural texture and calmer JPEG handling
+PHOTO = [("RealESRGAN_x4plus.pth", 0.7), ("4xNomos8kSC.safetensors", 0.3)]
 FACE = 512
 FACE_TILE = 128
 # Smaller tensors (biases, norms) stay float32: they hardly count
@@ -156,12 +157,8 @@ def main(out_dir: Path, weights: Path, only):
         build("upscale", compact.load(), tile, "image", "upscaled", "half",
               "Real-ESRGAN general x4v3 (denoise 0.5): 4x of a 256 px tile", bsd)
     if wanted("upscale-photo"):
-        build("upscale-photo", realplksr.load("4xNomos2_realplksr_dysample.safetensors", TILE), tile, "image", "upscaled", "half",
-              "4xNomos2_realplksr_dysample (RealPLKSR): 4x of a 256 px tile of a photo",
-              "CC-BY-4.0, 4xNomos2_realplksr_dysample by Philip Hofmann (Phhofm)")
-    if wanted("upscale-large"):
-        build("upscale-large", rrdbnet.load("RealESRGAN_x4plus.pth"), tile, "image", "upscaled", "half",
-              "Real-ESRGAN x4plus: 4x of a 256 px tile", bsd)
+        build("upscale-photo", rrdbnet.blend(PHOTO), tile, "image", "upscaled", "half",
+              "Real-ESRGAN x4plus 70% + 4xNomos8kSC 30% (RRDBNet): 4x of a 256 px tile of a photo", "BSD-3-Clause, Real-ESRGAN by Xintao Wang; CC-BY-4.0, 4xNomos8kSC by Philip Hofmann (Phhofm)")
     if wanted("upscale-text"):
         build("upscale-text", rrdbnet.load("RealESRNet_x4plus.pth"), tile, "image", "upscaled", "half",
               "RealESRNet x4plus: 4x of a 256 px tile", bsd)

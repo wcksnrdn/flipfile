@@ -60,9 +60,41 @@ class RRDBNet(nn.Module):
 
 
 def load(path):
-    """The released weights, read safely (tensors only)"""
-    state = torch.load(path, map_location="cpu", weights_only=True)
-    state = state.get("params_ema", state.get("params", state))
+    """The released weights, read safely (tensors only): a .pth of Real-ESRGAN's or a
+    .safetensors in the original ESRGAN's naming (as 4xNomos8kSC is published)"""
+    if str(path).endswith(".safetensors"):
+        from safetensors.torch import load_file
+
+        state = _renamed(load_file(path))
+    else:
+        state = torch.load(path, map_location="cpu", weights_only=True)
+        state = state.get("params_ema", state.get("params", state))
     net = RRDBNet()
-    net.load_state_dict(state, strict=True)
+    net.load_state_dict({k: v.float() for k, v in state.items()}, strict=True)
     return net.eval()
+
+
+def blend(weighted):
+    """One network from several trained from the same start (Real-ESRGAN's "network
+    interpolation"): each weight the weighted average of theirs, as [(path, share), ...]"""
+    nets = [(load(path).state_dict(), share) for path, share in weighted]
+    assert abs(sum(share for _, share in weighted) - 1.0) < 1e-6
+    net = RRDBNet()
+    net.load_state_dict({k: sum(state[k] * share for state, share in nets) for k in nets[0][0]})
+    return net.eval()
+
+
+def _renamed(state):
+    """The original ESRGAN's names (model.0, model.1.sub.N.RDBk.convj.0, ...) as Real-ESRGAN's"""
+    fixed = {"model.0": "conv_first", "model.1.sub.23": "conv_body", "model.3": "conv_up1", "model.6": "conv_up2",
+             "model.8": "conv_hr", "model.10": "conv_last"}
+    out = {}
+    for key, value in state.items():
+        prefix, _, kind = key.rpartition(".")
+        if prefix in fixed:
+            out[f"{fixed[prefix]}.{kind}"] = value
+            continue
+        parts = prefix.split(".")  # model 1 sub N RDBk convj 0
+        assert parts[:3] == ["model", "1", "sub"] and parts[4].startswith("RDB") and parts[6] == "0", key
+        out[f"body.{parts[3]}.rdb{parts[4][3:]}.{parts[5]}.{kind}"] = value
+    return out

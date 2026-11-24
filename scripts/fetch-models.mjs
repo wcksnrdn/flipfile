@@ -17,11 +17,15 @@
 //      changed on disk is replaced instead of being bundled.
 // Any mismatch stops the build. Nothing unverified is ever left in src-tauri/models/.
 //
-// - Upscale Photo and Upscale Text (models-3): the detailed photo upscaler (Nomos2), the
-//   document upscaler (RealESRNet), the JPEG cleaner (FBCNN) and the colourer (DDColor),
-//   as Core ML and ONNX models like the first ones; and for Upscale Text on every system
-//   the open fonts it types words in (models/fonts) and the Indonesian and English word
-//   list Windows and Linux check words against (models/words.txt).
+// - Upscale Text and Colorize (models-3): the document upscaler (RealESRNet), the JPEG
+//   cleaner (FBCNN) and the colourer (DDColor), as Core ML and ONNX models like the first
+//   ones; and for Upscale Text on every system the open fonts it types words in
+//   (models/fonts) and the Indonesian and English word list it checks words against
+//   (models/words.txt).
+// - Upscale Photo (models-4): the detailed photo upscaler (Real-ESRGAN x4plus blended with
+//   4xNomos8kSC).
+// Older archives keep files no longer used (x4plus, Nomos2): only the files pinned below
+// are extracted.
 //
 // FLIPFILE_ONNX=1 fetches the ONNX models on a Mac too, to test the Windows/Linux engine
 // there. To publish new models, run the scripts, archive the folders and files with
@@ -41,6 +45,7 @@ import { fileURLToPath } from "node:url";
 const RELEASES = "https://github.com/wcksnrdn/flipfile/releases/download";
 const RELEASE = `${RELEASES}/models-2`;
 const RELEASE_3 = `${RELEASES}/models-3`;
+const RELEASE_4 = `${RELEASES}/models-4`;
 
 // Each set: its archive and pinned hash, the folders or files it holds (replaced as a
 // whole), and the pinned hash of every file
@@ -48,16 +53,12 @@ const SETS = {
   coreml: {
     url: `${RELEASE}/flipfile-models-2.tar.gz`,
     archive: "42af598dcdbd6935e7f7ca262e8d2dd9b08fb8c750b27318186fadbd95b7028a",
-    entries: ["upscale.mlmodelc", "upscale-large.mlmodelc", "faces.mlmodelc", "faces-upscale.mlmodelc"],
+    entries: ["upscale.mlmodelc", "faces.mlmodelc", "faces-upscale.mlmodelc"],
     files: {
       "upscale.mlmodelc/analytics/coremldata.bin": "939bd25cb6f733debaff2d96656db1d243ef104879967caf2b73be26b1560ff2",
       "upscale.mlmodelc/coremldata.bin": "9ab3dd8c107a184c44f096d44ddbc2093886a81618838e4d3916cd07b4c194aa",
       "upscale.mlmodelc/model.mil": "4fac2a38cbe1a49e35771d4b5a30978b23578c9fb00d27f93f6298c9703d0149",
       "upscale.mlmodelc/weights/weight.bin": "54850b2138ac1a8489448b93e8bc0b50fb24530d2999ff035c573f1cb7ff86b6",
-      "upscale-large.mlmodelc/analytics/coremldata.bin": "06f5dd29fad3cb8ae4ef8fdbf471682a5364aaf92945b2eccbc735f86dda497d",
-      "upscale-large.mlmodelc/coremldata.bin": "9fc55f1c3405bb060e9b68966dbef96b24131464a37ec3c3f58e2e540e710399",
-      "upscale-large.mlmodelc/model.mil": "edc1dbe8ffa5e45dae0d5e16da7e9ed877f90c405af12112f20d0ac190b7db3c",
-      "upscale-large.mlmodelc/weights/weight.bin": "b0771b2a3874414cc1bc409300447a3398f8096fd92515b27f348d1137c6db3e",
       "faces.mlmodelc/analytics/coremldata.bin": "e9e8208bf1d6e7df3838a2cfe7872a2b50a22241a28995fbdac8d526c1b0751b",
       "faces.mlmodelc/coremldata.bin": "22ae07ebcb7266421763cfcdeb456dcdcfb79f440d464c53e4e2a8232952cfaa",
       "faces.mlmodelc/model.mil": "e8eca3e9eff9c6f88fbc6fff9c029dbe536d18ac2040cebfa5435e4beea507d3",
@@ -72,12 +73,8 @@ const SETS = {
     url: `${RELEASE_3}/flipfile-models-3.tar.gz`,
     archive: "8a36f889ddc861b0711424972f0c4609dc046c758930f395f0ece093589c2350",
     size: 300 * 1024 * 1024,
-    entries: ["upscale-photo.mlmodelc", "upscale-text.mlmodelc", "dejpeg.mlmodelc", "colorize.mlmodelc"],
+    entries: ["upscale-text.mlmodelc", "dejpeg.mlmodelc", "colorize.mlmodelc"],
     files: {
-      "upscale-photo.mlmodelc/analytics/coremldata.bin": "635d78ba72f5a982753abf759cefaedde1c5a84f694fc2b49f351e764d0149c4",
-      "upscale-photo.mlmodelc/coremldata.bin": "2903962b9f008248d38b21d9bf53b8f01583f493dac40150b2bb729126879cf2",
-      "upscale-photo.mlmodelc/model.mil": "51e3330e20569a33268f7b815912f6053b84b446d48e2a1e3d16e48705bfe23f",
-      "upscale-photo.mlmodelc/weights/weight.bin": "633b492030a151902952eb8d6e2ef606708235e227a6a258348e5a648652e779",
       "upscale-text.mlmodelc/analytics/coremldata.bin": "ceb5b061ec036c134a94b668e66d22190c1851fbe3f4e6318220b3613f963637",
       "upscale-text.mlmodelc/coremldata.bin": "60d3d67c292df57252650820a3df15c727b9f87593a7e31f4d2875a572af9f09",
       "upscale-text.mlmodelc/model.mil": "a2dc13f1c563c76e8525046f337fd580ef3a5901ce4ec8d28fd36ddde6caf487",
@@ -96,13 +93,29 @@ const SETS = {
     url: `${RELEASE_3}/flipfile-models-onnx-3.tar.gz`,
     archive: "a86cd855db08202ba2bbbcbc559d7b2339a12c31ca9236c03a7fa781a740b07c",
     size: 330 * 1024 * 1024,
-    entries: ["upscale-photo.onnx", "upscale-text.onnx", "dejpeg.onnx", "colorize.onnx"],
+    entries: ["upscale-text.onnx", "dejpeg.onnx", "colorize.onnx"],
     files: {
-      "upscale-photo.onnx": "6e06fe2b455d31f48073cef7b13c61d90a0ff59d293e685030da8245abd653ec",
       "upscale-text.onnx": "ecea9700b2652e40fb8b3ca862256f96ca23f3f01170da097e99db51db788ed7",
       "dejpeg.onnx": "94a69c887f1835f671383e213173ab2c28e067af7f8229e09ff162edb91e0fd8",
       "colorize.onnx": "731a75086129b6863d3a12394be89254687bb1da24050fbf7d4857690b32db52",
     },
+  },
+  coreml4: {
+    url: `${RELEASE_4}/flipfile-models-4.tar.gz`,
+    archive: "11fe5bdae8f69469da65445437731c66fca8656557020a0d101b51dd73049576",
+    entries: ["upscale-photo.mlmodelc"],
+    files: {
+      "upscale-photo.mlmodelc/analytics/coremldata.bin": "61c0f45a8a06bdafecdc31fd3add16964ec76d2cbef088bd71f409603d679a49",
+      "upscale-photo.mlmodelc/coremldata.bin": "658b4ac9d246021e6f8d78a6e34830bc21274f3748d37a2f398f0c830fc011f7",
+      "upscale-photo.mlmodelc/model.mil": "c1a2a3837192fd96b5dc67b5a722f84c0156f60612a795ff9f7302ea853e5d8f",
+      "upscale-photo.mlmodelc/weights/weight.bin": "6665d498288f761e443e01bccdd63b963f267d676634eb6d5d11f64025824e63",
+    },
+  },
+  onnx4: {
+    url: `${RELEASE_4}/flipfile-models-onnx-4.tar.gz`,
+    archive: "a92414d3a4c424f73b22f111baf2a96878525ad6e592c9c2451dfde4126b2c6e",
+    entries: ["upscale-photo.onnx"],
+    files: { "upscale-photo.onnx": "82a272fb410a24a025ee5571e4ccf900abe401b1944477130832629c98f0f52d" },
   },
   text3: {
     url: `${RELEASE_3}/flipfile-text-3.tar.gz`,
@@ -161,10 +174,9 @@ const SETS = {
   onnx: {
     url: `${RELEASE}/flipfile-models-onnx-2.tar.gz`,
     archive: "e74e913e3048851ff3d6e84a749902d2c2bf2d50d9e455708bf984385eb69cdb",
-    entries: ["upscale.onnx", "upscale-large.onnx", "faces.onnx", "yunet.onnx", "faces-upscale.onnx"],
+    entries: ["upscale.onnx", "faces.onnx", "yunet.onnx", "faces-upscale.onnx"],
     files: {
       "upscale.onnx": "c88b3c063179e944ab58612cfa37526c9062d026103da8c09507f38b92ce2795",
-      "upscale-large.onnx": "52580cc02fb8d84bbbeb7a1c6855d6ba958122b31671cc747265f29198d9b60d",
       "faces.onnx": "7954c397267b83a9972ca0baf223a729a47bcc055435c67056652db6bee134d6",
       "yunet.onnx": "ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0",
       "faces-upscale.onnx": "9b0da336ae79e207ecbfd4f3dad637296f15ea0b9b8e42547596e8b3a2af304f",
@@ -270,14 +282,17 @@ async function fetchSet(name, set) {
 async function main() {
   if (process.platform === "darwin") {
     await fetchSet("Core ML", SETS.coreml);
-    await fetchSet("Core ML, Upscale Photo and Text", SETS.coreml3);
+    await fetchSet("Core ML, Upscale Text and Colorize", SETS.coreml3);
+    await fetchSet("Core ML, Upscale Photo", SETS.coreml4);
     if (process.env.FLIPFILE_ONNX) {
       await fetchSet("ONNX", SETS.onnx);
-      await fetchSet("ONNX, Upscale Photo and Text", SETS.onnx3);
+      await fetchSet("ONNX, Upscale Text and Colorize", SETS.onnx3);
+      await fetchSet("ONNX, Upscale Photo", SETS.onnx4);
     }
   } else {
     await fetchSet("ONNX", SETS.onnx);
-    await fetchSet("ONNX, Upscale Photo and Text", SETS.onnx3);
+    await fetchSet("ONNX, Upscale Text and Colorize", SETS.onnx3);
+    await fetchSet("ONNX, Upscale Photo", SETS.onnx4);
   }
   await fetchSet("fonts and words for Upscale Text", SETS.text3);
   await fetchSet("GGML", SETS.whisper);

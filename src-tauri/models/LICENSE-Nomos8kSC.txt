@@ -1,0 +1,15 @@
+4xNomos8kSC
+Copyright (c) 2023 Philip Hofmann (Phhofm)
+https://github.com/Phhofm/models/releases/tag/4xNomos8kSC
+
+Licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+Changes made for flipfile: the released weights (4xNomos8kSC.safetensors, Real-ESRGAN's
+RRDBNet trained further by Philip Hofmann on his Nomos8k dataset with JPEG compression
+and slight blur) were blended 30% with 70% of Real-ESRGAN x4plus's weights (network
+interpolation; x4plus is BSD-3-Clause, see LICENSE-Real-ESRGAN.txt), and the result
+converted to Core ML (upscale-photo.mlmodelc) and ONNX (upscale-photo.onnx) for 256 px
+tiles, with the weights stored in float16; the network is reimplemented in
+scripts/upscale-model/rrdbnet.py. The weights are provided as is,
+without warranties of any kind.
