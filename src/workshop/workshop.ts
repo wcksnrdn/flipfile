@@ -87,6 +87,7 @@ export const CATALOG: CatalogEntry[] = [
   // ─── Photo Smart Tools ────────────────────────────────────────────────────
   { id: PHOTO_EDITOR, label: "Edit", sub: "studio", title: "Photo Editor (Crop, Adjust, Looks, Resize)", category: "photo-tools" },
   { id: "nobg", label: "Remove", sub: "BG", title: "AI Remove Background", category: "photo-tools", disabled: !IS_MAC },
+  { id: "colorize", label: "Colorize", sub: "B&W", title: "AI Colorize a black-and-white photo", category: "photo-tools" },
   { id: "up-2x", label: "Photo", sub: "2×", title: "AI Upscale Photo 2× (colour, texture, faces)", category: "photo-tools" },
   { id: "up-4x", label: "Photo", sub: "4×", title: "AI Upscale Photo 4× (colour, texture, faces)", category: "photo-tools" },
   { id: "up-text-2x", label: "Text", sub: "2×", title: "AI Upscale Text 2× (documents, screenshots, chats)", category: "photo-tools" },
@@ -205,7 +206,7 @@ export const DEFAULT_ROOM_SLOTS: Record<RingId, string[]> = {
   photo: ["jpg", "png", "webp", "heic", "pdf", PHOTO_EDITOR, "photo-formats-nav", "photo-tools-nav"],
   "photo-formats": ["avif", "tiff", "gif", "bmp", "ico", "icns", "photo-pro-nav"],
   "photo-pro": ["jpeg", "tga", "exr", "hdr", "qoi", "ppm", "svg"],
-  "photo-tools": ["photo-compress-nav", "nobg", "photo-upscale-nav", "photo-transform-nav", "square", "gif-anim", "clean"],
+  "photo-tools": ["photo-compress-nav", "nobg", "photo-upscale-nav", "colorize", "photo-transform-nav", "square", "gif-anim", "clean"],
   "photo-compress": ["cmp-auto", "cmp-1m", "cmp-500k", "cmp-200k", "cmp-100k", "cmp-lossless"],
   "photo-upscale": ["up-2x", "up-4x", "up-text-2x", "up-text-4x", "up-plain-2x", "up-plain-4x"],
   "photo-transform": ["rot-r", "rot-l", "rot-180", "flip-h", "flip-v", "grayscale"],

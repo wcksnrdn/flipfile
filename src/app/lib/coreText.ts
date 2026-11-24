@@ -45,6 +45,7 @@ const ACTION_HINTS: { when: (id: string, hand: Hand) => boolean; does: string }[
   { when: is(PHOTO_EDITOR), does: "to open in Photo Editor" },
   { when: is("clean"), does: "to strip metadata" },
   { when: is("nobg"), does: "to remove background" },
+  { when: is("colorize"), does: "to colour with AI" },
   { when: startsWith("up-"), does: "to enlarge with AI" },
   { when: is("tr-srt", "tr-vtt"), does: "to make subtitles with AI" },
   { when: startsWith("tr-"), does: "to write down what is said" },
