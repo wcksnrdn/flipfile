@@ -19,11 +19,13 @@ const labelsOf = ({ format, preset }: BatchJob) => {
 const verbOf = (format: string) =>
   format.startsWith("up-")
     ? "Upscaling"
-    : format.startsWith("tr-")
-      ? "Listening"
-      : COMPRESS_LEVELS.includes(format)
-        ? "Compressing"
-        : "Converting";
+    : format === "colorize"
+      ? "Colorizing"
+      : format.startsWith("tr-")
+        ? "Listening"
+        : COMPRESS_LEVELS.includes(format)
+          ? "Compressing"
+          : "Converting";
 
 export function batchStartStatus(job: BatchJob): Status {
   const many = job.paths.length > 1;
