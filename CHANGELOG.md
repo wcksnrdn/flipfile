@@ -10,9 +10,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 - **Upscale is now three tools** (*Photo → Tools → Upscale ›*), each 2× or 4×:
   - **Photo**: a photo made larger and better, in its own colours: dull colours get a
-    little more life and the picture a touch more clarity, never a different hue. Sharp
-    photos get real texture (4xNomos2: skin, fabric, brick, foliage instead of a painted
-    look); blurry ones are still sharpened by Real-ESRGAN. Faces are restored as before.
+    little more life and the picture a touch more clarity, never a different hue. A new
+    detailed upscaler (Real-ESRGAN x4plus blended with 4xNomos8kSC, x4plus trained further
+    on real photos) keeps x4plus's crispness, with leaves, fabric and skin that still look
+    like a photo when zoomed in instead of blocky, paper-like surfaces. Faces are
+    restored as before.
   - **Text**: documents, screenshots, chats and posters. The writing is read by the
     system's OCR and every word read with certainty is typed again, crisp, in the closest
     font, size, weight and ink colour, on the picture's own background. JPEG speckle is
@@ -27,9 +29,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Blurry photos are no longer halved first and enlarged the rest of the way by Lanczos,
+  which looked blocky when zoomed in: they are sharpened at their own size.
 - AI Upscale used to redraw small text as other words ("Catatan kecil" came back as
   "Cafatan kook"); Upscale Text fixes that, and Upscale Photo no longer holds back for text.
-- The installers are about 300 MB larger: the new models (from the `models-3` release),
+- The installers are about 300 MB larger: the new models (from the `models-3` and `models-4` releases),
   the open fonts Upscale Text types in, and its word list.
 
 ## [0.12.1] - 2026-11-20
