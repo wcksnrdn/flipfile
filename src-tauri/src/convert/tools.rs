@@ -9,6 +9,7 @@ use std::io::BufWriter;
 use std::path::Path;
 use tauri::ipc::Channel;
 
+use super::colour;
 use super::encode::{
     encode, encode_avif, encode_jpeg, encode_png_oxipng, encode_webp_bytes, flatten_on_white, has_transparency, resize,
     resize_exact, resize_to_fit, write_tiff_deflate, GIF_SPEED, JPEG_FULL_CHROMA,
@@ -16,9 +17,9 @@ use super::encode::{
 use super::input::{file_name, header, open_oriented, same_format_ext};
 use super::memory;
 use super::output::{save_err, unique_output_path};
-use super::strip::strip_jpeg;
 use super::retype;
-use super::upscale::{self, MAX_PIXELS};
+use super::strip::strip_jpeg;
+use super::upscale::{self, Models, MAX_PIXELS};
 use super::{isolate, par_map, BatchResult, Converted, OnPage, Progress};
 use crate::pdf::render as pdf_render;
 use crate::platform::background;
@@ -33,6 +34,7 @@ pub(super) fn is_tool(format: &str) -> bool {
     matches!(
         format,
         "nobg"
+            | "colorize"
             | "up-2x"
             | "up-4x"
             | "up-plain-2x"
@@ -80,6 +82,7 @@ pub(super) fn run_tool(
         "up-4x" => upscale_file(input, 4, upscale::Engine::Photo, out_dir, options, on_step),
         "up-plain-2x" => upscale_file(input, 2, upscale::Engine::Plain, out_dir, options, on_step),
         "up-plain-4x" => upscale_file(input, 4, upscale::Engine::Plain, out_dir, options, on_step),
+        "colorize" => colorize_file(input, out_dir, options),
         "up-text-2x" => upscale_text_file(input, 2, out_dir, options, on_step),
         "up-text-4x" => upscale_text_file(input, 4, out_dir, options, on_step),
         "rot-r" | "rot-l" | "rot-180" | "flip-h" | "flip-v" | "grayscale" => {
@@ -125,9 +128,6 @@ fn upscale_file(
     encode(&larger, &ext, &output, options.quality)?;
     let mut converted = Converted::file(input, &output);
     let mut notes = vec![];
-    if done.colorized {
-        notes.push("colorized".to_string());
-    }
     match done.faces {
         0 => {}
         1 => notes.push("1 face restored".into()),
@@ -139,6 +139,25 @@ fn upscale_file(
     }
     converted.note = (!notes.is_empty()).then(|| notes.join(", "));
     Ok(converted)
+}
+
+/// Colours a black-and-white or toned photo with the colouring model (DDColor): its own
+/// lightness and detail, the model's colours, in the file's own format: `photo_colorized.jpg`.
+/// A photo already in colour is refused, so its colours are never replaced.
+fn colorize_file(input: &Path, out_dir: Option<&Path>, options: &Options) -> Result<Converted, String> {
+    let name = file_name(input);
+    let ext = same_format_ext(input)?;
+    let (img, _) = open_oriented(input)?;
+    let img = resize(img, options.resize);
+    let rgb = img.to_rgb8();
+    if !colour::monochrome(&rgb) {
+        return Err(format!("\"{name}\" is already in colour: Colorize is for black-and-white and sepia photos"));
+    }
+    let ab = upscale::Bundled.colorize(&colour::grey_input(&rgb))?;
+    let coloured = upscale::with_alpha(&img, colour::colorized(&rgb, &ab));
+    let output = unique_output_path(input, out_dir, "colorized", &ext);
+    encode(&coloured, &ext, &output, options.quality)?;
+    Ok(Converted::file(input, &output))
 }
 
 /// Enlarges a document, screenshot or chat 2x or 4x with Upscale Text

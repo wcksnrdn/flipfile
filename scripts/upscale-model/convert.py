@@ -15,8 +15,8 @@
   Neural Engine.
 - dejpeg.mlmodelc (137 MB): FBCNN (fbcnn.py), removes JPEG artefacts from a 256 px tile
   before Upscale Text reads it. Float16, Neural Engine.
-- colorize.mlmodelc (116 MB): DDColor tiny (ddcolor.py), colours a black-and-white photo
-  from its 512 x 512 lightness. Float16, on the CPU (the Neural Engine ruins it).
+- colorize.mlmodelc (116 MB): DDColor tiny (ddcolor.py), Colorize (Photo > Tools): colours a
+  black-and-white photo from its 512 x 512 lightness. Float16, on the CPU (the Neural Engine ruins it).
 - faces.mlmodelc (71 MB): RestoreFormer++ (restoreformer.py), redraws a face aligned to a
   512 x 512 template from a dictionary of high-quality face parts while keeping the
   person's identity. 8-bit weights: flipfile runs it on the CPU (on the Neural Engine the
