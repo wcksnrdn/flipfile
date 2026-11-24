@@ -281,10 +281,10 @@ impl From<String> for Stop {
 /// What an upscale is for
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Engine {
-    /// A photo made larger and better: its colours put right (a black-and-white one
-    /// coloured), texture drawn, faces restored, a fine grain
+    /// A photo made larger and a little better: texture drawn, faces restored, its own
+    /// colours kept, with dull colours a little livelier and a little more clarity
     Photo,
-    /// A photo made larger only: texture and faces, its colours as they are
+    /// A photo made larger only: texture and faces, its colours exactly as they are
     Plain,
 }
 
@@ -292,8 +292,6 @@ pub(super) enum Engine {
 #[derive(Debug, Default, PartialEq)]
 pub(super) struct Done {
     pub faces: usize,
-    /// A black-and-white photo was coloured
-    pub colorized: bool,
 }
 
 /// `img` made `factor` times larger (2 or 4) by `engine`. `report` hears how far it has
@@ -306,22 +304,8 @@ pub(super) fn upscale(
     report: &dyn Fn(usize, usize),
 ) -> Result<(DynamicImage, Done), String> {
     assert!(factor == 2 || factor == 4, "upscaling by {factor} is not supported");
-    let original = img.to_rgb8();
+    let rgb = img.to_rgb8();
     let mut done = Done::default();
-    // The colours first, at the picture's own size: the upscaler then draws its texture
-    // on what the photo should look like
-    let rgb = match engine {
-        Engine::Plain => original,
-        Engine::Photo if colour::monochrome(&original) => match models.colorize(&colour::grey_input(&original)) {
-            Ok(ab) => {
-                done.colorized = true;
-                colour::correct(&colour::colorized(&original, &ab), 0.5)
-            }
-            // Without its colours, a black-and-white photo is still enlarged
-            Err(_) => original,
-        },
-        Engine::Photo => colour::correct(&original, 1.0),
-    };
     let (w, h) = rgb.dimensions();
     let (out_w, out_h) = (w * factor, h * factor);
     let soft = softness(&rgb).is_some_and(|soft| soft < SOFT);
@@ -379,17 +363,10 @@ pub(super) fn upscale(
     done.faces = faces::restore(&rgb, &mut larger, &found, &treatments, factor, models, &mut work)?;
     models.learned(work.timings);
     // The upscalers shift colours a little over large areas (the detailed one most):
-    // taken back, so the result has the colours the photo was meant to have
-    colour::lock(&mut larger, &rgb);
-    if engine == Engine::Photo {
-        colour::grain(&mut larger, GRAIN);
-    }
+    // taken back, so the result keeps the photo's own colours
+    colour::lock(&mut larger, &rgb, engine == Engine::Photo);
     Ok((with_alpha(img, larger), done))
 }
-
-/// How strong Upscale Photo's grain is: a standard deviation of about 3 levels in the mid
-/// tones, which smooth areas need to look like a photo rather than plastic
-const GRAIN: f32 = 0.012;
 
 /// `larger`, with `img`'s transparency enlarged to fit it (Lanczos): the models don't
 /// know transparency

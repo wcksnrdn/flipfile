@@ -17,7 +17,7 @@ code from the original repositories is included in the app.
 | `upscale-large.mlmodelc` / `upscale-large.onnx` | Real-ESRGAN x4plus, Upscale Photo's sharpener for soft photos | Xintao Wang et al. | BSD-3-Clause, [`LICENSE-Real-ESRGAN.txt`](LICENSE-Real-ESRGAN.txt) |
 | `upscale-text.mlmodelc` / `upscale-text.onnx` | RealESRNet x4plus, Upscale Text's shapes | Xintao Wang et al. | BSD-3-Clause, [`LICENSE-Real-ESRGAN.txt`](LICENSE-Real-ESRGAN.txt) |
 | `dejpeg.mlmodelc` / `dejpeg.onnx` | FBCNN (color), removes JPEG artefacts | Jiaxi Jiang, Kai Zhang, Radu Timofte | Apache-2.0, [`LICENSE-FBCNN.txt`](LICENSE-FBCNN.txt) |
-| `colorize.mlmodelc` / `colorize.onnx` | DDColor (paper tiny), colours black-and-white photos | Xiaoyang Kang, Tao Yang, Wenqi Ouyang, Peiran Ren, Lingzhi Li, Xuansong Xie | Apache-2.0, [`LICENSE-DDColor.txt`](LICENSE-DDColor.txt) |
+| `colorize.mlmodelc` / `colorize.onnx` | DDColor (paper tiny), Colorize: colours black-and-white photos | Xiaoyang Kang, Tao Yang, Wenqi Ouyang, Peiran Ren, Lingzhi Li, Xuansong Xie | Apache-2.0, [`LICENSE-DDColor.txt`](LICENSE-DDColor.txt) |
 | `faces.mlmodelc` / `faces.onnx` | RestoreFormer++ | Zhouxia Wang, Jiawei Zhang, Tianshui Chen, Wenping Wang, Ping Luo | Apache-2.0, [`LICENSE-RestoreFormerPlusPlus.txt`](LICENSE-RestoreFormerPlusPlus.txt) |
 | `faces-upscale.mlmodelc` / `faces-upscale.onnx` | 4xFaceUpSharpLDAT (DAT), a 4x upscaler for faces | Philip Hofmann (Phhofm) | CC-BY-4.0, [`LICENSE-FaceUp.txt`](LICENSE-FaceUp.txt) |
 | — / `yunet.onnx` | YuNet face detector (`face_detection_yunet_2026may.onnx`, unchanged) | Shiqi Yu et al. | MIT, [`LICENSE-YuNet.txt`](LICENSE-YuNet.txt) |
