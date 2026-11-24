@@ -6,15 +6,13 @@ flipfile's AI upscaling (Photo → Tools → Upscale: Photo, Text and Plain, 2×
 the same models on every system: as Core ML models on the Mac, as ONNX models (run by
 ONNX Runtime) on Windows and Linux. They are converted from the authors' published
 weights by `scripts/upscale-model/convert.py` and `export_onnx.py`, with model code
-written for flipfile (`compact.py`, `dat.py`, `realplksr.py`, `restoreformer.py`,
-`rrdbnet.py`) or, for DDColor and FBCNN, the authors' own code at build time; no source
+written for flipfile (`compact.py`, `dat.py`, `restoreformer.py`, `rrdbnet.py`) or, for DDColor and FBCNN, the authors' own code at build time; no source
 code from the original repositories is included in the app.
 
 | Model file (Mac / Windows and Linux) | Model | Authors | Licence |
 |---|---|---|---|
 | `upscale.mlmodelc` / `upscale.onnx` | Real-ESRGAN general x4v3 (denoise 0.5) | Xintao Wang et al. | BSD-3-Clause, [`LICENSE-Real-ESRGAN.txt`](LICENSE-Real-ESRGAN.txt) |
-| `upscale-photo.mlmodelc` / `upscale-photo.onnx` | 4xNomos2_realplksr_dysample (RealPLKSR), Upscale Photo's detailed upscaler | Philip Hofmann (Phhofm) | CC-BY-4.0, [`LICENSE-Nomos2.txt`](LICENSE-Nomos2.txt) |
-| `upscale-large.mlmodelc` / `upscale-large.onnx` | Real-ESRGAN x4plus, Upscale Photo's sharpener for soft photos | Xintao Wang et al. | BSD-3-Clause, [`LICENSE-Real-ESRGAN.txt`](LICENSE-Real-ESRGAN.txt) |
+| `upscale-photo.mlmodelc` / `upscale-photo.onnx` | Upscale Photo's and Plain's detailed upscaler: Real-ESRGAN x4plus (70%) blended with 4xNomos8kSC (30%, x4plus trained further on photos) | Xintao Wang et al.; Philip Hofmann (Phhofm) | BSD-3-Clause, [`LICENSE-Real-ESRGAN.txt`](LICENSE-Real-ESRGAN.txt); CC-BY-4.0, [`LICENSE-Nomos8kSC.txt`](LICENSE-Nomos8kSC.txt) |
 | `upscale-text.mlmodelc` / `upscale-text.onnx` | RealESRNet x4plus, Upscale Text's shapes | Xintao Wang et al. | BSD-3-Clause, [`LICENSE-Real-ESRGAN.txt`](LICENSE-Real-ESRGAN.txt) |
 | `dejpeg.mlmodelc` / `dejpeg.onnx` | FBCNN (color), removes JPEG artefacts | Jiaxi Jiang, Kai Zhang, Radu Timofte | Apache-2.0, [`LICENSE-FBCNN.txt`](LICENSE-FBCNN.txt) |
 | `colorize.mlmodelc` / `colorize.onnx` | DDColor (paper tiny), Colorize: colours black-and-white photos | Xiaoyang Kang, Tao Yang, Wenqi Ouyang, Peiran Ren, Lingzhi Li, Xuansong Xie | Apache-2.0, [`LICENSE-DDColor.txt`](LICENSE-DDColor.txt) |
@@ -24,7 +22,8 @@ code from the original repositories is included in the app.
 
 Changes from the original works: the weights were converted to Core ML and ONNX; the
 compact upscaler is an even blend of `realesr-general-x4v3` and
-`realesr-general-wdn-x4v3`; 4xNomos2, x4plus, RealESRNet, FBCNN and DDColor are stored in
+`realesr-general-wdn-x4v3`; the photo upscaler is 70% x4plus and 30% 4xNomos8kSC by
+weight (network interpolation); it, RealESRNet, FBCNN and DDColor are stored in
 float16, RestoreFormer++ and 4xFaceUpSharpLDAT with 8-bit weights. The Mac finds faces with its own Vision framework
 instead of YuNet.
 
@@ -35,10 +34,9 @@ instead of YuNet.
 - 4xFaceUpSharpLDAT: https://github.com/Phhofm/models/releases/tag/4xFaceUpDAT_Series
   (network: Z. Chen et al., "Dual Aggregation Transformer for Image Super-Resolution",
   ICCV 2023; trained by Philip Hofmann on his FaceUp dataset, made from FFHQ)
-- 4xNomos2_realplksr_dysample: https://huggingface.co/Phips/4xNomos2_realplksr_dysample
-  (network: D. Lee et al., "Partial Large Kernel CNNs for Efficient Super-Resolution",
-  2024, with DySample from W. Liu et al., "Learning to Upsample by Learning to Sample",
-  ICCV 2023; trained by Philip Hofmann on his Nomos v2 dataset)
+- 4xNomos8kSC: https://github.com/Phhofm/models/releases/tag/4xNomos8kSC (network:
+  Real-ESRGAN's RRDBNet, X. Wang et al., ICCVW 2021; trained further by Philip Hofmann on
+  his Nomos8k dataset, with JPEG compression and slight blur)
 - FBCNN: https://github.com/jiaxi-jiang/FBCNN (J. Jiang, K. Zhang, R. Timofte, "Towards
   Flexible Blind JPEG Artifacts Removal", ICCV 2021)
 - DDColor: https://github.com/piddnad/DDColor (X. Kang et al., "DDColor: Towards

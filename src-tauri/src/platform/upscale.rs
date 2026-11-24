@@ -7,11 +7,11 @@
 //   by scripts/upscale-model/export_onnx.py; on Windows on the GPU (DirectML).
 //
 // The models all read and write planar floats (all red values, then green, then blue):
-// - five upscalers of a square tile, SCALE times larger, values 0 to 1: a fast one
-//   (Real-ESRGAN compact), a detailed one for sharp photos (4xNomos2 RealPLKSR, real
-//   texture), one for soft photos (Real-ESRGAN x4plus, which sharpens what Nomos2 keeps
-//   soft) and one for documents (RealESRNet, which draws nothing it can't see) of TILE x
-//   TILE tiles, and one for faces (4xFaceUpSharpLDAT) of FACE_TILE x FACE_TILE;
+// - four upscalers of a square tile, SCALE times larger, values 0 to 1: a fast one
+//   (Real-ESRGAN compact), a detailed one for photos (Real-ESRGAN x4plus blended with
+//   4xNomos8kSC, x4plus trained further on real photos: crisp, natural texture) and
+//   one for documents (RealESRNet, which draws nothing it can't see) of TILE x TILE
+//   tiles, and one for faces (4xFaceUpSharpLDAT) of FACE_TILE x FACE_TILE;
 // - a face restorer of a FACE x FACE face aligned to a template, values -1 to 1
 //   (RestoreFormer++);
 // - a JPEG cleaner of a TILE x TILE tile, same size (FBCNN), for Upscale Text;
@@ -37,11 +37,9 @@ pub const COLORIZE: usize = 512;
 pub enum Upscaler {
     /// Real-ESRGAN compact: quick, for large pictures and for detail already restored
     Fast,
-    /// 4xNomos2 (RealPLKSR): real texture on sharp photos (skin, fabric, foliage), for
-    /// small pictures. It keeps soft what is soft (depth of field)
+    /// Real-ESRGAN x4plus blended with 4xNomos8kSC: crisp, natural texture on photos
+    /// (fabric, foliage, skin), sharpening soft ones too, for pictures up to Full HD
     Detailed,
-    /// Real-ESRGAN x4plus: sharpens a soft photo (enlarged, out of focus, a blurry scan)
-    Sharp,
     /// RealESRNet: faithful, for a document's shapes, rules and panels
     Text,
     /// 4xFaceUpSharpLDAT: trained on faces, draws sharp eyes, lashes, brows, hair and skin
@@ -52,7 +50,7 @@ impl Upscaler {
     /// The side of the tile it reads
     pub fn tile(self) -> usize {
         match self {
-            Upscaler::Fast | Upscaler::Detailed | Upscaler::Sharp | Upscaler::Text => TILE,
+            Upscaler::Fast | Upscaler::Detailed | Upscaler::Text => TILE,
             Upscaler::Face => FACE_TILE,
         }
     }
@@ -78,22 +76,20 @@ pub(crate) fn model_path(file: &str) -> Option<PathBuf> {
 
 /// What each step takes here before any has been measured, in seconds: a tile of the
 /// fast upscaler, a tile of the detailed one, a face restored, a tile of the face
-/// upscaler, a tile of the text upscaler, a tile cleaned of JPEG artefacts, a tile of the
-/// sharpening upscaler. (On Windows, this loads the fast model to learn whether there is
-/// a GPU.)
-pub fn expected_seconds() -> [f32; 7] {
+/// upscaler, a tile of the text upscaler, a tile cleaned of JPEG artefacts. (On Windows,
+/// this loads the fast model to learn whether there is a GPU.)
+pub fn expected_seconds() -> [f32; 6] {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        // M1 Pro: Neural Engine, but the detailed upscaler and the face upscaler on the
-        // GPU and faces on the CPU
-        [0.027, 0.32, 0.5, 0.55, 0.3, 0.05, 0.3]
+        // M1 Pro: Neural Engine; faces on the CPU, the face upscaler on the GPU
+        [0.027, 0.3, 0.5, 0.55, 0.3, 0.05]
     } else if cfg!(target_os = "macos") {
         // Intel: the GPU, at best
-        [0.2, 2.0, 2.0, 3.0, 3.0, 0.6, 3.0]
+        [0.2, 3.0, 2.0, 3.0, 3.0, 0.6]
     } else {
         #[cfg(not(target_os = "macos"))]
         return onnx_models::expected_seconds();
         #[allow(unreachable_code)]
-        [0.6, 5.0, 4.0, 4.0, 15.0, 2.0, 15.0]
+        [0.6, 15.0, 4.0, 4.0, 15.0, 2.0]
     }
 }
 
@@ -103,7 +99,6 @@ pub fn upscale_tile(upscaler: Upscaler, tile: &[f32]) -> Result<Vec<f32>, String
     match upscaler {
         Upscaler::Fast => coreml::FAST.run(tile),
         Upscaler::Detailed => coreml::DETAILED.run(tile),
-        Upscaler::Sharp => coreml::SHARP.run(tile),
         Upscaler::Text => coreml::TEXT.run(tile),
         Upscaler::Face => coreml::FACE_UP.run(tile),
     }
@@ -158,7 +153,6 @@ pub mod onnx_models {
 
     static FAST: Model = Model::new("upscale.onnx", true);
     static DETAILED: Model = Model::new("upscale-photo.onnx", true);
-    static SHARP: Model = Model::new("upscale-large.onnx", true);
     static TEXT: Model = Model::new("upscale-text.onnx", true);
     static FACES: Model = Model::new("faces.onnx", true);
     static FACE_UP: Model = Model::new("faces-upscale.onnx", true);
@@ -169,7 +163,6 @@ pub mod onnx_models {
         let model = match upscaler {
             Upscaler::Fast => &FAST,
             Upscaler::Detailed => &DETAILED,
-            Upscaler::Sharp => &SHARP,
             Upscaler::Text => &TEXT,
             Upscaler::Face => &FACE_UP,
         };
@@ -205,17 +198,17 @@ pub mod onnx_models {
 
     #[cfg_attr(test, allow(dead_code))]
     pub fn release() {
-        for model in [&FAST, &DETAILED, &SHARP, &TEXT, &FACES, &FACE_UP, &DEJPEG, &COLOURS] {
+        for model in [&FAST, &DETAILED, &TEXT, &FACES, &FACE_UP, &DEJPEG, &COLOURS] {
             model.release();
         }
     }
 
     /// See super::expected_seconds: measured with ONNX Runtime on an M1 Pro's CPU; a
     /// GPU's guessed (integrated GPUs, the slowest likely, take about a tenth)
-    pub fn expected_seconds() -> [f32; 7] {
+    pub fn expected_seconds() -> [f32; 6] {
         match FAST.prepare() {
-            Some(Device::Gpu) => [0.1, 0.6, 0.8, 1.0, 1.5, 0.3, 1.5],
-            _ => [0.6, 5.0, 4.0, 3.6, 15.0, 2.0, 15.0],
+            Some(Device::Gpu) => [0.1, 1.5, 0.8, 1.0, 1.5, 0.3],
+            _ => [0.6, 15.0, 4.0, 3.6, 15.0, 2.0],
         }
     }
 
@@ -270,12 +263,8 @@ mod coreml {
     unsafe impl Send for Model {}
 
     pub static FAST: Spec = Spec::new("upscale.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::All);
-    // On the GPU: the Neural Engine is slower on this one and loses accuracy in its
-    // sampling (0.3 s a tile on an M1 Pro's GPU)
     pub static DETAILED: Spec =
-        Spec::new("upscale-photo.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::CPUAndGPU);
-    pub static SHARP: Spec =
-        Spec::new("upscale-large.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::All);
+        Spec::new("upscale-photo.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::All);
     pub static TEXT: Spec =
         Spec::new("upscale-text.mlmodelc", ("image", TILE), ("upscaled", TILE * SCALE, 3), MLComputeUnits::All);
     pub static DEJPEG: Spec = Spec::new("dejpeg.mlmodelc", ("image", TILE), ("cleaned", TILE, 3), MLComputeUnits::All);
