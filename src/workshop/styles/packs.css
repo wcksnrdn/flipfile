@@ -1,0 +1,168 @@
+/* At the top: the AI features to download (PacksSection.tsx) */
+
+.ws-packs {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 10px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ws-packs.has-missing {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.ws-pack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+/* The one a drop on the ring asked for */
+.ws-pack.focused {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+  animation: ws-pack-ask 1.2s ease 2;
+}
+
+@keyframes ws-pack-ask {
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
+  }
+}
+
+.ws-pack-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ws-pack-name {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-pack-tag {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--ok);
+  background: rgba(48, 209, 88, 0.16);
+}
+
+.ws-pack-info {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.ws-pack-error {
+  font-size: 10px;
+  color: var(--err);
+}
+
+.ws-pack-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ws-pack-action .ws-btn {
+  white-space: nowrap;
+}
+
+.ws-pack-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  width: 150px;
+}
+
+.ws-pack-bar {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.ws-pack-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #ffffff;
+  transition: width 0.15s linear;
+}
+
+.ws-pack-count {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-packs-installed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-pack-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 500;
+  background: rgba(48, 209, 88, 0.1);
+  border: 1px solid rgba(48, 209, 88, 0.3);
+}
+
+.ws-pack-chip-size {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.ws-pack-remove {
+  border: none;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+}
+
+.ws-pack-remove:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ws-pack-remove.confirm {
+  color: #ffffff;
+  background: rgba(255, 69, 58, 0.75);
+}
+
+/* A catalog chip whose feature isn't downloaded */
+.ws-cat-chip-pack {
+  font-size: 9px;
+  color: var(--muted);
+}

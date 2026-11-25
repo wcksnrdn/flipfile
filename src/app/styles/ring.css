@@ -135,3 +135,17 @@
   font-weight: 600;
   letter-spacing: 0.3px;
 }
+
+/* A feature whose AI models aren't downloaded yet: still there, quieter, with the size to get it */
+.segment.needs-pack:not(.active) .segment-label {
+  fill: var(--muted);
+}
+
+.segment.needs-pack .segment-rim {
+  stroke-dasharray: 3 3;
+}
+
+.segment.needs-pack:not(.active) .segment-sub {
+  fill: var(--text);
+  font-weight: 600;
+}

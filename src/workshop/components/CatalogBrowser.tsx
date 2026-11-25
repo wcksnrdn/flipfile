@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { RingId } from "../../rings/dropTarget";
+import { packNeeded, sizeLabel } from "../../packs/packs";
 import { cls } from "../../shared/cls";
 import type { PressChip } from "../hooks/useChipPress";
 import { filterCatalog } from "../slots";
@@ -46,6 +47,7 @@ export default function CatalogBrowser({ ring, slots, onPressChip }: Props) {
       <div className="ws-catalog-grid">
         {items.map((item) => {
           const inRing = slots.includes(item.id);
+          const pack = item.disabled ? undefined : packNeeded(item.id, item.nav);
           return (
             <div
               key={item.id}
@@ -63,6 +65,7 @@ export default function CatalogBrowser({ ring, slots, onPressChip }: Props) {
                 <span className={`ws-cat-chip-action ${inRing ? "on" : "off"}`}>{inRing ? "✓ Added" : "+ Add"}</span>
               </div>
               <span className="ws-cat-chip-title">{item.title}</span>
+              {pack && <span className="ws-cat-chip-pack">Needs {pack.name} · {sizeLabel(pack.download || pack.size)} (above)</span>}
             </div>
           );
         })}

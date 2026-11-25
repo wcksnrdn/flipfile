@@ -1,6 +1,8 @@
+import type { Packs } from "../packs/usePacks";
 import type { RingId } from "../rings/dropTarget";
 import CatalogBrowser from "./components/CatalogBrowser";
 import ModeBar from "./components/ModeBar";
+import PacksSection from "./components/PacksSection";
 import SlotWorkbench from "./components/SlotWorkbench";
 import WorkshopHeader from "./components/WorkshopHeader";
 import WorkspacePicker from "./components/WorkspacePicker";
@@ -21,6 +23,9 @@ type Props = {
   state: WorkspacesState;
   activeWorkspace: WorkspaceConfig;
   editingRing: RingId;
+  packs: Packs;
+  /** The pack a drop on the ring asked for */
+  packFocus: string | null;
   onSelectWorkspace: (id: string) => void;
   onCreateWorkspace: (name: string) => void;
   onDeleteWorkspace: (id: string) => void;
@@ -41,6 +46,8 @@ export default function WorkshopPanel({
   state,
   activeWorkspace,
   editingRing,
+  packs,
+  packFocus,
   onSelectWorkspace,
   onCreateWorkspace,
   onDeleteWorkspace,
@@ -80,6 +87,8 @@ export default function WorkshopPanel({
 
       {/* Single smooth scrollable body so nothing is ever cut off on smaller window sizes */}
       <div className="ws-scroll-body">
+        <PacksSection packs={packs} focus={packFocus} />
+
         <div className="ws-top-controls">
           <WorkspacePicker
             state={state}

@@ -1,13 +1,15 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { CORE_OPEN_SCALE, CORE_SIZE, STAGE_SIZE } from "../rings/dropTarget";
 import { DEBUG_DROP, DebugOverlay } from "../debug/DebugOverlay";
 import EditorPanel from "../editor/EditorPanel";
 import { photoName } from "../editor/hooks/usePhoto";
+import { packSub } from "../packs/packs";
+import { usePacks } from "../packs/usePacks";
 import UpdateDialog from "../update/UpdateDialog";
 import WorkshopPanel from "../workshop/WorkshopPanel";
-import { PHOTO_EDITOR } from "../workshop/workshop";
+import { PHOTO_EDITOR, packFor } from "../workshop/workshop";
 import ChipDragGhost from "./components/ChipDragGhost";
 import CoreDisc from "./components/CoreDisc";
 import RingSvg from "./components/RingSvg";
@@ -51,12 +53,15 @@ export default function App() {
   const aiSupported = useAiSupport();
   const settingsSummary = useSettingsSummary();
   const scale = useScaleFactor();
+  const packs = usePacks();
+  // The pack a drop on the ring asked for, shown first in the Workshop
+  const [packFocus, setPackFocus] = useState<string | null>(null);
   useBackgroundStatus(statusActions);
 
   // The rings and what is in hand
   const { coreRef, coreCenter } = useCoreAnchor();
   const workspaces = useWorkspaces();
-  const nav = useRingNavigation(workspaces.active, aiSupported);
+  const nav = useRingNavigation(workspaces.active, aiSupported, packs.packs);
   const selection = useRingSelection({ nav, coreCenter, scale });
   const workshop = useWorkshop({ workspaces, nav, coreCenter, clearHover: () => selection.setHovered(null) });
   const editor = useEditor({ coreCenter });
@@ -82,8 +87,15 @@ export default function App() {
 
   // Input: drag & drop, paste-and-click, Option/Alt, keyboard, the core itself
   const convert = useConversion(statusActions);
-  // The Edit slice opens the photo in the Photo Editor; every other one converts
+  // A slice whose AI models aren't downloaded opens the Workshop to get them; the Edit slice
+  // opens the photo in the Photo Editor; every other one converts
   const execute: Execute = (paths, format, toDownloads, preset) => {
+    const pack = packFor(format);
+    if (pack) {
+      setPackFocus(pack.id);
+      if (!workshop.open) workshop.toggle(true);
+      return;
+    }
     if (format !== PHOTO_EDITOR) return convert(paths, format, toDownloads, preset);
     if (workshop.open) workshop.toggle(false, true);
     editor.openPhoto(paths[0], toDownloads);
@@ -130,6 +142,8 @@ export default function App() {
     },
   });
 
+  const packOf = (id: string | undefined) => (id ? packs.packs.find((p) => p.id === id) : undefined);
+  const hoveredPack = packOf(nav.built.rings[nav.ringId]?.items.find((i) => i.id === selection.hovered)?.pack);
   const text = coreText({
     open,
     dragging: selection.dragging,
@@ -147,6 +161,7 @@ export default function App() {
     activeWorkspace: workspaces.active,
     status,
     editing: editor.request && photoName(editor.request.path),
+    neededPack: hoveredPack && { pack: hoveredPack, progress: packs.progress[hoveredPack.id] },
   });
   const busy = !open && status?.tone === "busy";
   const aiBusy = busy && !!status?.ai;
@@ -171,7 +186,11 @@ export default function App() {
           current={nav.ringId}
           hovered={selection.hovered}
           preset={selection.preset}
-          subOf={sliceSub}
+          subOf={(item) => {
+            // A slice whose pack is downloading counts up
+            const pack = packOf(item.pack);
+            return pack ? packSub(pack, packs.progress[pack.id]) : sliceSub(item);
+          }}
         />
         <CoreDisc
           coreRef={coreRef}
@@ -194,6 +213,8 @@ export default function App() {
           state={workspaces.state}
           activeWorkspace={workspaces.active}
           editingRing={workshop.editingRing}
+          packs={packs}
+          packFocus={packFocus}
           {...workshop.panelHandlers}
           onStartChipDrag={startChipDrag}
           onWindowResized={() => sendGlass(coreCenter(), GLASS_OPEN).catch(() => {})}

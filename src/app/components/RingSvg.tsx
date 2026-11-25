@@ -70,6 +70,7 @@ function Segment({ ring, item, index, path, active, sub }: SegmentProps) {
     item.nav && "nav",
     ring.id === "category" && "category-item",
     item.id === AI_SUMMARY && "ai",
+    item.pack && "needs-pack",
   ]
     .filter(Boolean)
     .join(" ");

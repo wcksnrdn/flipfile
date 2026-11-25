@@ -47,6 +47,31 @@ describe("coreText", () => {
     });
   });
 
+  describe("a feature that isn't downloaded", () => {
+    const upscale = {
+      id: "upscale",
+      name: "Upscale",
+      targets: ["up-2x"],
+      state: "missing" as const,
+      size: 145_000_000,
+      download: 145_000_000,
+      done: 0,
+      total: 0,
+      removable: false,
+    };
+
+    it("says what dropping there gets, and its size", () => {
+      const t = coreText(aiming({ ringId: "photo-upscale", hovered: "up-2x", neededPack: { pack: upscale } }));
+      expect(t).toEqual({ title: "Upscale Photo 2×", hint: "Release to get Upscale · 145 MB", badge: "Not downloaded yet" });
+    });
+
+    it("counts up while it downloads", () => {
+      const pack = { ...upscale, state: "downloading" as const };
+      const t = coreText(aiming({ ringId: "photo-upscale", hovered: "up-2x", neededPack: { pack, progress: { id: "upscale", done: 1, total: 4 } } }));
+      expect(t.hint).toBe("Downloading Upscale · 25%");
+    });
+  });
+
   describe("aiming files at the ring", () => {
     it("asks for a category in the lobby", () => {
       expect(coreText(aiming({}))).toMatchObject({ title: "Convert", hint: "Pick a category" });

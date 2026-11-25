@@ -1,4 +1,5 @@
 import { COMPRESS_LEVELS, isCategoryRing, labelOf, type Ring, type RingId } from "../../rings/dropTarget";
+import { percent, sizeLabel, type PackProgress, type PackStatus } from "../../packs/packs";
 import { formatBytes } from "../../toast/toast";
 import { AI_SUMMARY, PHOTO_EDITOR, type WorkspaceConfig } from "../../workshop/workshop";
 import { ALT_KEY, ALT_SUPPORTED, CATEGORY_LABELS, ON_DEVICE } from "./constants";
@@ -26,6 +27,8 @@ export type CoreTextInput = {
   status: Status | null;
   /** The name of the photo open in the Photo Editor beside the circle */
   editing: string | null;
+  /** The pack the hovered slice needs and isn't here yet, and its download */
+  neededPack?: { pack: PackStatus; progress?: PackProgress };
 };
 
 type Hand = { fileCount: number; mergeable: boolean };
@@ -120,9 +123,20 @@ function presetRingText({ preset, dragging }: CoreTextInput): CoreText {
   };
 }
 
+// A slice whose AI models aren't downloaded: dropping there opens the Workshop to get them
+function packText(title: string, verb: string, { pack, progress }: NonNullable<CoreTextInput["neededPack"]>): CoreText {
+  const hint =
+    pack.state === "downloading"
+      ? `Downloading ${pack.name}${progress?.total ? ` · ${percent(progress.done, progress.total)}%` : "…"}`
+      : pack.state === "restart"
+        ? `Restart flipfile to use ${pack.name}`
+        : `${verb} to get ${pack.name} · ${sizeLabel(pack.download || pack.size)}`;
+  return { title, hint, badge: "Not downloaded yet" };
+}
+
 // Files in hand (dragged in or pasted), aiming at a ring
 function aimingText(input: CoreTextInput): CoreText {
-  const { hovered, preset, dragging, picking, ringId, rings, fileCount, mergeable, settingsSummary } = input;
+  const { hovered, preset, dragging, picking, ringId, rings, fileCount, mergeable, settingsSummary, neededPack } = input;
   const verb = dragging ? "Release" : "Click";
   const presetLabel = preset ? labelOf(preset) : undefined;
   const badge = isAiTool(hovered)
@@ -134,10 +148,12 @@ function aimingText(input: CoreTextInput): CoreText {
         : settingsSummary;
 
   // The lobby names its rooms; an action placed in it (AI Summary) speaks for itself
-  const hoveredAction = !!hovered && !rings[ringId]?.items.find((i) => i.id === hovered)?.nav;
+  const hoveredItem = hovered ? rings[ringId]?.items.find((i) => i.id === hovered) : undefined;
+  const hoveredAction = !!hovered && (!hoveredItem?.nav || !!hoveredItem.pack);
   if (isCategoryRing(ringId) && !hoveredAction) return { title: "Convert", hint: "Pick a category", badge };
 
   const hoveredLabel = hovered ? labelOf(hovered) : undefined;
+  if (hovered && neededPack) return packText(hoveredLabel ?? hoveredItem?.label ?? hovered, verb, neededPack);
   if (hovered && hoveredLabel) {
     return { title: hoveredLabel, hint: `${verb} ${actionHint(hovered, { fileCount, mergeable })}`, badge };
   }

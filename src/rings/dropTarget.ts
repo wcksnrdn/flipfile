@@ -32,6 +32,7 @@ export type Item = {
   disabled?: boolean;
   nav?: RingId; // hovering switches to this ring instead of selecting a format
   preset?: boolean; // size/quality preset (Option/Alt ring), picked by hovering
+  pack?: string; // the AI feature pack it needs and isn't here yet: dropping on it opens the Workshop to get it
 };
 
 export type Ring = {

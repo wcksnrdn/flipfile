@@ -8,6 +8,7 @@ import {
   type RingId,
 } from "../rings/dropTarget";
 
+import { packNeeded, packSub } from "../packs/packs";
 import { IS_MAC } from "../shared/platform";
 
 /** AI summary of a document by Apple Intelligence (src/summary/SummaryPanel.tsx); macOS only */
@@ -23,6 +24,9 @@ export function setAiSupport(supported: boolean) {
   aiSupport = supported;
 }
 export const hasAiSupport = () => aiSupport;
+
+/** The pack a format or sub-ring slice needs and isn't here yet */
+export const packFor = (id: string) => packNeeded(id, CATALOG_MAP.get(id)?.nav);
 
 export const MIN_RING_SLOTS = 2;
 export const MAX_RING_SLOTS = 10;
@@ -350,13 +354,16 @@ function idsToItems(ids: string[]): Item[] {
   for (const id of ids) {
     const entry = CATALOG_MAP.get(id);
     if (entry) {
+      // A feature whose models aren't downloaded says so, with its size, instead of its sub
+      const pack = entry.disabled ? undefined : packNeeded(entry.id, entry.nav);
       out.push({
         id: entry.id,
         label: entry.label,
-        sub: entry.sub,
+        sub: pack ? packSub(pack) : entry.sub,
         disabled: entry.disabled || (id === AI_SUMMARY && !aiSupport),
         nav: entry.nav,
         preset: entry.preset,
+        pack: pack?.id,
       });
     }
   }

@@ -71,7 +71,8 @@ export function useRingSelection({ nav, coreCenter, scale }: Options) {
     // does not swap straight back.
     const moving = type === "over" || type === "move";
     if (moving && detail.zone.kind === "item" && detail.zone.index !== lastIndex.current) {
-      const target = detail.zone.item.nav;
+      // A sub-ring whose pack isn't here is a slice like the others: dropping gets the pack
+      const target = detail.zone.item.pack ? undefined : detail.zone.item.nav;
       if (target) {
         nav.switchRing(target);
         detail = zoneAt(point, center, rings[target]);
@@ -84,7 +85,7 @@ export function useRingSelection({ nav, coreCenter, scale }: Options) {
     // On the Option/Alt ring, pointing at a preset picks it for this drop
     if (item?.preset && (moving || type === "drop" || type === "click")) choosePreset(item.id);
     // Dropping right on a preset converts in the file's own format with that preset
-    const id = item?.preset ? SAME_FORMAT : item && !item.disabled && !item.nav ? item.id : null;
+    const id = item?.preset ? SAME_FORMAT : item && !item.disabled && (!item.nav || item.pack) ? item.id : null;
 
     let result = id;
     if (type === "drop" && !id && detail.zone.kind !== "core") {
