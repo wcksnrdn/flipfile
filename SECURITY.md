@@ -64,7 +64,7 @@ You don't have to take our word for it. Every installer can be checked against t
    shasum -a 256 -c SHA256SUMS.txt --ignore-missing      # macOS / Linux
    certutil -hashfile flipfile_0.7.1_x64-setup.exe SHA256 # Windows, compare by eye
    ```
-3. **Read the code.** Everything that ships is in this repo under the MIT license, including the scripts that fetch the bundled AI models and PDFium with pinned SHA-256 digests.
+3. **Read the code.** Everything that ships is in this repo under the MIT license, including the scripts that fetch the AI models and PDFium with pinned SHA-256 digests and publish the models as packs (`scripts/packs.mjs`).
 4. **Try it offline.** Turn off Wi-Fi: every feature keeps working.
 
 > **Why does my OS warn about the app?** flipfile is not yet signed with a paid Apple Developer ID or a Windows code-signing certificate, so Gatekeeper and SmartScreen show an "unidentified developer" / "unknown publisher" warning. That warning means the developer has not bought a certificate, not that the file was flagged. The attestation above is the stronger check: it ties the exact file to the public source.
@@ -77,7 +77,7 @@ flipfile enforces strict boundaries between the WebView UI, the Rust native core
 
 | Security Layer | Implementation | Protection Provided |
 | --- | --- | --- |
-| **Offline Runtime** | CSP `connect-src` limited to local IPC | No account, no telemetry, no analytics, no remote assets. Every conversion and every AI model runs on your machine; files never leave it. The only request flipfile makes is the update check: it fetches `latest.json` from this repo's GitHub Releases and sends nothing about you or your files. Updates are only installed if they carry the maintainer's minisign signature. |
+| **Offline Runtime** | CSP `connect-src` limited to local IPC | No account, no telemetry, no analytics, no remote assets. Every conversion and every AI model runs on your machine; files never leave it. flipfile makes two kinds of requests, both to this repo's GitHub Releases, sending nothing about you or your files: the update check (`update.json`), and the AI features you choose to download in the Ring Workshop. Updates are only installed if they carry the maintainer's minisign signature; the list of AI features (`catalog-1.json`) must carry the same signature or be the one built into the app, and every model file is checked against the SHA-256 it gives before it is used. |
 | **Strict Content Security Policy** | `src-tauri/tauri.conf.json` & `vite.config.ts` | `default-src 'none'`; only bundled local scripts, styles, and fonts are permitted. No `eval`, no inline scripts, and `freezePrototype: true` blocks prototype pollution. |
 | **Least-Privilege Tauri ACL** | `src-tauri/build.rs` & `src-tauri/capabilities/default.json` | All custom Rust commands are declared in an `AppManifest` and gated by explicit capability permissions. The UI cannot read arbitrary paths, spawn shells, or open external URLs. |
 | **User-Granted File Tokens** | `src-tauri/src/state/grants.rs` | The Rust backend only converts file paths captured directly from native OS drag-and-drop or clipboard events *before* the UI sees them. Even a compromised WebView cannot trick the backend into reading or writing arbitrary files. |

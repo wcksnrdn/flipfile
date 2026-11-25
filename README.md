@@ -221,7 +221,7 @@ Drop a lecture, a meeting, a WhatsApp voice note or a video on **Music → Trans
 - **Any recording**: MP3, M4A, WAV, FLAC, OGG and Opus voice notes, AIFF, CAF, and the sound of MP4, MOV, MKV and WebM, read by flipfile itself; other formats through the system or `ffmpeg`. Up to 5 hours.
 - **99 languages**, detected by themselves (Indonesian, English, Javanese, Malay, Japanese, …). It writes what it hears, so names and jargon can come out spelled by ear.
 - **Then the gist**: on a Mac with Apple Intelligence, drop the recording on **AI ✦** to have it transcribed and summarised in one go.
-- **Private and quick**: OpenAI's [Whisper](https://github.com/openai/whisper) `small` model (about 190 MB, part of flipfile) runs through [whisper.cpp](https://github.com/ggml-org/whisper.cpp): on the GPU on Apple silicon, on the processor elsewhere. The circle shows how far it has got.
+- **Private and quick**: OpenAI's [Whisper](https://github.com/openai/whisper) `small` model (about 190 MB, downloaded once from the Ring Workshop) runs through [whisper.cpp](https://github.com/ggml-org/whisper.cpp): on the GPU on Apple silicon, on the processor elsewhere. The circle shows how far it has got.
 
 <sub>macOS 13 Ventura or later, Windows 10 or later, Linux (x86-64 processors need AVX2, from 2013 on).</sub>
 
@@ -237,6 +237,16 @@ Drop a picture on **Upscale** (*Photo → Tools*) and pick what it is. Photos an
 - **Plain 2× · 4×**: larger only, with texture and faces, the colours exactly as they are.
 
 To colour a black-and-white or sepia photo, drop it on **Colorize** (*Photo → Tools*): [DDColor](https://github.com/piddnad/DDColor) adds the colours and the photo keeps its own light, shade and detail. A photo already in colour is left alone.
+
+### AI features, downloaded when you want them
+
+The AI models are big, so flipfile doesn't make everyone download them all. **Upscale** (Photo and Plain, about 145 MB), **Upscale Text** (about 180 MB), **Colorize** (about 120 MB on the Mac, 150 MB elsewhere) and **Transcribe** (about 190 MB) are each one download, from the top of the **Ring Workshop**.
+
+- **Still on the ring**: a feature not downloaded yet keeps its slice, quieter, with its size (`↓ 145 MB`). Drop on it and the Workshop opens on that feature, one click from getting it.
+- **Downloads that hold up**: a dropped connection picks up where it stopped, even after quitting; *Stop* keeps what came so far. Every file is checked against its SHA-256 before it is used, and a model is only put in place once all of it is there.
+- **Small updates**: a better model updates that one feature, and only its changed files are downloaded, without an app update.
+- **Your space**: remove a feature in the Workshop to free its space, and get it again any time.
+- **Upgrading from 0.13 or earlier?** Nothing changes: the models you have stay, and every feature keeps working without a download.
 
 Same format as the original (`photo_2x.jpg` stays a JPG, `logo_4x.png` keeps its transparency), results up to **200 MP**. It runs on your hardware: the Neural Engine and GPU on a Mac, any DirectX 12 GPU on Windows (DirectML), the processor on Linux.
 
@@ -309,7 +319,7 @@ The preview is computed with the same arithmetic as the saved photo, so what you
 
 ## Download
 
-Get the latest version from **[Releases](https://github.com/wcksnrdn/flipfile/releases/latest)** (about 310 MB: the AI models for upscaling and transcription are most of it).
+Get the latest version from **[Releases](https://github.com/wcksnrdn/flipfile/releases/latest)**. The AI features you want are downloaded afterwards, from the Ring Workshop ([more](#ai-features-downloaded-when-you-want-them)).
 
 | Your computer | Install |
 |---|---|
@@ -349,7 +359,7 @@ The warning above means no paid certificate yet, not that anything was flagged. 
 
 - **Build provenance**: every installer is built by GitHub Actions from the tagged commit and carries a signed attestation. `gh attestation verify flipfile_x.y.z_aarch64.dmg --repo wcksnrdn/flipfile` shows the workflow and commit that made it, and fails if the file was changed.
 - **Checksums**: compare against `SHA256SUMS.txt` on the release page with `shasum -a 256 -c SHA256SUMS.txt --ignore-missing` (Windows: `certutil -hashfile <file> SHA256`).
-- **Offline test**: turn off Wi-Fi; every feature still works.
+- **Offline test**: turn off Wi-Fi; every feature still works (the AI ones once downloaded).
 
 Details in [SECURITY.md](SECURITY.md#verify-your-download).
 
@@ -586,7 +596,7 @@ flipfile **never overwrites** a file. If a name is taken, `_2`, `_3`, … is app
 
 ## Privacy & security
 
-flipfile works **offline**: files never leave your computer, there is no account and no telemetry. The only network request is the update check, which reads `latest.json` from this repo's GitHub Releases and sends nothing about you or your files; an update is installed only if it carries the maintainer's signature. AI summaries are written by Apple Intelligence's **on-device** model, and transcription and upscaling run on bundled models, so nothing is uploaded there either.
+flipfile works **offline**: files never leave your computer, there is no account and no telemetry. It goes online for two things only, both on this repo's GitHub Releases and sending nothing about you or your files: the update check, which reads `update.json` (an update is installed only if it carries the maintainer's signature), and the AI features you download from the Ring Workshop, with the list of them (`catalog-1.json`, signed with the same key), looked at no more than every few hours. Every downloaded model is checked against the SHA-256 that list gives. AI summaries are written by Apple Intelligence's **on-device** model, and transcription and upscaling run on the downloaded models on your computer, so nothing is uploaded there either.
 
 <details>
 <summary><b>Stored data, in detail</b></summary>
@@ -597,6 +607,7 @@ Two small files in the app data folder:
 |---|---|
 | `history.json` | Paths of your last 50 conversions (for *Recent Conversions* and *Undo*) |
 | `settings.json` | Your Resize and Quality choices |
+| `models/` | The AI features you downloaded, with `installed.json` (the SHA-256 of each file) and the signed list of features |
 
 | OS | App data folder |
 |---|---|
@@ -651,9 +662,9 @@ No. Every conversion, compression, upscale, transcription and summary runs on yo
 </details>
 
 <details>
-<summary><b>Why is the download about 310 MB?</b></summary>
+<summary><b>Where did Upscale or Transcribe go?</b></summary>
 
-It carries its own AI models so nothing has to be downloaded later or sent to a server: about 190 MB for Whisper (transcription) and about 140 MB for upscaling and face restoration, plus PDFium and the Typst layout engine for Office documents. On Windows and Linux it also bundles ONNX Runtime.
+They are still on the ring: since 0.14 each AI feature is its own download, so the app itself stays small. Open the **Ring Workshop**: the features not downloaded yet are at the very top, with their sizes. Or drop a file on the feature's slice, and the Workshop opens on it. If you had flipfile 0.13 or earlier, the update kept the models you had and nothing needs downloading.
 
 </details>
 
@@ -714,7 +725,13 @@ npm install
 npm run tauri dev
 ```
 
-`tauri dev` and `tauri build` first run `npm run fetch-pdfium` and `npm run fetch-models`, which download PDFium into `src-tauri/pdfium/` and the AI models into `src-tauri/models/` (both git-ignored, pinned by SHA-256, skipped when already there). The PDFium version is pinned in `scripts/fetch-pdfium.mjs` to match the `pdfium-render` crate; update both together. To fetch for another architecture, for example an Intel Mac app built on Apple silicon:
+`tauri dev` and `tauri build` first run `npm run fetch-pdfium` and `npm run fetch-models`, which download PDFium into `src-tauri/pdfium/` and the AI models into `src-tauri/models/` (both git-ignored, pinned by SHA-256, skipped when already there). A debug build uses the models there as if they came with the app; to try the Workshop's downloads instead, serve them locally and point the app at it (packs then go to `models-test/` in the app data folder):
+
+```bash
+node scripts/packs.mjs serve --slow          # in one terminal (--slow: ~5 MB/s, to see progress)
+FLIPFILE_PACKS_URL=http://127.0.0.1:8790 npm run tauri dev
+```
+ The PDFium version is pinned in `scripts/fetch-pdfium.mjs` to match the `pdfium-render` crate; update both together. To fetch for another architecture, for example an Intel Mac app built on Apple silicon:
 
 ```bash
 PDFIUM_PLATFORM=mac-x64 npm run fetch-pdfium
@@ -726,7 +743,9 @@ PDFIUM_PLATFORM=mac-x64 npm run fetch-pdfium
 npm run tauri build
 ```
 
-The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb`/`.rpm` on Linux). Most of their size is the bundled models: Whisper `small` for transcription (`ggml-small-q5_1.bin`, 190 MB, from the whisper.cpp project on Hugging Face), Silero VAD (about 1 MB), the upscaling and face models (about 140 MB, from this repo's `models-2` release) and the Upscale Photo / Text and Colorize models (about 300 MB: the photo upscaler from the `models-4` release; RealESRNet, FBCNN and DDColor from `models-3`, with the open fonts and word list Upscale Text uses) — Core ML on macOS, ONNX elsewhere; `scripts/upscale-model/` rebuilds them from the original weights. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`. To test that engine on a Mac, run with `FLIPFILE_ONNX=1`. Licences are in `src-tauri/models/LICENSES.md`.
+The installers end up in `src-tauri/target/release/bundle/` (`.app`/`.dmg` on macOS, `.msi`/`.exe` on Windows, `.AppImage`/`.deb`/`.rpm` on Linux). They bundle no AI models (`fetch-models --bundle` fetches only the fonts and word list Upscale Text uses): people download them as packs from the Workshop (`src-tauri/src/packs`). The models are Whisper `small` for transcription (`ggml-small-q5_1.bin`, 190 MB, from the whisper.cpp project on Hugging Face), Silero VAD (about 1 MB), the upscaling and face models (about 140 MB, from this repo's `models-2` release) and the Upscale Photo / Text and Colorize models (about 300 MB: the photo upscaler from the `models-4` release; RealESRNet, FBCNN and DDColor from `models-3`) — Core ML on macOS, ONNX elsewhere; `scripts/upscale-model/` rebuilds them from the original weights.
+
+**Packs**: `scripts/packs.mjs` lists each pack's files with their SHA-256 and size in `src-tauri/packs/catalog.json`, built into the app. The files are published on the `packs` release named by their SHA-256, with the catalog as `catalog-1.json`, signed with the updater's key; the **Packs** workflow does it when the catalog changes on main. To ship a better model: put it in `src-tauri/models` (pinned in `fetch-models.mjs` as before), run `node scripts/packs.mjs catalog` (its serial goes up), and merge: the apps out there download just the changed files, no app release needed. A release refuses to build until every file of its catalog is published. On Windows and Linux, `npm run fetch-onnxruntime` also downloads Microsoft's ONNX Runtime 1.24.4 (with DirectML on Windows) into `src-tauri/onnxruntime/`. To test that engine on a Mac, run with `FLIPFILE_ONNX=1`. Licences are in `src-tauri/models/LICENSES.md`.
 
 ### App icon
 

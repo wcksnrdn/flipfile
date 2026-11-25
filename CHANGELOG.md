@@ -6,6 +6,29 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **AI features are downloaded when you want them.** The app no longer carries every AI
+  model: **Upscale** (Photo and Plain, ~145 MB), **Upscale Text** (~180 MB), **Colorize**
+  (~120 MB on the Mac, ~150 MB elsewhere) and **Transcribe** (~190 MB) are each one
+  download, from a new section at the very top of the Ring Workshop.
+  - A feature not downloaded yet keeps its slice on the ring, quieter, with its size;
+    dropping on it opens the Workshop on that feature.
+  - Downloads pick up where they stopped after a dropped connection or a quit, can be
+    stopped, and every file is checked against its SHA-256 before it is used. A model is
+    only put in place once all of it is there.
+  - A better model now reaches you as an update of that feature alone, with only the
+    changed files downloaded, without an app update.
+  - A downloaded feature can be removed in the Workshop to free its space.
+
+### Changed
+
+- The download is much smaller: the AI models are no longer part of it.
+- Updating from 0.13 or earlier keeps the models you have: every feature keeps working
+  with nothing to download.
+- The update check reads `update.json` (was `latest.json`, which now serves the apps from
+  before this version).
+
 ## [0.13.0] - 2026-11-25
 
 ### Added

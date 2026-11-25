@@ -506,8 +506,9 @@ distribution for GPU-accelerated AI upscaling on Windows.
 
 ## Full license texts for AI models
 
-The full license texts for every bundled AI model are also included in the application
-bundle at `Resources/models/` (macOS) or alongside the executable (Windows/Linux):
+The full license texts for every AI model (downloaded as packs from the Ring Workshop) are
+also included in the application bundle at `Resources/models/` (macOS) or alongside the
+executable (Windows/Linux):
 
 - `LICENSE-Real-ESRGAN.txt` — BSD 3-Clause
 - `LICENSE-RestoreFormerPlusPlus.txt` — Apache 2.0
