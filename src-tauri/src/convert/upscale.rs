@@ -901,7 +901,7 @@ mod tests {
         let fetched = crate::platform::onnx::available()
             && ["upscale.onnx", "upscale-photo.onnx", "faces.onnx", "yunet.onnx"]
                 .iter()
-                .all(|m| crate::platform::upscale::model_path(m).is_some());
+                .all(|m| crate::packs::model_path(m).is_some());
         if !fetched {
             eprintln!("skipped: the ONNX engine (Windows and Linux) is not fetched here");
         }

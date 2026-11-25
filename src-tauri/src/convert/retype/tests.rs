@@ -96,7 +96,7 @@ fn forwarded_notice() -> DynamicImage {
 #[cfg(target_os = "macos")]
 #[test]
 fn a_forwarded_notice_reads_right_again() {
-    if crate::platform::upscale::model_path("dejpeg.mlmodelc").is_none() {
+    if crate::packs::model_path("dejpeg.mlmodelc").is_none() {
         eprintln!("skipped: the models are not fetched here");
         return;
     }

@@ -200,7 +200,7 @@ pub(super) fn faces() -> &'static [Face] {
             }
         };
         for &(file, name, bold) in BUNDLED {
-            if let Some(path) = crate::platform::upscale::model_path(&format!("fonts/{file}")) {
+            if let Some(path) = crate::packs::model_path(&format!("fonts/{file}")) {
                 add(path, 0, name, bold);
             }
         }

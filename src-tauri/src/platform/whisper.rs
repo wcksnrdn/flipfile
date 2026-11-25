@@ -62,7 +62,7 @@ static CONTEXT: Mutex<Option<WhisperContext>> = Mutex::new(None);
 /// True when the model is bundled and this processor can run it
 #[cfg(test)]
 pub fn available() -> bool {
-    super::upscale::model_path(MODEL).is_some() && processor_supported()
+    crate::packs::model_path(MODEL).is_some() && processor_supported()
 }
 
 /// x86-64 builds assume AVX2, FMA and F16C (.cargo/config.toml): without them the engine
@@ -87,7 +87,7 @@ fn load() -> Result<WhisperContext, String> {
     quiet();
     #[cfg(target_os = "macos")]
     without_residency_sets();
-    let path = super::upscale::model_path(MODEL).ok_or("The speech model is missing. Please reinstall flipfile.")?;
+    let path = crate::packs::model_path(MODEL).ok_or_else(|| crate::packs::missing(MODEL))?;
     let mut params = WhisperContextParameters::default();
     // Every word placed where it is heard: dynamic time warping over the attention of
     // the heads that follow the audio, for `small`. The model's own timestamps put a word
@@ -278,7 +278,7 @@ impl<'a> Speech<'a> {
 /// The stretches of `pcm` where someone speaks (seconds), as Silero VAD hears them;
 /// None when it cannot run
 fn detect_speech(pcm: &[f32]) -> Option<Vec<(f64, f64)>> {
-    let path = super::upscale::model_path(VAD_MODEL)?;
+    let path = crate::packs::model_path(VAD_MODEL)?;
     let mut context_params = WhisperVadContextParams::new();
     context_params.set_n_threads(threads());
     let mut vad = WhisperVadContext::new(path.to_str()?, context_params).ok()?;

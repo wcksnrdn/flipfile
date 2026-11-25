@@ -1,5 +1,6 @@
 mod convert; // conversion pipeline behind `convert_batch`
 mod office; // Word <-> PDF engines
+mod packs; // AI feature packs: models downloaded on demand from Workshop
 mod pdf; // low-level PDF writing and PDFium rendering
 mod platform; // OS integration: clipboard, glass, keys, codecs, tray
 mod state; // app state: grants, history, settings
@@ -105,9 +106,9 @@ pub fn run() {
             tray::setup(app.handle())?;
             appearance::init(app.handle());
             clipboard::clear_temp(app.handle());
+            packs::init(app.handle());
             if let Ok(dir) = app.path().resource_dir() {
                 pdf::render::set_library_dir(dir.join("pdfium"));
-                platform::upscale::set_model_dir(dir.join("models"));
                 #[cfg(not(target_os = "macos"))]
                 platform::onnx::set_library_dir(dir.join("onnxruntime"));
             }
@@ -144,7 +145,11 @@ pub fn run() {
             toast::toast_show,
             toast::toast_current,
             toast::toast_fit,
-            toast::toast_close
+            toast::toast_close,
+            packs::packs_status,
+            packs::pack_install,
+            packs::pack_cancel,
+            packs::pack_remove
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

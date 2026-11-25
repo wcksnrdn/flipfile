@@ -39,7 +39,7 @@ fn in_list(word: &str) -> bool {
     static WORDS: OnceLock<HashSet<String>> = OnceLock::new();
     WORDS
         .get_or_init(|| {
-            super::upscale::model_path("words.txt")
+            crate::packs::model_path("words.txt")
                 .and_then(|path| std::fs::read_to_string(path).ok())
                 .map(|list| list.lines().map(str::to_string).collect())
                 .unwrap_or_default()

@@ -30,6 +30,10 @@
     "allow-summarize",
     "allow-summary-show",
     "allow-toast-show",
+    "allow-packs-status",
+    "allow-pack-install",
+    "allow-pack-cancel",
+    "allow-pack-remove",
     "updater:default",
     "process:default"
   ]

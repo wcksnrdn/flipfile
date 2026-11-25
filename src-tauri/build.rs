@@ -38,6 +38,10 @@ fn main() {
             "toast_current",
             "toast_fit",
             "toast_close",
+            "packs_status",
+            "pack_install",
+            "pack_cancel",
+            "pack_remove",
         ]),
     ))
     .expect("failed to run tauri-build");

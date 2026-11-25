@@ -1,7 +1,7 @@
 // AI upscaling (Photo > Tools > Upscale): the machine-learning half, one engine per
 // system. Everything else (cutting images into tiles, faces, putting it all back
 // together) is shared by every system (src/convert/upscale.rs, src/convert/faces.rs).
-// - macOS: Core ML runs the bundled models (src-tauri/models, built by
+// - macOS: Core ML runs the models (downloaded as packs, src/packs; built by
 //   scripts/upscale-model/convert.py) on the Neural Engine and the CPU.
 // - Windows and Linux: ONNX Runtime (src/platform/onnx.rs) runs the same models, exported
 //   by scripts/upscale-model/export_onnx.py; on Windows on the GPU (DirectML).
@@ -17,9 +17,6 @@
 // - a JPEG cleaner of a TILE x TILE tile, same size (FBCNN), for Upscale Text;
 // - a colourer of a black-and-white photo (DDColor): its lightness as a grey COLORIZE x
 //   COLORIZE picture in, the Lab a and b channels out (two planes).
-
-use std::path::PathBuf;
-use std::sync::OnceLock;
 
 /// The side of the tile the fast and detailed upscalers read
 pub const TILE: usize = 256;
@@ -54,24 +51,6 @@ impl Upscaler {
             Upscaler::Face => FACE_TILE,
         }
     }
-}
-
-static MODEL_DIR: OnceLock<PathBuf> = OnceLock::new();
-
-/// Called once at startup with the bundled `models/` resource folder
-pub fn set_model_dir(dir: PathBuf) {
-    let _ = MODEL_DIR.set(dir);
-}
-
-/// Where a model is: the bundled resources, or (debug builds and tests) the folder the
-/// fetch script writes to. A Core ML model is a folder, an ONNX model a file.
-pub(crate) fn model_path(file: &str) -> Option<PathBuf> {
-    let mut dirs: Vec<PathBuf> = MODEL_DIR.get().cloned().into_iter().collect();
-    if cfg!(debug_assertions) || cfg!(test) {
-        dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models"));
-    }
-    let present = |path: &PathBuf| if file.ends_with(".mlmodelc") { path.join("coremldata.bin").is_file() } else { path.is_file() };
-    dirs.into_iter().map(|dir| dir.join(file)).find(present)
 }
 
 /// What each step takes here before any has been measured, in seconds: a tile of the
@@ -244,7 +223,7 @@ mod coreml {
     };
     use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString, NSURL};
 
-    use super::{model_path, COLORIZE, FACE, FACE_TILE, SCALE, TILE};
+    use super::{COLORIZE, FACE, FACE_TILE, SCALE, TILE};
 
     /// One bundled model: its file, its input (a planar RGB square) and output (planes of
     /// a square: name, side, planes), where it runs, and the model itself once loaded.
@@ -318,7 +297,7 @@ mod coreml {
             if macos_major().is_some_and(|major| major < 13) {
                 return Err("AI Upscale needs macOS 13 Ventura or later".into());
             }
-            let path = model_path(self.file).ok_or("The AI models are missing. Please reinstall flipfile.")?;
+            let path = crate::packs::model_path(self.file).ok_or_else(|| crate::packs::missing(self.file))?;
             let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
             let config = unsafe { MLModelConfiguration::new() };
             unsafe { config.setComputeUnits(self.units) };

@@ -149,7 +149,7 @@ impl Model {
     }
 
     fn load(&self, gpu: bool) -> Result<(Session, Device), String> {
-        let path = super::upscale::model_path(self.file).ok_or("The AI models are missing. Please reinstall flipfile.")?;
+        let path = crate::packs::model_path(self.file).ok_or_else(|| crate::packs::missing(self.file))?;
         let environment = environment()?;
         let failed = |e: &dyn std::fmt::Display| format!("an AI model could not be loaded ({e})");
         #[cfg(windows)]

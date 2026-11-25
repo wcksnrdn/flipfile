@@ -82,6 +82,14 @@ gif = "0.14"
 color_quant = "1.1"
 # Resampling to the 16 kHz Whisper hears
 rubato = { version = "5", default-features = false, features = ["fft_resampler"] }
+# Downloading the AI feature packs (src/packs) and checking them: the HTTP client, TLS
+# and signature check the in-app updater already uses, and SHA-256; all already part of
+# the build through tauri-plugin-updater and Tauri
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+minisign-verify = "0.3"
+base64 = "0.22"
+sha2 = "0.10"
 
 # Native glass view (src/glass.rs) and HEIC/AVIF decoding via ImageIO (src/system_codec.rs).
 # Mostly already compiled as part of Tauri/wry on macOS; these enable a few extra bindings.
