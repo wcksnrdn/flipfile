@@ -22,13 +22,16 @@
 //                                    http://127.0.0.1:8790, to try downloads with a debug
 //                                    build run with FLIPFILE_PACKS_URL=http://127.0.0.1:8790
 //                                    (--slow: at about 5 MB/s, to see the progress)
+//   node scripts/packs.mjs dev [--slow]
+//                                    both: the server, and `npm run tauri dev` pointed at it
+//                                    (npm run dev:packs)
 //
 // A changed model: put it in src-tauri/models, run `catalog`; the serial goes up by one
 // when anything changed. A change the app's code must follow (new inputs, a model it
 // can't run as before) needs a new catalog format instead: FORMAT here and in
 // src-tauri/src/packs/catalog.rs, so apps still on the old format keep the old catalog.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { copyFileSync, createReadStream, existsSync, linkSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -222,7 +225,7 @@ function published() {
 }
 
 /** The packs over plain HTTP, as GitHub serves them (ranges too), for a debug build */
-function serve(slow) {
+function serve(slow, onReady = () => {}) {
   const files = new Map(uniqueFiles(readCatalog()).map((f) => [f.sha256, f]));
   createServer((req, res) => {
     const file = files.get(req.url.slice(1));
@@ -249,7 +252,19 @@ function serve(slow) {
     res.on("close", () => stream.destroy());
   }).listen(PORT, "127.0.0.1", () => {
     console.log(`Serving ${files.size} files from src-tauri/models on http://127.0.0.1:${PORT}${slow ? " (slow)" : ""}`);
-    console.log(`Run the app with: FLIPFILE_PACKS_URL=http://127.0.0.1:${PORT} npm run tauri dev`);
+    onReady();
+  });
+}
+
+/** The server, and the app run against it; quitting the app stops both */
+function dev(slow) {
+  serve(slow, () => {
+    const app = spawn("npm", ["run", "tauri", "dev"], {
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      env: { ...process.env, FLIPFILE_PACKS_URL: `http://127.0.0.1:${PORT}` },
+    });
+    app.on("exit", (code) => process.exit(code ?? 0));
   });
 }
 
@@ -259,9 +274,11 @@ try {
   else if (command === "check") check();
   else if (command === "publish") publish();
   else if (command === "published") published();
-  else if (command === "serve") serve(args.includes("--slow"));
+  else if (command === "serve")
+    serve(args.includes("--slow"), () => console.log(`Run the app with: FLIPFILE_PACKS_URL=http://127.0.0.1:${PORT} npm run tauri dev`));
+  else if (command === "dev") dev(args.includes("--slow"));
   else {
-    console.error("usage: node scripts/packs.mjs catalog | check | publish | published | serve [--slow]");
+    console.error("usage: node scripts/packs.mjs catalog | check | publish | published | serve [--slow] | dev [--slow]");
     process.exitCode = 1;
   }
 } catch (e) {

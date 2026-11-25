@@ -10,10 +10,10 @@
 // bundle copies them here at start (`adopt`), so they stay when an update without them
 // replaces the app.
 //
-// To try downloads in a debug build without publishing anything: `node scripts/packs.mjs
-// serve`, then run the app with FLIPFILE_PACKS_URL=http://127.0.0.1:8790. Packs are then
-// downloaded from there into <app data>/models-test, and src-tauri/models doesn't count as
-// bundled.
+// To try downloads in a debug build without publishing anything: `npm run dev:packs`
+// (scripts/packs.mjs serves them and runs the app with FLIPFILE_PACKS_URL). Packs are then
+// downloaded from there into <app data>/models-test, and no model counts as bundled; the
+// fonts and words still come from src-tauri/models.
 
 mod catalog;
 mod download;
@@ -39,14 +39,15 @@ static DOWNLOADED: OnceLock<PathBuf> = OnceLock::new();
 /// The app's own `models/` resource folder
 static BUNDLED: OnceLock<PathBuf> = OnceLock::new();
 
-/// Models that came with the app: the bundle, and in debug builds and tests the folder
-/// scripts/fetch-models.mjs writes to
+/// Models that came with the app: the bundle; in debug builds and tests, the folder
+/// scripts/fetch-models.mjs writes to instead (a debug build's resource folder,
+/// target/debug, keeps the models of older builds that bundled them)
 fn bundled_dirs() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = BUNDLED.get().cloned().into_iter().collect();
-    if (cfg!(debug_assertions) || cfg!(test)) && test_server().is_none() {
-        dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models"));
+    if cfg!(debug_assertions) || cfg!(test) {
+        vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models")]
+    } else {
+        BUNDLED.get().cloned().into_iter().collect()
     }
-    dirs
 }
 
 /// A debug build's local pack server (FLIPFILE_PACKS_URL), to try downloads with
@@ -62,7 +63,10 @@ fn test_server() -> Option<String> {
 /// model a file.
 pub(crate) fn model_path(file: &str) -> Option<PathBuf> {
     let present = |path: &PathBuf| if file.ends_with(".mlmodelc") { path.join("coremldata.bin").is_file() } else { path.is_file() };
-    DOWNLOADED.get().cloned().into_iter().chain(bundled_dirs()).map(|dir| dir.join(file)).find(present)
+    // Trying downloads (FLIPFILE_PACKS_URL): a pack's models only as downloaded, the
+    // fonts and words where they always are
+    let bundled = if test_server().is_some() && Catalog::built_in().pack_of(file).is_some() { vec![] } else { bundled_dirs() };
+    DOWNLOADED.get().cloned().into_iter().chain(bundled).map(|dir| dir.join(file)).find(present)
 }
 
 /// What to tell someone whose model isn't there: which pack to download
@@ -89,7 +93,8 @@ pub fn init(app: &AppHandle) {
         .and_then(|updater| updater.get("pubkey"))
         .and_then(|key| key.as_str())
         .map(str::to_string);
-    let mut packs = Packs::new(Store { dir, bundled: bundled_dirs() }, key);
+    let bundled = if test_server().is_some() { vec![] } else { bundled_dirs() };
+    let mut packs = Packs::new(Store { dir, bundled }, key);
     if let Some(url) = test_server() {
         packs.catalog.get_mut().unwrap_or_else(|e| e.into_inner()).base = url;
         packs.key = None;

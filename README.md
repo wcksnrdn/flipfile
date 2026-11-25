@@ -728,8 +728,7 @@ npm run tauri dev
 `tauri dev` and `tauri build` first run `npm run fetch-pdfium` and `npm run fetch-models`, which download PDFium into `src-tauri/pdfium/` and the AI models into `src-tauri/models/` (both git-ignored, pinned by SHA-256, skipped when already there). A debug build uses the models there as if they came with the app; to try the Workshop's downloads instead, serve them locally and point the app at it (packs then go to `models-test/` in the app data folder):
 
 ```bash
-node scripts/packs.mjs serve --slow          # in one terminal (--slow: ~5 MB/s, to see progress)
-FLIPFILE_PACKS_URL=http://127.0.0.1:8790 npm run tauri dev
+npm run dev:packs     # the packs served at ~5 MB/s (to see the progress), and the app pointed at them
 ```
  The PDFium version is pinned in `scripts/fetch-pdfium.mjs` to match the `pdfium-render` crate; update both together. To fetch for another architecture, for example an Intel Mac app built on Apple silicon:
 
