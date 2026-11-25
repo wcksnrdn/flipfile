@@ -1,5 +1,6 @@
-// Downloads the AI models into src-tauri/models/, where the platform's tauri.*.conf.json
-// bundles them as resources:
+// Downloads the AI models into src-tauri/models/, for debug builds and tests, and for the
+// AI feature packs (scripts/packs.mjs), which release builds download from Workshop
+// instead of bundling them (src-tauri/src/packs):
 // - AI upscaling (src-tauri/src/platform/upscale.rs):
 //   - macOS: Core ML models, built by scripts/upscale-model/convert.py;
 //   - Windows and Linux: the same models as ONNX, built by scripts/upscale-model/export_onnx.py,
@@ -10,8 +11,8 @@
 //   Hugging Face, unchanged; the same file on every system. With it Silero VAD (~1 MB),
 //   which finds the speech in a recording first, also as published there.
 //
-// Supply-chain protection, as for PDFium (fetch-pdfium.mjs): the models end up inside
-// every installer, so they are verified against SHA-256 hashes pinned below, twice:
+// Supply-chain protection, as for PDFium (fetch-pdfium.mjs): the models end up in every
+// pack people download (and the fonts and words in every installer), so they are verified against SHA-256 hashes pinned below, twice:
 //   1. the downloaded archive, before anything is extracted from it;
 //   2. every extracted file, before it is used, and again on every later run, so a model
 //      changed on disk is replaced instead of being bundled.
@@ -26,6 +27,11 @@
 //   4xNomos8kSC).
 // Older archives keep files no longer used (x4plus, Nomos2): only the files pinned below
 // are extracted.
+//
+// With --bundle (a release build's beforeBuildCommand), only what an installer bundles: the
+// fonts and words, whichever system; every model too with FLIPFILE_FULL=1, for a build that
+// comes with them (the bridge release, see .github/workflows/release.yml), from the files
+// src-tauri/full/*.json bundles.
 //
 // FLIPFILE_ONNX=1 fetches the ONNX models on a Mac too, to test the Windows/Linux engine
 // there. To publish new models, run the scripts, archive the folders and files with
@@ -280,6 +286,10 @@ async function fetchSet(name, set) {
 }
 
 async function main() {
+  if (process.argv.includes("--bundle") && !process.env.FLIPFILE_FULL) {
+    await fetchSet("fonts and words for Upscale Text", SETS.text3);
+    return;
+  }
   if (process.platform === "darwin") {
     await fetchSet("Core ML", SETS.coreml);
     await fetchSet("Core ML, Upscale Text and Colorize", SETS.coreml3);

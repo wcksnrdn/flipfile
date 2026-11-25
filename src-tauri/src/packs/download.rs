@@ -85,7 +85,9 @@ async fn fetch_once(
         request = request.header(reqwest::header::RANGE, format!("bytes={have}-"));
     }
     let mut response = request.send().await.map_err(|e| Failure::Dropped(format!("could not download ({})", cause(&e))))?;
-    if !(response.url().scheme() == "https" || cfg!(test) && response.url().host_str() == Some("127.0.0.1")) {
+    // (A local test server for tests and debug builds: see FLIPFILE_PACKS_URL in mod.rs)
+    let local = (cfg!(test) || cfg!(debug_assertions)) && response.url().host_str() == Some("127.0.0.1");
+    if !(response.url().scheme() == "https" || local) {
         return Err(format!("the download was sent elsewhere ({})", response.url()).into());
     }
     let status = response.status();

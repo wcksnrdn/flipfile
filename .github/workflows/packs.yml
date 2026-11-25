@@ -1,0 +1,45 @@
+name: Packs
+
+# Publishes the AI feature packs (scripts/packs.mjs): every file of
+# src-tauri/packs/catalog.json not on the `packs` release yet, named by its SHA-256, then
+# the catalog itself, signed with the updater's key, once its serial is newer. Runs when
+# the catalog changes on main, so an updated model reaches the apps without an app release.
+on:
+  push:
+    branches: [main]
+    paths:
+      - src-tauri/packs/catalog.json
+  workflow_dispatch:
+
+concurrency:
+  group: packs
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - run: npm ci
+
+      # Every model, Core ML and ONNX, verified against the hashes pinned there
+      - name: Fetch the models
+        env:
+          FLIPFILE_ONNX: "1"
+        run: npm run fetch-models
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/packs.mjs publish

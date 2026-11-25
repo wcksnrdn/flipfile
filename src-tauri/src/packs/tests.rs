@@ -189,6 +189,41 @@ fn a_bundled_pack_needs_nothing_and_stays() {
 }
 
 #[test]
+fn bundled_models_are_kept_for_an_update_without_them() {
+    let dir = temp_dir("adopt");
+    let bundle = dir.join("bundle");
+    let catalog = fake_catalog("https://example.com", b"weights v1");
+    for (path, data) in [("fake.mlmodelc/coremldata.bin", &b"header"[..]), ("fake.mlmodelc/weights/weight.bin", b"weights v1"), ("fake.bin", b"single model")] {
+        std::fs::create_dir_all(bundle.join(path).parent().unwrap()).unwrap();
+        std::fs::write(bundle.join(path), data).unwrap();
+    }
+    let store = Store { dir: dir.join("models"), bundled: vec![bundle.clone()] };
+    let pack = &catalog.packs[0];
+    // Half staged by an earlier start that was quit: cleared, then adopted whole
+    std::fs::create_dir_all(store.dir.join(".staging/fake.mlmodelc")).unwrap();
+    store.finish_pending();
+    assert!(!store.dir.join(".staging/fake.mlmodelc").exists());
+    store.adopt(pack, &catalog, &bundle).unwrap();
+    assert_eq!(std::fs::read(store.dir.join("fake.mlmodelc/weights/weight.bin")).unwrap(), b"weights v1");
+    assert!(store.bundles(pack), "nothing to remove while the app still has them");
+
+    // The update without them: still there, nothing to download
+    std::fs::remove_dir_all(&bundle).unwrap();
+    let after = Store { dir: store.dir.clone(), bundled: vec![bundle.clone()] };
+    assert_eq!(after.presence(pack, &catalog, &after.installed()), Presence::Current);
+    assert!(after.to_download(pack, &catalog, &after.installed()).is_empty());
+    assert!(!after.bundles(pack));
+
+    // A model here already (in any version) is never replaced by the bundled one
+    std::fs::create_dir_all(&bundle).unwrap();
+    std::fs::write(bundle.join("fake.bin"), b"single model").unwrap();
+    std::fs::write(store.dir.join("fake.bin"), b"newer model").unwrap();
+    store.adopt(pack, &catalog, &bundle).unwrap();
+    assert_eq!(std::fs::read(store.dir.join("fake.bin")).unwrap(), b"newer model");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_model_waiting_for_the_next_start_is_put_in_place_then() {
     let dir = temp_dir("pending");
     let store = Store { dir: dir.join("models"), bundled: vec![] };

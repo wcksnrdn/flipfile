@@ -231,7 +231,12 @@
       "name": "Transcribe",
       "targets": [
         "music-transcribe",
-        "video-transcribe"
+        "video-transcribe",
+        "tr-srt",
+        "tr-vtt",
+        "tr-txt",
+        "tr-docx",
+        "tr-md"
       ],
       "files": {
         "all": [

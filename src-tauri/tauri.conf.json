@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run fetch-pdfium && npm run fetch-models && npm run fetch-onnxruntime && npm run build",
+    "beforeBuildCommand": "npm run fetch-pdfium && npm run fetch-models -- --bundle && npm run fetch-onnxruntime && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -82,7 +82,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM3MzNGNEM2MjYzMTMzMTUKUldRVk16RW14dlF6TnhVemlSZkpHWUJSUTlkY3ErbEo3cVFXLy9rYnlORVR0S1hoWEkwUnJoNGQK",
       "endpoints": [
-        "https://github.com/wcksnrdn/flipfile/releases/latest/download/latest.json"
+        "https://github.com/wcksnrdn/flipfile/releases/latest/download/update.json"
       ]
     }
   }

@@ -2,16 +2,6 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "resources": {
-      "models/upscale.onnx": "models/upscale.onnx",
-      "models/upscale-photo.onnx": "models/upscale-photo.onnx",
-      "models/upscale-text.onnx": "models/upscale-text.onnx",
-      "models/dejpeg.onnx": "models/dejpeg.onnx",
-      "models/colorize.onnx": "models/colorize.onnx",
-      "models/faces.onnx": "models/faces.onnx",
-      "models/faces-upscale.onnx": "models/faces-upscale.onnx",
-      "models/yunet.onnx": "models/yunet.onnx",
-      "models/whisper-small.bin": "models/whisper-small.bin",
-      "models/whisper-vad.bin": "models/whisper-vad.bin",
       "models/LICENSES.md": "models/LICENSES.md",
       "models/fonts/": "models/fonts/",
       "models/words.txt": "models/words.txt",

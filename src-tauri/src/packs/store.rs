@@ -86,6 +86,11 @@ impl Store {
         std::iter::once(&self.dir).chain(&self.bundled).any(|dir| dir.join(model).exists())
     }
 
+    /// Whether every model of `pack` came with the app
+    pub fn bundles(&self, pack: &Pack) -> bool {
+        pack.models().iter().all(|m| self.bundled.iter().any(|dir| dir.join(m).exists()))
+    }
+
     pub fn presence(&self, pack: &Pack, built_in: &Catalog, installed: &Installed) -> Presence {
         if !pack.models().iter().all(|m| self.has_model(m)) {
             Presence::Missing
@@ -193,7 +198,7 @@ impl Store {
     }
 
     /// At start, before any model is loaded: puts in place the models that were waiting,
-    /// and empties the trash
+    /// and empties the trash and what an interrupted install left half staged
     pub fn finish_pending(&self) {
         if let Ok(entries) = fs::read_dir(self.staging()) {
             for entry in entries.flatten() {
@@ -206,7 +211,32 @@ impl Store {
                 }
             }
         }
+        if let Ok(entries) = fs::read_dir(self.staging()) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !name.ends_with(".ready") && !self.waiting(&name) {
+                    remove(&entry.path());
+                }
+            }
+        }
         remove(&self.dir.join(".trash"));
+    }
+
+    /// Copies the models of `pack` that came with the app (in `bundle`, as the built-in
+    /// catalog has them) here, unless one is here already in any version: an update
+    /// without them then keeps them. On APFS the copy is a clone and takes no space.
+    pub fn adopt(&self, pack: &Pack, built_in: &Catalog, bundle: &Path) -> Result<(), String> {
+        for model in pack.models() {
+            let files: Vec<&File> = pack.files().filter(|f| f.model() == model).collect();
+            let bundled = files.iter().all(|f| built_in.file(&f.path).is_some_and(|b| b.sha256 == f.sha256) && bundle.join(&f.path).is_file());
+            if !bundled || self.dir.join(model).exists() || self.waiting(model) {
+                continue;
+            }
+            let installed = self.installed();
+            self.stage(model, &files, built_in, &installed)?;
+            self.commit(model, &files)?;
+        }
+        Ok(())
     }
 
     /// Removes the installed models of `pack` no other pack still has in place, and its

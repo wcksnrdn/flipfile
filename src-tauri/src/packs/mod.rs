@@ -5,6 +5,15 @@
 // place once all of it is there (store.rs). A model is found the same way wherever it is
 // (`model_path`): downloaded, bundled with an app that still has it, or fetched for a
 // debug build.
+//
+// The bridge from the apps that came with every model: an app that still has them in its
+// bundle copies them here at start (`adopt`), so they stay when an update without them
+// replaces the app.
+//
+// To try downloads in a debug build without publishing anything: `node scripts/packs.mjs
+// serve`, then run the app with FLIPFILE_PACKS_URL=http://127.0.0.1:8790. Packs are then
+// downloaded from there into <app data>/models-test, and src-tauri/models doesn't count as
+// bundled.
 
 mod catalog;
 mod download;
@@ -34,10 +43,18 @@ static BUNDLED: OnceLock<PathBuf> = OnceLock::new();
 /// scripts/fetch-models.mjs writes to
 fn bundled_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = BUNDLED.get().cloned().into_iter().collect();
-    if cfg!(debug_assertions) || cfg!(test) {
+    if (cfg!(debug_assertions) || cfg!(test)) && test_server().is_none() {
         dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models"));
     }
     dirs
+}
+
+/// A debug build's local pack server (FLIPFILE_PACKS_URL), to try downloads with
+fn test_server() -> Option<String> {
+    if !cfg!(debug_assertions) || cfg!(test) {
+        return None;
+    }
+    std::env::var("FLIPFILE_PACKS_URL").ok().filter(|url| url.starts_with("http://127.0.0.1:"))
 }
 
 /// Where a model (or a file the app ships, like the fonts) is: downloaded first, as a
@@ -61,7 +78,8 @@ pub fn init(app: &AppHandle) {
     if let Ok(dir) = app.path().resource_dir() {
         let _ = BUNDLED.set(dir.join("models"));
     }
-    let dir = app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("flipfile")).join("models");
+    let folder = if test_server().is_some() { "models-test" } else { "models" };
+    let dir = app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("flipfile")).join(folder);
     let _ = DOWNLOADED.set(dir.clone());
     let key = app
         .config()
@@ -71,8 +89,23 @@ pub fn init(app: &AppHandle) {
         .and_then(|updater| updater.get("pubkey"))
         .and_then(|key| key.as_str())
         .map(str::to_string);
-    let packs = Packs::new(Store { dir, bundled: bundled_dirs() }, key);
+    let mut packs = Packs::new(Store { dir, bundled: bundled_dirs() }, key);
+    if let Some(url) = test_server() {
+        packs.catalog.get_mut().unwrap_or_else(|e| e.into_inner()).base = url;
+        packs.key = None;
+    }
     packs.store.finish_pending();
+    // A debug build's resource folder may hold models from an older build: never adopted
+    if let Some(bundle) = BUNDLED.get().filter(|_| !cfg!(debug_assertions)).cloned() {
+        let (store, built_in) = (packs.store.clone(), packs.built_in.clone());
+        std::thread::spawn(move || {
+            for pack in &built_in.packs {
+                if let Err(e) = store.adopt(pack, &built_in, &bundle) {
+                    eprintln!("Could not keep the bundled {}: {e}", pack.name);
+                }
+            }
+        });
+    }
     app.manage(packs);
 }
 
@@ -114,7 +147,8 @@ pub struct PackStatus {
     /// While downloading: bytes done of the total
     pub done: u64,
     pub total: u64,
-    /// It has downloaded models that can be removed (bundled ones can't)
+    /// It has downloaded models that can be removed (an app that still bundles them keeps
+    /// them, so there is nothing to free)
     pub removable: bool,
 }
 
@@ -176,7 +210,7 @@ impl Packs {
                     download,
                     done: running.map_or(0, |a| a.done.load(Ordering::Relaxed)),
                     total: running.map_or(0, |a| a.total.load(Ordering::Relaxed)),
-                    removable: pack.models().iter().any(|m| self.store.dir.join(m).exists()),
+                    removable: pack.models().iter().any(|m| self.store.dir.join(m).exists()) && !self.store.bundles(pack),
                 }
             })
             .collect()

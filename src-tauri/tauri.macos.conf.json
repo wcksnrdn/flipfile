@@ -9,15 +9,6 @@
       "binaries/flipfile-ai"
     ],
     "resources": {
-      "models/upscale.mlmodelc/": "models/upscale.mlmodelc/",
-      "models/upscale-photo.mlmodelc/": "models/upscale-photo.mlmodelc/",
-      "models/upscale-text.mlmodelc/": "models/upscale-text.mlmodelc/",
-      "models/dejpeg.mlmodelc/": "models/dejpeg.mlmodelc/",
-      "models/colorize.mlmodelc/": "models/colorize.mlmodelc/",
-      "models/faces.mlmodelc/": "models/faces.mlmodelc/",
-      "models/faces-upscale.mlmodelc/": "models/faces-upscale.mlmodelc/",
-      "models/whisper-small.bin": "models/whisper-small.bin",
-      "models/whisper-vad.bin": "models/whisper-vad.bin",
       "models/LICENSES.md": "models/LICENSES.md",
       "models/fonts/": "models/fonts/",
       "models/words.txt": "models/words.txt",
