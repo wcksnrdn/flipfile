@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-25
+
 ### Added
 
 - **Upscale is now three tools** (*Photo → Tools → Upscale ›*), each 2× or 4×:
@@ -539,7 +541,8 @@ First public release.
 - Clipboard paste, menu bar / tray with recent conversions and undo, global shortcut.
 - Native glass look on macOS.
 
-[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/wcksnrdn/flipfile/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/wcksnrdn/flipfile/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/wcksnrdn/flipfile/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/wcksnrdn/flipfile/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/wcksnrdn/flipfile/compare/v0.10.0...v0.11.0

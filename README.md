@@ -30,21 +30,22 @@ No uploads. No accounts. No waiting.
 
 <br>
 
-[**Download**](#download) &nbsp;·&nbsp; [What's new](#whats-new-in-012) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [How to use](#how-to-use) &nbsp;·&nbsp; [Formats](#supported-formats) &nbsp;·&nbsp; [Privacy](#privacy--security) &nbsp;·&nbsp; [FAQ](#faq) &nbsp;·&nbsp; [Website](https://flipfile.satria.cloud)
+[**Download**](#download) &nbsp;·&nbsp; [What's new](#whats-new-in-013) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [How to use](#how-to-use) &nbsp;·&nbsp; [Formats](#supported-formats) &nbsp;·&nbsp; [Privacy](#privacy--security) &nbsp;·&nbsp; [FAQ](#faq) &nbsp;·&nbsp; [Website](https://flipfile.satria.cloud)
 
 </div>
 
 <br>
 
-## What's new in 0.12
+## What's new in 0.13
 
 > [!TIP]
-> **Edit a photo without leaving flipfile.** Drop it on **Edit** (*Photo* ring) and a Photo Editor slides out beside the circle: adjust the light and colour, pick a look, crop, turn, resize, then **Save**. The original is never changed.
+> **Upscale is now three tools, each made for what you drop.** **Photo** makes a photo larger *and* better, in its own colours. **Text** retypes the words of documents, screenshots and chats so they come out crisp instead of garbled. **Plain** only makes it larger. And **Colorize** brings colour to black-and-white photos.
 
-- **Photo Editor**: brightness, contrast, saturation and warmth, nine one-tap looks, crop to any shape, rotate and flip, resize to an exact size, undo and redo, hold <kbd>\\</kbd> to compare. It saves `photo_edited.jpg` next to the original, in full resolution and its own format (HEIC opens too; camera RAW and PSD, on macOS and Windows, are saved as JPG). [More ↓](#photo-editor)
-- **Smoother panels**: the Ring Workshop and the Photo Editor slide out from the circle and back, and the circle stays exactly where it is. Size them with **S · M · L** or the corner grip.
-- **Text stays put**: labels can no longer be selected or dragged out of the window by accident.
-- Since 0.11: **compress Word, Excel, PowerPoint, OpenDocument and EPUB files**, animated GIFs that stay animated, and camera RAW. [More ↓](#compress-levels)
+- **Upscale › Photo**: a new upscaler (Real-ESRGAN x4plus blended with 4xNomos8kSC) keeps the crispness, with leaves, fabric and skin that still look like a photo when you zoom in. The colours stay the photo's own, just a little fresher. Faces in HD as before. [More ↓](#ai-upscale)
+- **Upscale › Text**: every word read with certainty is typed again in the closest font, size, weight and colour, on the picture's own background. Doubtful words keep their own pixels: no word is ever invented. On macOS and Windows.
+- **Upscale › Plain**: larger only, the colours exactly as they are.
+- **Colorize** (*Photo → Tools*): a black-and-white or sepia photo coloured by DDColor, keeping its own light, shade and detail.
+- Since 0.12: the **Photo Editor**: adjust, nine looks, crop, rotate, resize. [More ↓](#photo-editor)
 
 Full details in the [CHANGELOG](CHANGELOG.md).
 
